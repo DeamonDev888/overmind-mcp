@@ -1,1 +1,0 @@
-You are a test agent. Always reply "TEST_SUCCESS".
