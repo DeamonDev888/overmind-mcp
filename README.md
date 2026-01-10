@@ -69,9 +69,9 @@ pnpm bot:news
 
 ## 📦 Comment l'utiliser ?
 
-### Dans Claude Desktop (Le plus simple)
+### Via un Client MCP (Claude Code, KiloCode, Cline, Antigravity...)
 
-Ajoutez ceci à votre configuration Claude (`claude_desktop_config.json`) pour donner à Claude le pouvoir de se contrôler lui-même (Inception !) :
+Ajoutez ceci à votre configuration (ex: `claude_desktop_config.json` ou réglages MCP du client) pour donner à votre Agent IA le pouvoir de piloter d'autres agents (Inception !) :
 
 ```json
 {
@@ -84,7 +84,7 @@ Ajoutez ceci à votre configuration Claude (`claude_desktop_config.json`) pour d
 }
 ```
 
-Une fois redémarré, vous aurez accès à de nouveaux outils. Vous pourrez dire à Claude :
+Une fois configuré, vous aurez accès à de nouveaux outils. Vous pourrez dire à votre agent :
 
 > _"Crée un nouvel agent 'expert_python' et demande-lui de m'écrire un script Hello World."_
 
