@@ -92,7 +92,9 @@ Ajoutez ce serveur à votre configuration globale Claude Desktop (`claude_deskto
 
 ---
 
-## � Outils Disponibles
+## 📦 Outils Disponibles
+
+> 📄 **[Voir la documentation détaillée des outils](docs/tools.md)**
 
 ### `run_agent`
 
