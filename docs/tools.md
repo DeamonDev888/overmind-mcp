@@ -23,6 +23,20 @@ Ce serveur expose les outils suivants via le protocole MCP.
   - `model` (string, optionnel) : Modèle à utiliser (défaut: `claude-3-5-sonnet-20241022`).
   - `copyEnvFrom` (string, optionnel) : Chemin vers un fichier settings existant pour copier les clés API.
 
+### `list_agents`
+
+**Description** : Liste tous les agents disponibles dans le projet.
+
+- **Paramètres** :
+  - `details` (boolean, optionnel, défaut: `false`) : Si `true`, affiche les détails complets (Modèle utilisé, Serveurs MCP activés, taille du prompt).
+
+### `delete_agent`
+
+**Description** : Supprime définitivement un agent (Prompt `.md` et Config `.json`).
+
+- **Paramètres** :
+  - `name` (string, requis) : Nom de l'agent à supprimer.
+
 ## 📝 Gestion des Prompts (Personas)
 
 ### `create_prompt`

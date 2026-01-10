@@ -2,6 +2,7 @@ import { FastMCP } from 'fastmcp';
 import { runClaudeAgent, runAgentSchema } from './tools/run_claude.js';
 import { createAgent, createAgentSchema } from './tools/create_agent.js';
 import { createPrompt, createPromptSchema, editPrompt, editPromptSchema } from './tools/manage_prompts.js';
+import { listAgents, listAgentsSchema, deleteAgent, deleteAgentSchema } from './tools/manage_agents.js';
 import { getAgentPrompt } from './prompts/agent_prompts.js';
 import { updateConfig } from './lib/config.js';
 import { fileURLToPath } from 'url';
@@ -26,6 +27,22 @@ export function createServer(name: string = "Claude-Code MCP Runner") {
         description: "Crée un nouvel agent (Prompt + Config) compatible avec ce runner",
         parameters: createAgentSchema,
         execute: createAgent
+    });
+
+    // Outil : Lister les agents
+    server.addTool({
+        name: "list_agents",
+        description: "Liste tous les agents disponibles. Option 'details=true' pour voir la config complète.",
+        parameters: listAgentsSchema,
+        execute: listAgents
+    });
+
+    // Outil : Supprimer un agent
+    server.addTool({
+        name: "delete_agent",
+        description: "Supprime définitivement un agent (Prompt et Config)",
+        parameters: deleteAgentSchema,
+        execute: deleteAgent
     });
 
     // Outil : Créer un prompt seul
