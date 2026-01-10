@@ -116,4 +116,6 @@ Voici les commandes magiques à votre disposition :
 
 ---
 
+![Aperçu du Terminal](assets/terminal_preview.png)
+
 _Projet propulsé par DeaMoN888 - 2026_
