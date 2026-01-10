@@ -144,7 +144,7 @@ export const updateAgentConfigSchema = z.object({
     name: z.string().describe("Nom de l'agent à modifier"),
     model: z.string().optional().describe("Nouveau modèle à utiliser (ex: claude-3-opus-20240229)"),
     mcpServers: z.array(z.string()).optional().describe("Liste complète des serveurs MCP à activer (remplace la liste existante). Ex: ['postgresql', 'news']"),
-    env: z.record(z.string()).optional().describe("Variables d'environnement supplémentaires à définir ou écraser (ex: { 'API_KEY': '123' })")
+    env: z.record(z.string(), z.string()).optional().describe("Variables d'environnement supplémentaires à définir ou écraser (ex: { 'API_KEY': '123' })")
 });
 
 export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSchema>): Promise<any> {
