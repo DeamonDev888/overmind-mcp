@@ -20,7 +20,7 @@ export const DEFAULT_CONFIG: ConfigType = {
         PERMISSIONS: '--dangerously-skip-permissions',
         PATHS: {
             SETTINGS: '.claude/settings.json',
-            MCP: '../.mcp.json'
+            MCP: '.mcp.json'
         }
     }
 };
