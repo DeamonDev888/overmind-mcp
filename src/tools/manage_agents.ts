@@ -139,3 +139,71 @@ export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Prom
         content: [{ type: 'text', text: response }]
     };
 }
+
+export const updateAgentConfigSchema = z.object({
+    name: z.string().describe("Nom de l'agent à modifier"),
+    model: z.string().optional().describe("Nouveau modèle à utiliser (ex: claude-3-opus-20240229)"),
+    mcpServers: z.array(z.string()).optional().describe("Liste complète des serveurs MCP à activer (remplace la liste existante). Ex: ['postgresql', 'news']"),
+    env: z.record(z.string()).optional().describe("Variables d'environnement supplémentaires à définir ou écraser (ex: { 'API_KEY': '123' })")
+});
+
+export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSchema>): Promise<any> {
+    const { name, model, mcpServers, env } = args;
+    const claudeDir = getClaudeDir();
+    const settingsPath = path.join(claudeDir, `settings_${name}.json`);
+
+    try {
+        // Read existing config
+        const content = await fs.readFile(settingsPath, 'utf-8');
+        const settings = JSON.parse(content);
+
+        const updates: string[] = [];
+
+        // Update Model
+        if (model) {
+            settings.env = settings.env || {};
+            const oldModel = settings.env.ANTHROPIC_MODEL;
+            settings.env.ANTHROPIC_MODEL = model;
+            updates.push(`- Modèle : ${oldModel} -> ${model}`);
+        }
+
+        // Update MCP Servers
+        if (mcpServers) {
+            const oldServers = settings.enabledMcpjsonServers || [];
+            settings.enabledMcpjsonServers = mcpServers;
+            updates.push(`- Serveurs MCP : [${oldServers.join(', ')}] -> [${mcpServers.join(', ')}]`);
+        }
+
+        // Update other Env vars
+        if (env) {
+            settings.env = settings.env || {};
+            for (const [key, value] of Object.entries(env)) {
+                const oldVal = settings.env[key] ? '***' : '(undefined)';
+                settings.env[key] = value;
+                updates.push(`- Env Var '${key}' : ${oldVal} -> ${value ? '***' : '(vide)'}`);
+            }
+        }
+
+        if (updates.length === 0) {
+            return {
+                content: [{ type: 'text', text: `⚠️ Aucune modification demandée pour l'agent '${name}'.` }]
+            };
+        }
+
+        // Write back
+        await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+
+        return {
+            content: [{ 
+                type: 'text', 
+                text: `✅ Configuration de l'agent '${name}' mise à jour :\n${updates.join('\n')}` 
+            }]
+        };
+
+    } catch (e: any) {
+        return {
+            isError: true,
+            content: [{ type: 'text', text: `❌ Erreur lors de la mise à jour de '${name}': ${e.message}` }]
+        };
+    }
+}
