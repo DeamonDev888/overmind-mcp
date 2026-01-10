@@ -43,7 +43,7 @@ Ce serveur expose les outils suivants via le protocole MCP.
 
 - **Paramètres** :
   - `name` (string, requis) : Nom de l'agent à modifier.
-  - `model` (string, optionnel) : Change le modèle IA (ex: `claude-3-opus...`).
+  - `model` (string, optionnel) : Change le modèle IA (ex: `claude-3-5-sonnet-20241022`).
   - `mcpServers` (array<string>, optionnel) : Remplace la liste des serveurs MCP activés (ex: `["postgresql", "news"]`).
   - `env` (object, optionnel) : Ajoute ou écrase des variables d'environnement (ex: `{"API_KEY": "xxx"}`).
 
