@@ -1,7 +1,7 @@
 {
   "name": "claude-code-runner",
   "version": "1.0.0",
-  "description": "",
+  "description": "Serveur MCP orchestrateur pour agents Claude autonomes (Workflow)",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

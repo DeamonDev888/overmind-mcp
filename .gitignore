@@ -7,3 +7,5 @@ coverage
 backup
 .mcp.json
 *.log
+mcp.json
+votes_sentinel.csv

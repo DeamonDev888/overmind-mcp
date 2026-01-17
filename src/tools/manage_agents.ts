@@ -201,6 +201,12 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
         };
 
     } catch (e: any) {
+        if (e.code === 'ENOENT') {
+             return {
+                isError: true,
+                content: [{ type: 'text', text: `❌ **Agent Introuvable**\n\nImpossible de modifier la configuration pour '${name}' car le fichier settings est introuvable.\nChemin: ${settingsPath}\n\n💡 **Solution:** Vérifiez le nom de l'agent avec \`list_agents\`.` }]
+            };
+        }
         return {
             isError: true,
             content: [{ type: 'text', text: `❌ Erreur lors de la mise à jour de '${name}': ${e.message}` }]
