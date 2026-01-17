@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
@@ -31,6 +32,13 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
     if (agentName) {
         const settingsDir = path.dirname(PATHS.SETTINGS); 
         const specificSettingsPath = resolveConfigPath(path.join(settingsDir, `settings_${agentName}.json`));
+        
+        if (!fs.existsSync(specificSettingsPath)) {
+            return {
+                content: [{ type: 'text', text: `❌ **Erreur Configuration Agent**\n\nL'agent '${agentName}' est introuvable ou mal configuré.\nFichier attendu: ${specificSettingsPath}\n\n💡 **Solution:**\nUtilisez l'outil \`create_agent\` pour créer cet agent avant de l'exécuter.` }],
+                isError: true
+            };
+        }
         settingsPath = specificSettingsPath;
     }
 
@@ -94,10 +102,12 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
                         { type: 'text', text: `SESSION_ID: ${response.session_id}` } 
                     ]
                 });
-            } catch (e) {
+            } catch (e: any) {
+                // Guide détaillé pour le LLM en cas d'erreur de format
+                const preview = stdout.trim().substring(0, 500);
                 resolve({
-                    content: [{ type: 'text', text: stdout.trim() }],
-                    isError: false
+                    content: [{ type: 'text', text: `⚠️ **Réponse Agent Non-Conforme (JSON invalide)**\n\nL'agent '${agentName || 'default'}' a répondu, mais le format JSON est cassé.\n\n❌ **Erreur Parsing:** ${e.message}\n\n🔍 **Début de la réponse reçue:**\n\`\`\`text\n${preview}...\n\`\`\`\n\n💡 **Conseil:** Vérifiez que le prompt demande explicitement une sortie JSON pure.` }],
+                    isError: true
                 });
             }
         });

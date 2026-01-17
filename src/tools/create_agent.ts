@@ -13,6 +13,14 @@ export const createAgentSchema = z.object({
 export async function createAgent(args: z.infer<typeof createAgentSchema>): Promise<any> {
     const { name, prompt, model, copyEnvFrom } = args;
 
+    // Validation du nom (sécurité système de fichiers)
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+        return {
+            content: [{ type: 'text', text: `❌ **Nom d'agent invalide**\n\nLe nom '${name}' contient des caractères interdits.\n\n💡 **Règle:** Utilisez uniquement des lettres, chiffres, tirets (-) et underscores (_).\n\nExemple valide: 'agent_finance', 'expert-seo'` }],
+            isError: true
+        };
+    }
+
     // Résolution des chemins
     const currentFileUrl = import.meta.url;
     const currentFilePath = fileURLToPath(currentFileUrl);
