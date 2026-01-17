@@ -2,6 +2,7 @@ import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { CONFIG, resolveConfigPath } from '../lib/config.js';
 
 // --- Helpers ---
 function getClaudeDir() {
@@ -9,6 +10,17 @@ function getClaudeDir() {
     const currentFilePath = fileURLToPath(currentFileUrl);
     const projectRoot = path.resolve(path.dirname(currentFilePath), '../../');
     return path.resolve(projectRoot, '.claude');
+}
+
+async function getAvailableMcpServers(): Promise<string[]> {
+    try {
+        const mcpPath = resolveConfigPath(CONFIG.CLAUDE.PATHS.MCP);
+        const content = await fs.readFile(mcpPath, 'utf-8');
+        const json = JSON.parse(content);
+        return Object.keys(json.mcpServers || {});
+    } catch (e) {
+        return [];
+    }
 }
 
 // --- Schemas ---
@@ -62,8 +74,13 @@ export async function listAgents(args: z.infer<typeof listAgentsSchema>): Promis
                 const model = settings.env?.ANTHROPIC_MODEL || "settings-default";
                 const servers = settings.enabledMcpjsonServers || [];
                 
+                const availableServers = await getAvailableMcpServers();
+                const serverStatus = servers.map((s: string) => 
+                    availableServers.includes(s) ? s : `${s} (⚠️ INCONNU)`
+                );
+                
                 info += `\n  - Modèle : ${model}`;
-                info += `\n  - Serveurs MCP : ${servers.length > 0 ? servers.join(', ') : 'Aucun'}`;
+                info += `\n  - Serveurs MCP : ${servers.length > 0 ? serverStatus.join(', ') : 'Aucun'}`;
             } catch (e) {
                 info += `\n  - Config : ⚠️ Manquante ou invalide (${settingsPath})`;
             }
@@ -170,6 +187,15 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
         // Update MCP Servers
         if (mcpServers) {
             const oldServers = settings.enabledMcpjsonServers || [];
+            
+            // Validation
+            const availableServers = await getAvailableMcpServers();
+            const unknownServers = mcpServers.filter(s => !availableServers.includes(s));
+            
+            if (unknownServers.length > 0 && availableServers.length > 0) {
+                 updates.push(`⚠️ **ATTENTION:** Serveurs inconnus détectés: ${unknownServers.join(', ')}. Ils ne sont PAS dans mcp.json.\n   Serveurs valides: ${availableServers.join(', ')}`);
+            }
+
             settings.enabledMcpjsonServers = mcpServers;
             updates.push(`- Serveurs MCP : [${oldServers.join(', ')}] -> [${mcpServers.join(', ')}]`);
         }

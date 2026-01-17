@@ -2,6 +2,7 @@ import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { CONFIG, resolveConfigPath } from '../lib/config.js';
 
 export const createAgentSchema = z.object({
     name: z.string().describe("Nom de l'agent (ex: agent_finance). Sera utilisé pour les noms de fichiers."),
@@ -12,6 +13,16 @@ export const createAgentSchema = z.object({
 
 export async function createAgent(args: z.infer<typeof createAgentSchema>): Promise<any> {
     const { name, prompt, model, copyEnvFrom } = args;
+
+    // Helper (Inline for simplicity)
+    const getAvailableMcpServers = async () => {
+        try {
+            const mcpPath = resolveConfigPath(CONFIG.CLAUDE.PATHS.MCP);
+            const content = await fs.readFile(mcpPath, 'utf-8');
+            const json = JSON.parse(content);
+            return Object.keys(json.mcpServers || {});
+        } catch (e) { return []; }
+    };
 
     // Validation du nom (sécurité système de fichiers)
     if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
@@ -39,7 +50,13 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>): Prom
 
     // 2. Création du fichier Settings (.json)
     let envVars = {};
-    let mcpServers = ["postgresql", "news", "discord", "workflow"]; // Default defaults
+    const availableServers = await getAvailableMcpServers();
+    
+    // Par défaut, on active tous les serveurs détectés (meilleure expérience pour l'agent)
+    // Si aucun détecté (ou mcp.json manquant), on garde des defaults raisonnables
+    let mcpServers = availableServers.length > 0 
+        ? availableServers 
+        : ["postgresql", "news", "discord", "workflow"];
 
     // Copie des env si demandé
     if (copyEnvFrom) {
