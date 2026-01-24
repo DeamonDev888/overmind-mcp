@@ -11,7 +11,8 @@ Ce serveur expose les outils suivants via le protocole MCP.
 - **Paramètres** :
   - `prompt` (string, requis) : La consigne à envoyer à l'agent.
   - `sessionId` (string, optionnel) : Un identifiant unique pour maintenir le contexte d'une conversation.
-  - `agentName` (string, optionnel) : Nom de l'agent pour le logging.
+  - `agentName` (string, optionnel) : Nom de l'agent (pour logging, monitoring et persistance).
+  - `autoResume` (boolean, optionnel, défaut: `false`) : Si `true` (et `agentName` fourni), reprend automatiquement la dernière conversation de cet agent.
 
 ### `create_agent`
 
@@ -65,9 +66,3 @@ Ce serveur expose les outils suivants via le protocole MCP.
   - `name` (string, requis) : Nom du fichier prompt à modifier.
   - `search` (string, requis) : Le texte exact à rechercher.
   - `replace` (string, requis) : Le nouveau texte de remplacement.
-
-## 🔍 Introspection
-
-### `inspect_agent_config` (Prompt)
-
-**Description** : Ce n'est pas un outil mais une _Resource Template_ MCP (ou Prompt). Il permet à l'agent de lire sa propre configuration active (settings + prompt système) pour le débogage ou l'auto-amélioration.
