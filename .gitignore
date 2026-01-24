@@ -9,3 +9,4 @@ backup
 *.log
 mcp.json
 votes_sentinel.csv
+embed-analytics.json
