@@ -6,8 +6,8 @@ _Le Pilote Automatique pour vos Agents IA._
 
 ## 👋 C'est quoi ?
 
-Imaginez une télécommande universelle pour **Claude**.
-Ce projet permet à n'importe quelle application (Discord, n8n, ou même un autre Claude) de **commander un Agent IA** capable de coder, chercher des infos et utiliser des outils sur votre ordinateur.
+Imaginez une télécommande universelle pour **Claude-Code**.
+Ce projet permet à n'importe quelle application (Discord, n8n, KiloCode, Antigravity, ou même un autre Claude-Code) de **commander un Agent IA** sans avoir à utiliser le terminal a partir de MCP(API).
 
 C'est une "passerelle" qui transforme le puissant CLI Claude Code en un outil simple à utiliser.
 
@@ -16,7 +16,7 @@ C'est une "passerelle" qui transforme le puissant CLI Claude Code en un outil si
 - **🔌 Contrôle Total** : Lancez des missions complexes ("Analyse ces fichiers", "Résume cette page") via une simple commande.
 - **🛠️ Super-Pouvoirs** : L'agent piloté peut utiliser VOS outils (Base de données, Scrapers, etc.).
 - **🔗 Compatible** : Fonctionne avec tout client compatible MCP (Claude Desktop, Cursor, etc.).
-- **🤖 Multi-Agents** : Créez, configurez et gérez plusieurs personnalités d'agents facilement.
+- **🤖 Multi-Agents** : Créez, configurez et gérez plusieurs personnalités d'agents facilement. Lancer un pipeline d'agents a partir d'un script.
 
 ---
 
