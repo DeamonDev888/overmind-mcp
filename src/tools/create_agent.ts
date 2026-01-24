@@ -7,7 +7,7 @@ import { CONFIG, resolveConfigPath } from '../lib/config.js';
 export const createAgentSchema = z.object({
     name: z.string().describe("Nom de l'agent (ex: agent_finance). Sera utilisé pour les noms de fichiers."),
     prompt: z.string().describe("Le prompt système (instructions) de l'agent."),
-    model: z.string().optional().default("claude-3-5-sonnet-20241022").describe("Modèle à utiliser (ex: claude-3-5-sonnet-20241022)"),
+    model: z.string().optional().default("claude-sonnet-4-5").describe("Modèle à utiliser. Supporte tous les modèles compatibles avec Claude Code (Anthropic, OpenAI, DeepSeek, Glm, Minimax, etc.). Ex: claude-sonnet-4-5, gpt-4, deepseek-chat"),
     copyEnvFrom: z.string().optional().describe("Chemin vers un settings.json existant pour copier les variables d'environnement (ex: .claude/settingsM.json)")
 });
 

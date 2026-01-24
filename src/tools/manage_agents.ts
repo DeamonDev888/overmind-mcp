@@ -90,7 +90,9 @@ export async function listAgents(args: z.infer<typeof listAgentsSchema>): Promis
                 const promptPath = path.join(agentsDir, file);
                 const promptStat = await fs.stat(promptPath);
                 info += `\n  - Prompt Size : ${promptStat.size} bytes`;
-            } catch (e) {}
+            } catch (e) {
+                // Ignore missing prompt file
+            }
 
             agentsList.push(info);
         }
@@ -159,7 +161,7 @@ export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Prom
 
 export const updateAgentConfigSchema = z.object({
     name: z.string().describe("Nom de l'agent à modifier"),
-    model: z.string().optional().describe("Nouveau modèle à utiliser (ex: claude-3-opus-20240229)"),
+    model: z.string().optional().describe("Nouveau modèle à utiliser. Supporte tous les modèles compatibles avec Claude Code (Anthropic, OpenAI, DeepSeek, Glm, Minimax, etc.). Ex: claude-sonnet-4-5, gpt-4, deepseek-chat"),
     mcpServers: z.array(z.string()).optional().describe("Liste complète des serveurs MCP à activer (remplace la liste existante). Ex: ['postgresql', 'news']"),
     env: z.record(z.string(), z.string()).optional().describe("Variables d'environnement supplémentaires à définir ou écraser (ex: { 'API_KEY': '123' })")
 });
