@@ -6,6 +6,13 @@ import { CONFIG, resolveConfigPath } from '../lib/config.js';
 
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 
+// export const runAgentSchema = z.object({
+//     prompt: z.string().describe("Le prompt à envoyer à l'agent"),
+//     sessionId: z.string().optional().describe("ID de session pour continuer une conversation (manuel)"),
+//     agentName: z.string().optional().describe("Nom de l'agent (pour logging/monitoring et persistance)"),
+//     autoResume: z.boolean().optional().default(false).describe("Si true (et agentName fourni), reprend automatiquement la dernière conversation de cet agent")
+// });
+
 export const runAgentSchema = z.object({
     prompt: z.string().describe("Le prompt à envoyer à l'agent"),
     sessionId: z.string().optional().describe("ID de session pour continuer une conversation (manuel)"),
@@ -14,7 +21,8 @@ export const runAgentSchema = z.object({
 });
 
 export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Promise<any> {
-    let { prompt, sessionId, agentName, autoResume } = args;
+    const { prompt, agentName, autoResume } = args;
+    let { sessionId } = args;
     const { CORE, PERMISSIONS, PATHS } = CONFIG.CLAUDE;
 
     // --- Gestion Automatique de Session ---
@@ -102,7 +110,8 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
                         { type: 'text', text: `SESSION_ID: ${response.session_id}` } 
                     ]
                 });
-            } catch (e: any) {
+            } catch (error: unknown) {
+                const e = error as Error;
                 // Guide détaillé pour le LLM en cas d'erreur de format
                 const preview = stdout.trim().substring(0, 500);
                 resolve({

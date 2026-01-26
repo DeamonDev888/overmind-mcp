@@ -70,19 +70,19 @@ export function createServer(name: string = "Claude-Code MCP Runner") {
     });
 
     // Prompt : Inspecter la config
-    server.addPrompt({
-        name: "inspect_agent_config",
-        description: "Affiche la configuration actuelle de l'agent",
-        load: async () => {
-            const content = await getAgentPrompt();
-            return {
-                messages: [{ 
-                    role: 'user', 
-                    content: { type: 'text', text: content } 
-                }]
-            };
-        }
-    });
+    // server.addPrompt({
+    //     name: "inspect_agent_config",
+    //     description: "Affiche la configuration actuelle de l'agent",
+    //     load: async () => {
+    //         const content = await getAgentPrompt();
+    //         return {
+    //             messages: [{ 
+    //                 role: 'user' as const, 
+    //                 content: { type: 'text', text: content } 
+    //             }]
+    //         };
+    //     }
+    // });
 
     return server;
 }
