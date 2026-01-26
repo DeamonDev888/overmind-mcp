@@ -21,7 +21,7 @@ Ce serveur expose les outils suivants via le protocole MCP.
 - **Paramètres** :
   - `name` (string, requis) : Nom de l'agent (ex: `agent_finance`). Sera utilisé pour les noms de fichiers (`.claude/agents/agent_finance.md`).
   - `prompt` (string, requis) : Le prompt système (instructions) initial de l'agent.
-  - `model` (string, optionnel, défaut: `claude-sonnet-4-5`) : Modèle à utiliser. Supporte tous les modèles compatibles avec Claude Code (Anthropic, OpenAI, DeepSeek, Glm, Minimax, etc.).
+  - `model` (string, optionnel, défaut: `claude-sonnet-4-5`) : Modèle à utiliser. Supporte tous les modèles compatibles avec Claude Code (DeepSeek, Glm, Minimax, etc.).
   - `copyEnvFrom` (string, optionnel) : Chemin vers un fichier settings existant pour copier les clés API.
 
 ### `list_agents`

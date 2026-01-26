@@ -3,7 +3,6 @@ import { runClaudeAgent, runAgentSchema } from './tools/run_claude.js';
 import { createAgent, createAgentSchema } from './tools/create_agent.js';
 import { createPrompt, createPromptSchema, editPrompt, editPromptSchema } from './tools/manage_prompts.js';
 import { listAgents, listAgentsSchema, deleteAgent, deleteAgentSchema, updateAgentConfig, updateAgentConfigSchema } from './tools/manage_agents.js';
-import { getAgentPrompt } from './prompts/agent_prompts.js';
 import { updateConfig } from './lib/config.js';
 import { fileURLToPath } from 'url';
 export function createServer(name = "Claude-Code MCP Runner") {
@@ -61,19 +60,19 @@ export function createServer(name = "Claude-Code MCP Runner") {
         execute: editPrompt
     });
     // Prompt : Inspecter la config
-    server.addPrompt({
-        name: "inspect_agent_config",
-        description: "Affiche la configuration actuelle de l'agent",
-        load: async () => {
-            const content = await getAgentPrompt();
-            return {
-                messages: [{
-                        role: 'user',
-                        content: { type: 'text', text: content }
-                    }]
-            };
-        }
-    });
+    // server.addPrompt({
+    //     name: "inspect_agent_config",
+    //     description: "Affiche la configuration actuelle de l'agent",
+    //     load: async () => {
+    //         const content = await getAgentPrompt();
+    //         return {
+    //             messages: [{ 
+    //                 role: 'user' as const, 
+    //                 content: { type: 'text', text: content } 
+    //             }]
+    //         };
+    //     }
+    // });
     return server;
 }
 // Auto-start si exécuté directement
