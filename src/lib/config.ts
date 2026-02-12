@@ -19,8 +19,8 @@ export const DEFAULT_CONFIG: ConfigType = {
         CORE: '-p --output-format json',
         PERMISSIONS: '--dangerously-skip-permissions',
         PATHS: {
-            SETTINGS: '.claude/settings.json',
-            MCP: '.mcp.json'
+            SETTINGS: './.claude/settings.json',
+            MCP: './.mcp.json'
         }
     }
 };

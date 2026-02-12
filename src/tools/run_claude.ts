@@ -50,7 +50,57 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
         settingsPath = specificSettingsPath;
     }
 
-    const mcpPath = resolveConfigPath(PATHS.MCP);
+    const cwd = process.cwd();
+
+    // --- FIX: PATHS WITH SPACES ---
+    // Absolute paths containing spaces (e.g. "Serveur MCP") cause "Settings file not found" errors
+    // with the 'claude' CLI command, even when quoted on Windows.
+    // SOLUTION: We convert to relative paths (starting with ./) which avoids full path quoting issues.
+
+    // Convert to relative path if possible to avoid quoting issues with spaces
+    const relativeSettings = path.relative(cwd, settingsPath);
+    if (!relativeSettings.startsWith('..') && !path.isAbsolute(relativeSettings)) {
+        settingsPath = relativeSettings.startsWith('./') ? relativeSettings : `./${relativeSettings}`;
+    }
+
+    let mcpPath = resolveConfigPath(PATHS.MCP);
+
+    // --- Isolation MCP Mode ---
+    if (agentName) {
+        try {
+            const agentSettingsPath = resolveConfigPath(path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`));
+            if (fs.existsSync(agentSettingsPath)) {
+                const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+                // Si l'isolation est demandée (false) et qu'une liste est fournie
+                if (settings.enableAllProjectMcpServers === false && Array.isArray(settings.enabledMcpjsonServers)) {
+                    if (fs.existsSync(mcpPath)) {
+                        const fullMcp = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+                        const filteredMcp = { mcpServers: {} as any };
+                        
+                        for (const serverName of settings.enabledMcpjsonServers) {
+                            if (fullMcp.mcpServers && fullMcp.mcpServers[serverName]) {
+                                filteredMcp.mcpServers[serverName] = fullMcp.mcpServers[serverName];
+                            }
+                        }
+                        
+                        // Créer un fichier de config temporaire par agent
+                        const tmpMcpPath = path.join(path.dirname(agentSettingsPath), `mcp_${agentName}_tmp.json`);
+                        fs.writeFileSync(tmpMcpPath, JSON.stringify(filteredMcp, null, 2));
+                        mcpPath = tmpMcpPath;
+                        console.error(`🛡️ MCP Isolated for ${agentName}: Using filtered config.`);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error(`⚠️ Failed to isolate MCP for ${agentName}:`, e);
+        }
+    }
+
+    const relativeMcp = path.relative(cwd, mcpPath);
+    if (!relativeMcp.startsWith('..') && !path.isAbsolute(relativeMcp)) {
+        mcpPath = relativeMcp.startsWith('./') ? relativeMcp : `./${relativeMcp}`;
+    }
+
     const safePath = (p: string) => p.includes(' ') ? `"${p}"` : p;
 
     let command = `claude ${CORE} ${PERMISSIONS} --settings ${safePath(settingsPath)} --mcp-config ${safePath(mcpPath)}`;

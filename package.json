@@ -1,7 +1,7 @@
 {
   "name": "claude-code-runner",
   "version": "1.0.0",
-  "description": "Serveur MCP orchestrateur pour agents Claude autonomes (Workflow)",
+  "description": "MCP Server to orchestrate autonomous Claude Code agents — Run, create, and manage AI agents via any MCP-compatible client.",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -15,9 +15,24 @@
     "check-types": "tsc --noEmit",
     "test": "vitest run"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "ai-agent",
+    "llm",
+    "orchestration",
+    "automation"
+  ],
+  "author": "DeaMoN888",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DeaMoN888/claude-code-runner"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "packageManager": "pnpm@10.18.0",
   "devDependencies": {
     "@eslint/js": "^9.39.2",
@@ -32,6 +47,7 @@
   },
   "dependencies": {
     "fastmcp": "^3.29.0",
+    "pg": "^8.18.0",
     "zod": "^3.24.1"
   }
 }

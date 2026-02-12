@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "claude-code-runner": {
-      "command": "node",
-      "args": ["C:/Users/Deamon/Desktop/Backup/Serveur MCP/Workflow/dist/index.js"]
-    }
-  }
-}
