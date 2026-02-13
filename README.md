@@ -87,7 +87,7 @@ Une fois configuré, vous aurez accès à de nouveaux outils. Vous pourrez dire 
 
 > _"Crée un nouvel agent 'Chatbot' et demande-lui de se connecter au serveur MCP_Chat_bot pour répondre."_
 
-> _"Crée un nouvel agent 'RAG', connecte-le au serveur MCP_RAG et demande-lui de parcourir la base de données pour lister les 10 clients les plus récents, puis de répondre sur SMS_mcp au numéro 0612345678."_
+> _"Crée un nouvel agent 'RAG', connecte-le au serveur MCP_RAG et demande-lui de parcourir la base de données pour lister les 10 clients les plus récents, puis de répondre sur SMS_mcp au numéro 0612345678 toutes les 10 minutes et de me faire un résumé de ce qui s'est passé."_
 
 > _"Crée un nouvel agent 'Discord' et connecte-le au serveur MCP_Discord pour répondre sur le salon #bot."_
 
