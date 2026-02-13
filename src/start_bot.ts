@@ -26,5 +26,5 @@ console.error(`🔧 Settings: ${newsSettingsPath}`);
 console.error(`🔧 MCP Config: ${localMcpPath}`);
 
 // 2. Démarrage du Serveur MCP
-const server = createServer("Claude-Code MCP Runner");
+const server = createServer('Claude-Code MCP Runner');
 server.start({ transportType: 'stdio' });
