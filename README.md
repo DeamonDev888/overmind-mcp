@@ -85,7 +85,7 @@ Ajoutez ceci à votre configuration (ex: `claude_desktop_config.json` ou réglag
 
 Une fois configuré, vous aurez accès à de nouveaux outils. Vous pourrez dire à votre agent :
 
-> _"Crée un nouvel agent 'expert_python' et demande-lui de m'écrire un script Hello World."_
+> _"Crée un nouvel agent 'Chatbot' et demande-lui de ce connecter au serveur MCP_Chat_bot."_
 
 ### Les Outils Principaux
 
