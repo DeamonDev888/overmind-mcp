@@ -85,7 +85,11 @@ Ajoutez ceci à votre configuration (ex: `claude_desktop_config.json` ou réglag
 
 Une fois configuré, vous aurez accès à de nouveaux outils. Vous pourrez dire à votre agent :
 
-> _"Crée un nouvel agent 'Chatbot' et demande-lui de ce connecter au serveur MCP_Chat_bot."_
+> _"Crée un nouvel agent 'Chatbot' et demande-lui de se connecter au serveur MCP_Chat_bot pour répondre."_
+
+> _"Crée un nouvel agent 'RAG', connecte-le au serveur MCP_RAG et demande-lui de parcourir la base de données pour lister les 10 clients les plus récents, puis de répondre sur SMS_mcp au numéro 0612345678."_
+
+> _"Crée un nouvel agent 'Discord' et connecte-le au serveur MCP_Discord pour répondre sur le salon #bot."_
 
 ### Les Outils Principaux
 
