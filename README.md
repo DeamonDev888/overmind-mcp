@@ -13,7 +13,7 @@ C'est une "passerelle" qui transforme le puissant CLI Claude Code en un outil si
 ## ✨ Ce que ça fait
 
 - **🔌 Contrôle Total** : Lancez des missions complexes ("Analyse ces fichiers", "Résume cette page") via une simple commande.
-- **🛠️ Super-Pouvoirs** : L'agent piloté peut utiliser VOS outils (Base de données, Scrapers, etc.).
+- **🛠️ Capacités Étendues** : L'agent piloté peut utiliser VOS outils (Base de données, Scrapers, etc.).
 - **🔗 Compatible** : Fonctionne avec tout client compatible MCP (Claude Desktop, Cursor, etc.).
 - **🤖 Multi-Agents** : Créez, configurez et gérez plusieurs personnalités d'agents facilement. Lancer un pipeline d'agents a partir d'un script.
 
@@ -70,7 +70,7 @@ pnpm bot:news
 
 ### Via un Client MCP (Claude Code, KiloCode, Cline, Antigravity...)
 
-Ajoutez ceci à votre configuration (ex: `claude_desktop_config.json` ou réglages MCP du client) pour donner à votre Agent IA le pouvoir de piloter d'autres agents (Inception !) :
+Ajoutez ceci à votre configuration (ex: `claude_desktop_config.json` ou réglages MCP du client) pour donner à votre Agent IA la capacité de piloter d'autres agents (Inception !) :
 
 ```json
 {
