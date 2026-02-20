@@ -44,7 +44,7 @@ Ce serveur expose les outils suivants via le protocole MCP.
 
 - **Paramètres** :
   - `name` (string, requis) : Nom de l'agent à modifier.
-  - `model` (string, optionnel) : Change le modèle IA. Supporte tous les modèles compatibles avec Claude Code (Anthropic, OpenAI, DeepSeek, Glm, Minimax, etc.).
+  - `model` (string, optionnel) : Change le modèle IA. Supporte tous les modèles compatibles avec Claude Code (Ollama, OpenAI, DeepSeek, Glm, Minimax, etc.).
   - `mcpServers` (array<string>, optionnel) : Remplace la liste des serveurs MCP activés (ex: `["postgresql", "news"]`).
   - `env` (object, optionnel) : Ajoute ou écrase des variables d'environnement (ex: `{"API_KEY": "xxx"}`).
 

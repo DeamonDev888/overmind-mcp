@@ -83,6 +83,8 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
   }
 
   let mcpPath = resolveConfigPath(PATHS.MCP);
+  let tmpMcpPathToDelete: string | null = null;
+  let customTimeoutMs = CONFIG.TIMEOUT_MS;
 
   // --- Isolation MCP Mode ---
   if (agentName) {
@@ -92,6 +94,12 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
       );
       if (fs.existsSync(agentSettingsPath)) {
         const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+
+        // Extract custom timeout if specified in Environment Variables
+        if (settings.env && settings.env.AGENT_TIMEOUT_MS) {
+          customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
+        }
+
         // Si l'isolation est demandée (false) et qu'une liste est fournie
         if (
           settings.enableAllProjectMcpServers === false &&
@@ -114,6 +122,7 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
             );
             fs.writeFileSync(tmpMcpPath, JSON.stringify(filteredMcp, null, 2));
             mcpPath = tmpMcpPath;
+            tmpMcpPathToDelete = tmpMcpPath;
             console.error(`🛡️ MCP Isolated for ${agentName}: Using filtered config.`);
           }
         }
@@ -128,21 +137,32 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
     mcpPath = relativeMcp.startsWith('./') ? relativeMcp : `./${relativeMcp}`;
   }
 
-  const safePath = (p: string) => (p.includes(' ') ? `"${p}"` : p);
-
-  let command = `claude ${CORE} ${PERMISSIONS} --settings ${safePath(settingsPath)} --mcp-config ${safePath(mcpPath)}`;
-
+  const argsSpawn: string[] = [];
+  if (CORE) argsSpawn.push(...CORE.split(' ').filter(Boolean));
+  if (PERMISSIONS) argsSpawn.push(...PERMISSIONS.split(' ').filter(Boolean));
+  argsSpawn.push('--settings', settingsPath);
+  argsSpawn.push('--mcp-config', mcpPath);
   if (sessionId) {
-    command += ` --resume ${sessionId}`;
+    argsSpawn.push('--resume', sessionId);
   }
 
-  console.error(`🚀 Exec Claude (${agentName || 'default'}): ${command.substring(0, 100)}...`);
+  console.error(
+    `🚀 Exec Claude (${agentName || 'default'}): claude ${argsSpawn.join(' ').substring(0, 100)}...`,
+  );
 
   return new Promise((resolve, reject) => {
-    const child: ChildProcess = spawn(command, [], {
+    const cleanupTmpFiles = () => {
+      if (tmpMcpPathToDelete && fs.existsSync(tmpMcpPathToDelete)) {
+        try {
+          fs.unlinkSync(tmpMcpPathToDelete);
+        } catch (e) {}
+      }
+    };
+
+    const child: ChildProcess = spawn('claude', argsSpawn, {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: process.cwd(),
-      shell: true,
+      shell: process.platform === 'win32',
     });
 
     let stdout = '';
@@ -157,11 +177,13 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
 
     const timeout = setTimeout(() => {
       child.kill();
-      reject(new Error(`Timeout (${CONFIG.TIMEOUT_MS}ms)`));
-    }, CONFIG.TIMEOUT_MS);
+      cleanupTmpFiles();
+      reject(new Error(`Timeout (${customTimeoutMs}ms)`));
+    }, customTimeoutMs);
 
     child.on('close', async (code: number | null) => {
       clearTimeout(timeout);
+      cleanupTmpFiles();
 
       if (code !== 0) {
         console.error('⚠️ Stderr:', stderr);
@@ -170,8 +192,15 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
       }
 
       try {
+        let jsonStr = stdout.trim();
+        const jsonStartIndex = jsonStr.indexOf('{');
+        const jsonLastIndex = jsonStr.lastIndexOf('}');
+        if (jsonStartIndex >= 0 && jsonLastIndex > jsonStartIndex) {
+          jsonStr = jsonStr.substring(jsonStartIndex, jsonLastIndex + 1);
+        }
+
         // Claude returns JSON { type: 'result', content: '...', session_id: '...' }
-        const response = JSON.parse(stdout.trim());
+        const response = JSON.parse(jsonStr || '{}');
 
         // Sauvegarde de la session si autoResume est actif
         if (agentName && response.session_id) {
@@ -203,7 +232,10 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
       }
     });
 
-    child.on('error', (err: Error) => reject(err));
+    child.on('error', (err: Error) => {
+      cleanupTmpFiles();
+      reject(err);
+    });
 
     if (child.stdin) {
       child.stdin.write(prompt);
