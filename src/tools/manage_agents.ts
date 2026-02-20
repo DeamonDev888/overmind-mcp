@@ -144,6 +144,15 @@ export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Prom
     if (e.code !== 'ENOENT') errors.push(`Settings: ${e.message}`);
   }
 
+  // Delete Tmp MCP config
+  const tmpMcpPath = path.join(claudeDir, `mcp_${name}_tmp.json`);
+  try {
+    await fs.unlink(tmpMcpPath);
+    deletedFiles.push(tmpMcpPath);
+  } catch (e: any) {
+    // on ignore si pas de fichier tmp
+  }
+
   if (deletedFiles.length === 0 && errors.length === 0) {
     return {
       isError: true,
