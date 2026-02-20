@@ -6,9 +6,9 @@ _Le Pilote Automatique pour vos Agents IA._
 
 ## 👋 C'est quoi ?
 
-Imaginez une télécommande universelle pour **Claude-Code** ou pour tout autre CLI. Ce projet permet à n'importe quelle application (Discord, n8n, KiloCode, Antigravity, ou même un autre Claude-Code) de **commander un Agent IA** sans avoir à utiliser le terminal a partir de MCP(API).
+Il s'agit d'une véritable télécommande universelle pour **Claude-Code** et d'autres outils CLI similaires. Grâce à ce projet, n'importe quel environnement de développement ou client compatible (comme KiloCode, Antigravity, ou même un autre Claude-Code) peut **piloter un Agent IA** de manière autonome via le protocole MCP, sans jamais avoir besoin d'utiliser directement le terminal.
 
-C'est une "passerelle" qui transforme le puissant CLI Claude Code en un outil simple à utiliser.
+C'est une "passerelle" qui transforme le puissant Claude Code (sans Anthropic) en une flotte d agent simple et efficace à utiliser.
 
 ## ✨ Ce que ça fait
 
