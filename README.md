@@ -1,46 +1,38 @@
-# 🤖 Claude-Code MCP Runner
+# 🤖 Claude-Code MCP Runner (Package Edition)
 
-_Le Pilote Automatique pour vos Agents IA._
+_Le Pilote Automatique pour vos Agents IA, désormais modulaire et réutilisable._
 
 ![Architecture du projet](assets/banner_project.png)
 
 ## 👋 C'est quoi ?
 
-Il s'agit d'une véritable télécommande universelle pour **Claude-Code** et d'autres outils CLI similaires. Grâce à ce projet, n'importe quel environnement de développement ou client compatible (comme KiloCode, Antigravity, ou même un autre Claude-Code) peut **piloter un Agent IA** de manière autonome via le protocole MCP, sans jamais avoir besoin d'utiliser directement le terminal.
+Il s'agit d'une véritable télécommande universelle pour **Claude-Code** et d'autres outils CLI similaires. Ce projet est désormais structuré comme une **bibliothèque (package)** moderne, permettant non seulement de lancer un serveur MCP autonome, mais aussi d'intégrer les capacités de pilotage d'agents directement dans vos propres applications Node.js.
 
-C'est une "passerelle" qui transforme le puissant Claude Code (sans Anthropic) en une flotte d agent simple et efficace à utiliser.
+C'est la passerelle ultime pour transformer Claude Code en une flotte d'agents spécialisés, pilotables par API ou par MCP.
 
 ## ✨ Ce que ça fait
 
-- **🔌 Contrôle Total** : Lancez des missions complexes ("Analyse ces fichiers", "Résume cette page") via une simple commande.
+- **🔌 Contrôle Total** : Lancez des missions complexes via MCP ou directement via le code.
+- **🏗️ Architecture Pro** : Basé sur des services (`AgentManager`, `ClaudeRunner`, `PromptManager`) pour une stabilité maximale.
 - **🛠️ Capacités Étendues** : L'agent piloté peut utiliser VOS outils (Base de données, Scrapers, etc.).
-- **🔗 Compatible** : Fonctionne avec tout client compatible MCP (Claude Desktop, Cursor, etc.).
-- **🤖 Multi-Agents** : Créez, configurez et gérez plusieurs personnalités d'agents facilement. Lancer un pipeline d'agents a partir d'un script.
+- **🤖 Multi-Agents** : Créez, configurez et gérez des personnalités d'agents isolées (Prompts & Settings dédiés).
+- **📦 Prêt pour l'Intégration** : Importable comme un module NPM dans vos autres projets.
 
 ---
 
 ## 🚀 Commencer (Guide Facile)
 
-### 1. Prérequis
-
-Assurez-vous d'avoir installé sur votre machine :
-
-- **Node.js** (v18 ou plus récent)
-- **pnpm** (recommandé) ou npm
-
-### 2. Installation
-
-Ouvrez un terminal dans ce dossier et lancez :
+### 1. Installation
 
 ```bash
-# 1. Installe tout le nécessaire
+# Installe les dépendances
 pnpm install
 
-# 2. Construit le projet
+# Build le projet (Génère les types TS et le code JS)
 pnpm run build
 ```
 
-### 3. Configuration Rapide
+### 2. Configuration MCP
 
 Pour que l'agent puisse voir vos autres serveurs MCP, copiez le fichier d'exemple :
 
@@ -48,74 +40,69 @@ Pour que l'agent puisse voir vos autres serveurs MCP, copiez le fichier d'exempl
 cp .mcp.json.example .mcp.json
 ```
 
-_(C'est dans ce fichier `.mcp.json` que vous listez les outils que l'agent a le droit d'utiliser !)_
+### 3. Lancer le Serveur Standalone
 
-### 4. Lancer le Serveur
-
-Pour démarrer le serveur (commande de base) :
+Le serveur peut être lancé via le CLI dédié :
 
 ```bash
+# Lancement standard
 pnpm start
-```
 
-Ou pour lancer le bot configuré pour les News :
-
-```bash
-pnpm bot:news
+# Ou via le binaire directement
+node dist/bin/cli.js
 ```
 
 ---
 
-## 📦 Comment l'utiliser ?
+## 📦 Utilisation comme Bibliothèque
 
-### Via un Client MCP (Claude Code, KiloCode, Cline, Antigravity...)
+Vous pouvez désormais importer le moteur du runner dans vos propres scripts :
 
-Ajoutez ceci à votre configuration (ex: `claude_desktop_config.json` ou réglages MCP du client) pour donner à votre Agent IA la capacité de piloter d'autres agents (Inception !) :
+```typescript
+import { createServer, AgentManager, ClaudeRunner } from 'claude-code-runner';
+
+// 1. Gérer les agents programmatiquement
+const manager = new AgentManager();
+await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude-3-5-sonnet');
+
+// 2. Lancer une exécution sans passer par MCP
+const runner = new ClaudeRunner();
+const result = await runner.runAgent({
+  agentName: 'expert-seo',
+  prompt: 'Analyse le site example.com',
+  autoResume: true,
+});
+
+console.log(result.result);
+```
+
+---
+
+## 🛠️ Configuration MCP (Client)
+
+Pour connecter ce runner à un client (Cursor, Claude Desktop, etc.), pointez vers le nouvel entrypoint CLI :
 
 ```json
 {
   "mcpServers": {
     "claude-runner": {
       "command": "node",
-      "args": ["CHEMIN_ABSOLU_VERS_CE_DOSSIER/dist/index.js"]
+      "args": ["/CHEMIN_VERS_PROJET/dist/bin/cli.js"]
     }
   }
 }
 ```
 
-Une fois configuré, vous aurez accès à de nouveaux outils. Vous pourrez dire à votre agent :
-
-> _"Crée un nouvel agent 'Chatbot' et demande-lui de se connecter au serveur MCP_Chat_bot pour répondre."_
-
-> _"Crée un nouvel agent 'RAG', connecte-le au serveur MCP_RAG et demande-lui de parcourir la base de données pour lister les 10 clients les plus récents, puis de répondre sur SMS_mcp au numéro 0612345678 toutes les 10 minutes et de me faire un résumé de ce qui s'est passé."_
-
-> _"Crée un nouvel agent 'Discord' et connecte-le au serveur MCP_Discord pour répondre sur le salon #bot."_
-
-### Les Outils Principaux
-
-> 📄 **[Voir la liste complète et détaillée des outils](docs/tools.md)**
-
-Voici les commandes magiques à votre disposition :
-
-- **`run_agent`** : Donnez un ordre à l'agent.
-  - `prompt`: Votre instruction.
-  - `agentName`: (Optionnel) Quel agent doit travailler (ex: "news").
-  - `autoResume`: (Optionnel, `true`/`false`) Si Vrai, l'agent se souvient de la conversation précédente !
-  - `sessionId`: (Optionnel) Pour forcer la reprise d'une conversation spécifique.
-- **`create_agent`** : Créez un nouveau "collègue" virtuel spécialisé.
-- **`list_agents`** : Affichez l'équipe d'agents disponibles.
-- **`delete_agent`** : Supprimez un agent dont vous n'avez plus besoin.
-- **`update_agent_config`** : Modifiez les réglages (modèle, variables) d'un agent.
-
 ---
 
-## 📂 Où sont les choses ?
+## 📂 Structure du Projet
 
-- `assets/` : Les images du projet.
-- `dist/` : Le code compilé (ne touchez pas à ça).
-- `src/` : Le code source (pour les développeurs curieux).
-- `.claude/` : Le dossier où sont stockés les cerveaux (prompts) et réglages de vos agents.
-- `.mcp.json` : La carte des serveurs MCP connectés.
+- `src/services/` : Le cœur du système (Logique métier isolée en services).
+- `src/tools/` : Les outils MCP qui appellent les services.
+- `src/bin/cli.ts` : Le point d'entrée exécutable pour le terminal.
+- `src/server.ts` : La définition du serveur FastMCP.
+- `src/index.ts` : Les exports publics (API de la bibliothèque).
+- `.claude/` : Stockage des agents (Prompts `.md` et Settings `.json`).
 
 ---
 

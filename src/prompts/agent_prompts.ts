@@ -22,7 +22,7 @@ export async function getAgentPrompt() {
 
     // Let's try to return the settings.json content + any specialized instructions
     return `Configuration actuelle (${settingsPath}):\n${settingsContent}`;
-  } catch (error: any) {
-    return `Erreur lors de la lecture du prompt: ${error.message}`;
+  } catch (error) {
+    return `Erreur lors de la lecture du prompt: ${error instanceof Error ? error.message : String(error)}`;
   }
 }

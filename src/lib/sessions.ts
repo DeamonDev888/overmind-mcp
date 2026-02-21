@@ -16,7 +16,7 @@ export async function getLastSessionId(agentName: string): Promise<string | null
     const content = await fs.readFile(filePath, 'utf-8');
     const sessions = JSON.parse(content);
     return sessions[agentName] || null;
-  } catch (error) {
+  } catch (_error) {
     return null; // File doesn't exist or error reading
   }
 }
@@ -32,7 +32,7 @@ export async function saveSessionId(agentName: string, sessionId: string): Promi
     try {
       const content = await fs.readFile(filePath, 'utf-8');
       sessions = JSON.parse(content);
-    } catch (e) {
+    } catch (_e) {
       // Ignore error (file new)
     }
 
