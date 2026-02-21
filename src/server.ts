@@ -3,6 +3,7 @@ import { runClaudeAgent, runAgentSchema } from './tools/run_claude.js';
 import { runGeminiAgent, runGeminiSchema } from './tools/run_gemini.js';
 import { runKiloAgent, runKiloSchema } from './tools/run_kilo.js';
 import { runQwenAgent, runQwenSchema } from './tools/run_qwen.js';
+import { runOpenClawAgent, runOpenClawSchema } from './tools/run_openclaw.js';
 import { createAgent, createAgentSchema } from './tools/create_agent.js';
 import {
   createPrompt,
@@ -56,6 +57,14 @@ export function createServer(name: string = 'OverMind-MCP') {
     description: "Exécute une commande sur l'agent Qwen Code via CLI (qwen -p)",
     parameters: runQwenSchema,
     execute: runQwenAgent,
+  });
+
+  // Outil : Exécuter l'agent OpenClaw
+  server.addTool({
+    name: 'run_openclaw',
+    description: "Exécute une commande sur l'agent OpenClaw via CLI (openclaw message send)",
+    parameters: runOpenClawSchema,
+    execute: runOpenClawAgent,
   });
 
   // Outil : Créer un nouvel agent
