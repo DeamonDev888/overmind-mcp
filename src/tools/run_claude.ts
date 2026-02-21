@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ClaudeRunner } from '../services/ClaudeRunner.js';
+import { storeRun } from '../memory/OverMindMemory.js';
 
 // export const runAgentSchema = z.object({
 //     prompt: z.string().describe("Le prompt à envoyer à l'agent"),
@@ -32,7 +33,14 @@ export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Prom
   const runner = new ClaudeRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 
+  const start = Date.now();
   const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId });
+  const durationMs = Date.now() - start;
+
+  // Auto-instrument: record every run in OverMind memory
+  try {
+    storeRun({ runner: 'claude', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
+  } catch { /* silent — memory must never block the runner */ }
 
   if (result.error === 'INVALID_AGENT') {
     return {

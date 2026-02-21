@@ -7,6 +7,9 @@ import { runOpenClawAgent, runOpenClawSchema } from './tools/run_openclaw.js';
 import { runClineAgent, runClineSchema } from './tools/run_cline.js';
 import { runOpenCodeAgent, runOpenCodeSchema } from './tools/run_opencode.js';
 import { runTraeAgent, runTraeSchema } from './tools/run_trae.js';
+import { memorySearchTool, memorySearchSchema } from './tools/memory_search.js';
+import { memoryStoreTool, memoryStoreSchema } from './tools/memory_store.js';
+import { memoryRunsTool, memoryRunsSchema } from './tools/memory_runs.js';
 import { createAgent, createAgentSchema } from './tools/create_agent.js';
 import {
   createPrompt,
@@ -142,6 +145,28 @@ export function createServer(name: string = 'OverMind-MCP') {
     description: 'Modifie un prompt existant en remplaçant un bloc de texte spécifique',
     parameters: editPromptSchema,
     execute: editPrompt,
+  });
+
+  // ── Mémoire OverMind ───────────────────────────────────────────────────────────────
+  server.addTool({
+    name: 'memory_search',
+    description: 'Recherche sémantique + full-text dans la mémoire d’orchestration OverMind (connaissances + historique)',
+    parameters: memorySearchSchema,
+    execute: memorySearchTool,
+  });
+
+  server.addTool({
+    name: 'memory_store',
+    description: 'Mémorise durablement une connaissance, décision ou pattern d’orchestration',
+    parameters: memoryStoreSchema,
+    execute: memoryStoreTool,
+  });
+
+  server.addTool({
+    name: 'memory_runs',
+    description: 'Liste l’historique des runs d’agents enregistrés par OverMind (avec stats optionnelles)',
+    parameters: memoryRunsSchema,
+    execute: memoryRunsTool,
   });
 
   return server;
