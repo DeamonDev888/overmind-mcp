@@ -4,6 +4,8 @@ import { runGeminiAgent, runGeminiSchema } from './tools/run_gemini.js';
 import { runKiloAgent, runKiloSchema } from './tools/run_kilo.js';
 import { runQwenAgent, runQwenSchema } from './tools/run_qwen.js';
 import { runOpenClawAgent, runOpenClawSchema } from './tools/run_openclaw.js';
+import { runClineAgent, runClineSchema } from './tools/run_cline.js';
+import { runOpenCodeAgent, runOpenCodeSchema } from './tools/run_opencode.js';
 import { createAgent, createAgentSchema } from './tools/create_agent.js';
 import {
   createPrompt,
@@ -65,6 +67,22 @@ export function createServer(name: string = 'OverMind-MCP') {
     description: "Exécute une commande sur l'agent OpenClaw via CLI (openclaw message send)",
     parameters: runOpenClawSchema,
     execute: runOpenClawAgent,
+  });
+
+  // Outil : Exécuter l'agent Cline
+  server.addTool({
+    name: 'run_cline',
+    description: "Exécute une commande sur l'agent Cline via CLI (cline -y). Supporte les modes : plan, act",
+    parameters: runClineSchema,
+    execute: runClineAgent,
+  });
+
+  // Outil : Exécuter l'agent OpenCode
+  server.addTool({
+    name: 'run_opencode',
+    description: "Exécute une commande sur l'agent OpenCode via CLI (opencode run)",
+    parameters: runOpenCodeSchema,
+    execute: runOpenCodeAgent,
   });
 
   // Outil : Créer un nouvel agent
