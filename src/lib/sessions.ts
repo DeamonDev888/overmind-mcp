@@ -1,13 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { CONFIG } from './config.js';
+import { getWorkspaceDir } from './config.js';
 
 const SESSIONS_FILE = '.claude/sessions.json';
 
 function getSessionsPath(): string {
-  // Resolve relative to CWD or setup logic similar to config
-  // For simplicity, we assume .claude is in CWD or relative to project root
-  return path.resolve(process.cwd(), SESSIONS_FILE);
+  return path.resolve(getWorkspaceDir(), SESSIONS_FILE);
 }
 
 export async function getLastSessionId(agentName: string): Promise<string | null> {

@@ -1,4 +1,6 @@
+import os from 'os';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 export interface ConfigType {
@@ -27,16 +29,39 @@ export const DEFAULT_CONFIG: ConfigType = {
 
 export const CONFIG = { ...DEFAULT_CONFIG };
 
+export function getWorkspaceDir(): string {
+  // 1. Environment Variable
+  if (process.env.OVERMIND_WORKSPACE) {
+    return path.resolve(process.env.OVERMIND_WORKSPACE);
+  }
+  
+  // 2. Local Project mode if .mcp.json exists in cwd
+  const cwd = process.cwd();
+  if (fs.existsSync(path.join(cwd, '.mcp.json'))) {
+    return cwd;
+  }
+
+  // 3. Fallback: global directory in user profile
+  const homedir = os.homedir(); 
+  const globalDir = path.join(homedir, '.overmind-mcp');
+  
+  if (!fs.existsSync(globalDir)) {
+    fs.mkdirSync(globalDir, { recursive: true });
+    // Create an empty .mcp.json so claude CLI doesn't crash
+    fs.writeFileSync(
+      path.join(globalDir, '.mcp.json'), 
+      JSON.stringify({ mcpServers: {} }, null, 2)
+    );
+  }
+  
+  return globalDir;
+}
+
 export function resolveConfigPath(configPath: string): string {
   if (path.isAbsolute(configPath)) return configPath;
 
-  // Resolve relative to project root (Workflow/)
-  const currentFileUrl = import.meta.url;
-  const currentFilePath = fileURLToPath(currentFileUrl);
-  // src/lib/config.ts -> src/lib -> src -> Workflow
-  const projectRoot = path.resolve(path.dirname(currentFilePath), '../../');
-
-  return path.resolve(projectRoot, configPath);
+  const workspaceDir = getWorkspaceDir();
+  return path.resolve(workspaceDir, configPath);
 }
 
 export function updateConfig(newSettingsPath?: string, newMcpPath?: string) {
