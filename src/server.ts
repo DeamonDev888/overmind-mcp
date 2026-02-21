@@ -1,6 +1,7 @@
 import { FastMCP } from 'fastmcp';
 import { runClaudeAgent, runAgentSchema } from './tools/run_claude.js';
 import { runGeminiAgent, runGeminiSchema } from './tools/run_gemini.js';
+import { runKiloAgent, runKiloSchema } from './tools/run_kilo.js';
 import { createAgent, createAgentSchema } from './tools/create_agent.js';
 import {
   createPrompt,
@@ -37,6 +38,15 @@ export function createServer(name: string = 'OverMind-MCP') {
     description: "Exécute une commande sur l'agent Gemini configuré via CLI",
     parameters: runGeminiSchema,
     execute: runGeminiAgent,
+  });
+
+  // Outil : Exécuter l'agent Kilocode
+  server.addTool({
+    name: 'run_kilo',
+    description:
+      "Exécute une commande sur l'agent Kilocode via CLI. Supporte les modes : code, architect, ask, debug, orchestrator",
+    parameters: runKiloSchema,
+    execute: runKiloAgent,
   });
 
   // Outil : Créer un nouvel agent
