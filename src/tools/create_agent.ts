@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { CONFIG, resolveConfigPath } from '../lib/config.js';
+
+import { AgentManager } from '../services/AgentManager.js';
 
 export const createAgentSchema = z.object({
   name: z
@@ -24,23 +24,19 @@ export const createAgentSchema = z.object({
     ),
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createAgent(args: z.infer<typeof createAgentSchema>): Promise<any> {
+  const manager = new AgentManager();
   const { name, prompt, model, copyEnvFrom } = args;
 
-  // Helper (Inline for simplicity)
-  const getAvailableMcpServers = async () => {
-    try {
-      const mcpPath = resolveConfigPath(CONFIG.CLAUDE.PATHS.MCP);
-      const content = await fs.readFile(mcpPath, 'utf-8');
-      const json = JSON.parse(content);
-      return Object.keys(json.mcpServers || {});
-    } catch (e) {
-      return [];
-    }
-  };
+  const currentFileUrl = import.meta.url;
+  const currentFilePath = fileURLToPath(currentFileUrl);
+  // src/tools/create_agent.ts -> src/tools -> src -> Workflow
+  const projectRoot = path.resolve(path.dirname(currentFilePath), '../../');
 
-  // Validation du nom (sécurité système de fichiers)
-  if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+  const result = await manager.createAgent(name, prompt, model, copyEnvFrom, projectRoot);
+
+  if (result.error === 'INVALID_NAME') {
     return {
       content: [
         {
@@ -52,68 +48,11 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>): Prom
     };
   }
 
-  // Résolution des chemins
-  const currentFileUrl = import.meta.url;
-  const currentFilePath = fileURLToPath(currentFileUrl);
-  // src/tools/create_agent.ts -> src/tools -> src -> Workflow
-  const projectRoot = path.resolve(path.dirname(currentFilePath), '../../');
-  const claudeDir = path.resolve(projectRoot, '.claude');
-  const agentsDir = path.resolve(claudeDir, 'agents');
-
-  // Assurer que les dossiers existent
-  await fs.mkdir(claudeDir, { recursive: true });
-  await fs.mkdir(agentsDir, { recursive: true });
-
-  // 1. Création du fichier Prompt (.md)
-  const promptPath = path.join(agentsDir, `${name}.md`);
-  await fs.writeFile(promptPath, prompt, 'utf-8');
-
-  // 2. Création du fichier Settings (.json)
-  let envVars = {};
-  const availableServers = await getAvailableMcpServers();
-
-  // Par défaut, on active tous les serveurs détectés (meilleure expérience pour l'agent)
-  // Si aucun détecté (ou mcp.json manquant), on garde des defaults raisonnables
-  let mcpServers =
-    availableServers.length > 0 ? availableServers : ['postgresql', 'news', 'discord', 'workflow'];
-
-  // Copie des env si demandé
-  if (copyEnvFrom) {
-    try {
-      const sourceSettingsPath = path.resolve(projectRoot, copyEnvFrom);
-      const sourceContent = await fs.readFile(sourceSettingsPath, 'utf-8');
-      const sourceJson = JSON.parse(sourceContent);
-      if (sourceJson.env) envVars = sourceJson.env;
-      if (sourceJson.enabledMcpjsonServers) mcpServers = sourceJson.enabledMcpjsonServers;
-    } catch (e: any) {
-      console.warn(`⚠️ Impossible de copier la config depuis ${copyEnvFrom}: ${e.message}`);
-    }
-  } else {
-    // Fallback env (si aucun fichier source fourni)
-    envVars = {
-      ANTHROPIC_MODEL: model,
-    };
-  }
-
-  const settings = {
-    env: {
-      ...envVars,
-      ANTHROPIC_MODEL: model, // Force le modèle demandé
-    },
-    enableAllProjectMcpServers: false,
-    enabledMcpjsonServers: mcpServers,
-    agent: name,
-  };
-
-  const settingsFileName = `settings_${name}.json`;
-  const settingsPath = path.join(claudeDir, settingsFileName);
-  await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
-
   return {
     content: [
       {
         type: 'text',
-        text: `✅ Agent '${name}' créé avec succès !\n\n📂 Fichiers :\n- Prompt : ${promptPath}\n- Config : ${settingsPath}\n\n🚀 Pour lancer cet agent :\nnode dist/index.js --settings .claude/${settingsFileName}`,
+        text: `✅ Agent '${name}' créé avec succès !\n\n📂 Fichiers :\n- Prompt : ${result.promptPath}\n- Config : ${result.settingsPath}\n\n🚀 Pour lancer cet agent :\nnode dist/bin/cli.js --settings .claude/settings_${name}.json`,
       },
     ],
   };
