@@ -63,7 +63,12 @@ export async function listAgents(args: z.infer<typeof listAgentsSchema>): Promis
   } catch (e) {
     return {
       isError: true,
-      content: [{ type: 'text', text: `❌ Erreur lors du listing des agents : ${e instanceof Error ? e.message : String(e)}` }],
+      content: [
+        {
+          type: 'text',
+          text: `❌ Erreur lors du listing des agents : ${e instanceof Error ? e.message : String(e)}`,
+        },
+      ],
     };
   }
 }
@@ -95,7 +100,6 @@ export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Prom
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function updateAgentConfig(
   args: z.infer<typeof updateAgentConfigSchema>,
 ): Promise<any> {
@@ -136,7 +140,10 @@ export async function updateAgentConfig(
     return {
       isError: true,
       content: [
-        { type: 'text', text: `❌ Erreur lors de la mise à jour de '${name}': ${e instanceof Error ? e.message : String(e)}` },
+        {
+          type: 'text',
+          text: `❌ Erreur lors de la mise à jour de '${name}': ${e instanceof Error ? e.message : String(e)}`,
+        },
       ],
     };
   }
