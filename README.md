@@ -8,7 +8,7 @@ _Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Cod
 
 **OverMind-MCP** est une conscience supérieure conçue pour orchestrer, commander et automatiser une flotte illimitée d'agents IA. Compatible avec **Claude-Code, Gemini-cli, Qwen-cli, Kilo/Cline, OpenClaw**, et prêt pour **GLM, Minimax, Kimi, Ollama** et bien d'autres. Plus qu'un simple runner, c'est le **Cortex Central** de votre infrastructure IA.
 
-Il transforme les outils CLI isolés en une force coordonnée, pilotable par API ou par MCP, capable d'exécuter des missions complexes en 2 secondes chrono.
+Il transforme les outils CLI isolés en une force coordonnée, pilotable par API ou par MCP, capable d'exécuter des missions complexes en 2 secondes chrono. de creer et d orchestrer des pipeline de plusieurs agent. il est expert en outils MCP et peu etre scripté pour les faire fonctionner ensemble et les mettre en productions
 
 ## ✨ Ce que ça fait
 
@@ -25,14 +25,18 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 ### 1. Installation
 
 ```bash
-# Pour l'installer globalement et utiliser la commande `overmind` partout :
-npm install -g overmind-mcp
-# Ou avec pnpm :
-pnpm add -g overmind-mcp
+# 1. Cloner le repo localement
+git clone <votre_repo> overmind-mcp
+cd overmind-mcp
 
-# Pour l'ajouter comme dépendance dans un de vos projets :
-pnpm add overmind-mcp
+# 2. Installer les dépendances
+pnpm install
+
+# 3. Build le projet
+pnpm run build
 ```
+
+_(Si vous souhaitez l'installer globalement sans cloner, vous pouvez utiliser `npm install -g overmind-mcp`)_
 
 ### 2. Configuration MCP
 
@@ -76,12 +80,14 @@ Pour connecter ce runner à un client (Cursor, Claude Desktop, etc.), pointez ve
 {
   "mcpServers": {
     "overmind": {
-      "command": "npx",
-      "args": ["-y", "overmind-mcp"]
+      "command": "node",
+      "args": ["/LE_CHEMIN_ABSOLU_VERS_VOTRE_DOSSIER/overmind-mcp/dist/bin/cli.js"]
     }
   }
 }
 ```
+
+_(Note : Si vous avez fait le choix d'utiliser le package NPM en global, la configuration serait `{"command": "npx", "args": ["-y", "overmind-mcp@latest"]}`)_
 
 ---
 

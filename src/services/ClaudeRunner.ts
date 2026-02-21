@@ -135,10 +135,14 @@ export class ClaudeRunner {
         }
       };
 
-      const child: ChildProcess = spawn('claude', argsSpawn, {
+      const isWin = process.platform === 'win32';
+      const command = isWin ? `claude ${argsSpawn.join(' ')}` : 'claude';
+      const spawnArgs = isWin ? [] : argsSpawn;
+
+      const child: ChildProcess = spawn(command, spawnArgs, {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: process.cwd(),
-        shell: process.platform === 'win32',
+        shell: isWin,
       });
 
       let stdout = '';
