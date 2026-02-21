@@ -8,7 +8,7 @@ _Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Cod
 
 **OverMind-MCP** est une conscience supérieure conçue pour orchestrer, commander et automatiser une flotte illimitée d'agents IA. Compatible avec **Claude-Code, Gemini-cli, Qwen-cli, Kilo/Cline, OpenClaw**, et prêt pour **GLM, Minimax, Kimi, Ollama** et bien d'autres. Plus qu'un simple runner, c'est le **Cortex Central** de votre infrastructure IA.
 
-Il transforme les outils CLI isolés en une force coordonnée, pilotable par API ou par MCP, capable d'exécuter des missions complexes en 2 secondes chrono.
+Il transforme les outils CLI isolés en une force coordonnée, pilotable par API ou par MCP, capable d'exécuter des missions complexes en 2 secondes chrono. de creer et d orchestrer des pipeline de plusieurs agent. il est expert en outils MCP et peu etre scripté pour les faire fonctionner ensemble et les mettre en productions
 
 ## ✨ Ce que ça fait
 
@@ -22,36 +22,62 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 
 ## 🚀 Commencer (Guide Facile)
 
-### 1. Installation
+### Option 1 : Utilisation Globale ou Package distant NPM
+
+Si vous souhaitez l'installer globalement sans cloner de repo, vous pouvez utiliser :
 
 ```bash
-# Pour l'installer globalement et utiliser la commande `overmind` partout :
 npm install -g overmind-mcp
-# Ou avec pnpm :
-pnpm add -g overmind-mcp
-
-# Pour l'ajouter comme dépendance dans un de vos projets :
-pnpm add overmind-mcp
 ```
 
-### 2. Configuration MCP
+**Configuration MCP (Client) pour l'Option 1 :**
+Pour connecter l'orchestrateur distant à un client ou à Cursor, pointez simplement via `npx` :
 
-Pour que l'agent puisse voir vos autres serveurs MCP, copiez le fichier d'exemple :
+```json
+{
+  "mcpServers": {
+    "overmind": {
+      "command": "npx",
+      "args": ["-y", "overmind-mcp@latest"]
+    }
+  }
+}
+```
+
+---
+
+### Option 2 : Installation Locale (Développement ou hébergement précis)
+
+```bash
+# 1. Cloner le repo localement
+git clone https://github.com/DeamonDev888/overmind-mcp overmind-mcp
+cd overmind-mcp
+
+# 2. Installer les dépendances
+pnpm install
+
+# 3. Build le projet
+pnpm run build
+```
+
+Pour que l'agent puisse voir vos autres serveurs MCP locaux, copiez le fichier d'exemple :
 
 ```bash
 cp .mcp.json.example .mcp.json
 ```
 
-### 3. Lancer le Serveur Standalone
+**Configuration MCP (Client) pour l'Option 2 :**
+Pour connecter ce runner à un client en pointant vers votre version locale compilée :
 
-Le serveur peut être lancé très facilement depuis n'importe où :
-
-```bash
-# Si installé globalement
-overmind
-
-# Ou via npx sans installation globale
-npx overmind-mcp
+```json
+{
+  "mcpServers": {
+    "overmind": {
+      "command": "node",
+      "args": ["/LE_CHEMIN_ABSOLU_VERS_VOTRE_DOSSIER/overmind-mcp/dist/bin/cli.js"]
+    }
+  }
+}
 ```
 
 ---
@@ -76,23 +102,6 @@ const result = await runner.runAgent({
 });
 
 console.log(result.result);
-```
-
----
-
-## 🛠️ Configuration MCP (Client)
-
-Pour connecter ce runner à un client (Cursor, Claude Desktop, etc.), pointez vers le nouvel entrypoint CLI :
-
-```json
-{
-  "mcpServers": {
-    "overmind": {
-      "command": "npx",
-      "args": ["-y", "overmind-mcp"]
-    }
-  }
-}
 ```
 
 ---
