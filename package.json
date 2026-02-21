@@ -39,7 +39,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DeaMoN888/claude-code-runner"
+    "url": "https://github.com/DeamonDev888/overmind-mcp"
   },
   "engines": {
     "node": ">=18.0.0"
