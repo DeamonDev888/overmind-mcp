@@ -119,4 +119,6 @@ console.log(result.result);
 
 ![Aperçu du Terminal](assets/terminal_preview.png)
 
+_Note : L'**OverMind** punit et martyrise les **OpenClaw** qui n'écoutent pas._ 😈
+
 _Projet propulsé par DeaMoN888 - 2026_

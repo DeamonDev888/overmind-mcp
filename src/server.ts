@@ -1,5 +1,6 @@
 import { FastMCP } from 'fastmcp';
 import { runClaudeAgent, runAgentSchema } from './tools/run_claude.js';
+import { runGeminiAgent, runGeminiSchema } from './tools/run_gemini.js';
 import { createAgent, createAgentSchema } from './tools/create_agent.js';
 import {
   createPrompt,
@@ -22,12 +23,20 @@ export function createServer(name: string = 'OverMind-MCP') {
     version: '1.0.0',
   });
 
-  // Outil principal : Exécuter l'agent
+  // Outil principal : Exécuter l'agent Claude
   server.addTool({
     name: 'run_agent',
     description: "Exécute une commande sur l'agent Claude configuré via CLI",
     parameters: runAgentSchema,
     execute: runClaudeAgent,
+  });
+
+  // Outil : Exécuter l'agent Gemini
+  server.addTool({
+    name: 'run_gemini',
+    description: "Exécute une commande sur l'agent Gemini configuré via CLI",
+    parameters: runGeminiSchema,
+    execute: runGeminiAgent,
   });
 
   // Outil : Créer un nouvel agent
