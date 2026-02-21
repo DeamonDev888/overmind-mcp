@@ -25,11 +25,13 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 ### 1. Installation
 
 ```bash
-# Installe les dépendances
-pnpm install
+# Pour l'installer globalement et utiliser la commande `overmind` partout :
+npm install -g overmind-mcp
+# Ou avec pnpm :
+pnpm add -g overmind-mcp
 
-# Build le projet (Génère les types TS et le code JS)
-pnpm run build
+# Pour l'ajouter comme dépendance dans un de vos projets :
+pnpm add overmind-mcp
 ```
 
 ### 2. Configuration MCP
@@ -42,14 +44,14 @@ cp .mcp.json.example .mcp.json
 
 ### 3. Lancer le Serveur Standalone
 
-Le serveur peut être lancé via le CLI dédié :
+Le serveur peut être lancé très facilement depuis n'importe où :
 
 ```bash
-# Lancement standard
-pnpm start
-
-# Ou via le binaire directement (si installé via npm link)
+# Si installé globalement
 overmind
+
+# Ou via npx sans installation globale
+npx overmind-mcp
 ```
 
 ---
@@ -59,7 +61,7 @@ overmind
 Vous pouvez désormais importer le moteur du runner dans vos propres scripts :
 
 ```typescript
-import { createServer, AgentManager, ClaudeRunner } from 'claude-code-runner';
+import { createServer, AgentManager, ClaudeRunner } from 'overmind-mcp';
 
 // 1. Gérer les agents programmatiquement
 const manager = new AgentManager();
@@ -85,9 +87,9 @@ Pour connecter ce runner à un client (Cursor, Claude Desktop, etc.), pointez ve
 ```json
 {
   "mcpServers": {
-    "claude-runner": {
-      "command": "node",
-      "args": ["/CHEMIN_VERS_PROJET/dist/bin/cli.js"]
+    "overmind": {
+      "command": "npx",
+      "args": ["-y", "overmind-mcp"]
     }
   }
 }
