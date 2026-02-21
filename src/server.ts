@@ -6,6 +6,7 @@ import { runQwenAgent, runQwenSchema } from './tools/run_qwen.js';
 import { runOpenClawAgent, runOpenClawSchema } from './tools/run_openclaw.js';
 import { runClineAgent, runClineSchema } from './tools/run_cline.js';
 import { runOpenCodeAgent, runOpenCodeSchema } from './tools/run_opencode.js';
+import { runTraeAgent, runTraeSchema } from './tools/run_trae.js';
 import { createAgent, createAgentSchema } from './tools/create_agent.js';
 import {
   createPrompt,
@@ -83,6 +84,14 @@ export function createServer(name: string = 'OverMind-MCP') {
     description: "Exécute une commande sur l'agent OpenCode via CLI (opencode run)",
     parameters: runOpenCodeSchema,
     execute: runOpenCodeAgent,
+  });
+
+  // Outil : Exécuter l'agent Trae (SOLO headless)
+  server.addTool({
+    name: 'run_trae',
+    description: "Exécute une mission sur l'agent Trae en mode SOLO headless (trae solo --headless)",
+    parameters: runTraeSchema,
+    execute: runTraeAgent,
   });
 
   // Outil : Créer un nouvel agent
