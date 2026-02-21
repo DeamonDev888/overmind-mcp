@@ -2,6 +2,7 @@ import { FastMCP } from 'fastmcp';
 import { runClaudeAgent, runAgentSchema } from './tools/run_claude.js';
 import { runGeminiAgent, runGeminiSchema } from './tools/run_gemini.js';
 import { runKiloAgent, runKiloSchema } from './tools/run_kilo.js';
+import { runQwenAgent, runQwenSchema } from './tools/run_qwen.js';
 import { createAgent, createAgentSchema } from './tools/create_agent.js';
 import {
   createPrompt,
@@ -47,6 +48,14 @@ export function createServer(name: string = 'OverMind-MCP') {
       "Exécute une commande sur l'agent Kilocode via CLI. Supporte les modes : code, architect, ask, debug, orchestrator",
     parameters: runKiloSchema,
     execute: runKiloAgent,
+  });
+
+  // Outil : Exécuter l'agent Qwen Code
+  server.addTool({
+    name: 'run_qwen',
+    description: "Exécute une commande sur l'agent Qwen Code via CLI (qwen -p)",
+    parameters: runQwenSchema,
+    execute: runQwenAgent,
   });
 
   // Outil : Créer un nouvel agent
