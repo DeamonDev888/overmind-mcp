@@ -1,14 +1,14 @@
-# 🤖 Claude-Code MCP Runner (Package Edition)
+# 🧠 OverMind-MCP
 
-_Le Pilote Automatique pour vos Agents IA, désormais modulaire et réutilisable._
+_Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini, Qwen, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite._
 
-![Architecture du projet](assets/banner_project.png)
+![OverMind-MCP Banner](assets/overmind_mcp_banner.png)
 
 ## 👋 C'est quoi ?
 
-Il s'agit d'une véritable télécommande universelle pour **Claude-Code** et d'autres outils CLI similaires. Ce projet est désormais structuré comme une **bibliothèque (package)** moderne, permettant non seulement de lancer un serveur MCP autonome, mais aussi d'intégrer les capacités de pilotage d'agents directement dans vos propres applications Node.js.
+**OverMind-MCP** est une conscience supérieure conçue pour orchestrer, commander et automatiser une flotte illimitée d'agents IA. Compatible avec **Claude-Code, Gemini-cli, Qwen-cli, Kilo/Cline, OpenClaw**, et prêt pour **GLM, Minimax, Kimi, Ollama** et bien d'autres. Plus qu'un simple runner, c'est le **Cortex Central** de votre infrastructure IA.
 
-C'est la passerelle ultime pour transformer Claude Code en une flotte d'agents spécialisés, pilotables par API ou par MCP.
+Il transforme les outils CLI isolés en une force coordonnée, pilotable par API ou par MCP, capable d'exécuter des missions complexes en 2 secondes chrono.
 
 ## ✨ Ce que ça fait
 
@@ -48,8 +48,8 @@ Le serveur peut être lancé via le CLI dédié :
 # Lancement standard
 pnpm start
 
-# Ou via le binaire directement
-node dist/bin/cli.js
+# Ou via le binaire directement (si installé via npm link)
+overmind
 ```
 
 ---

@@ -16,7 +16,7 @@ import {
   updateAgentConfigSchema,
 } from './tools/manage_agents.js';
 
-export function createServer(name: string = 'Claude-Code MCP Runner') {
+export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
     name,
     version: '1.0.0',

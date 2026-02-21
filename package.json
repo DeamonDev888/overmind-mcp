@@ -1,12 +1,12 @@
 {
-  "name": "claude-code-runner",
+  "name": "overmind-mcp",
   "version": "1.0.0",
-  "description": "MCP Server to orchestrate autonomous Claude Code agents — Run, create, and manage AI agents via any MCP-compatible client.",
+  "description": "Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini, Qwen, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "claude-code-runner": "dist/bin/cli.js"
+    "overmind": "dist/bin/cli.js"
   },
   "exports": {
     ".": {
