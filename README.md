@@ -42,18 +42,6 @@ Pour que l'agent puisse voir vos autres serveurs MCP, copiez le fichier d'exempl
 cp .mcp.json.example .mcp.json
 ```
 
-### 3. Lancer le Serveur Standalone
-
-Le serveur peut être lancé très facilement depuis n'importe où :
-
-```bash
-# Si installé globalement
-overmind
-
-# Ou via npx sans installation globale
-npx overmind-mcp
-```
-
 ---
 
 ## 📦 Utilisation comme Bibliothèque
