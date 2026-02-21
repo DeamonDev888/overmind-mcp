@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { CONFIG, resolveConfigPath } from '../lib/config.js';
+import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
 
 export interface AgentConfigUpdates {
   model?: string;
@@ -16,10 +16,7 @@ export class AgentManager {
     if (customClaudeDir) {
       this.claudeDir = customClaudeDir;
     } else {
-      const currentFileUrl = import.meta.url;
-      const currentFilePath = fileURLToPath(currentFileUrl);
-      const projectRoot = path.resolve(path.dirname(currentFilePath), '../../');
-      this.claudeDir = path.resolve(projectRoot, '.claude');
+      this.claudeDir = path.join(getWorkspaceDir(), '.claude');
     }
   }
 

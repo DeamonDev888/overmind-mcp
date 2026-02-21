@@ -74,7 +74,7 @@ Pour connecter ce runner à un client en pointant vers votre version locale comp
   "mcpServers": {
     "overmind": {
       "command": "node",
-      "args": ["/LE_CHEMIN_ABSOLU_VERS_VOTRE_DOSSIER/overmind-mcp/dist/bin/cli.js"]
+      "args": ["/LE_CHEMIN_ABSOLU_VERS_LE_DOSSIER_CLONE/dist/bin/cli.js"]
     }
   }
 }
