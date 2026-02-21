@@ -12,15 +12,30 @@ describe('MCP Tools Unit Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    vi.spyOn(AgentManager.prototype, 'createAgent').mockResolvedValue({ promptPath: '/tmp/p.md', settingsPath: '/tmp/s.json', error: undefined } as any);
+    vi.spyOn(AgentManager.prototype, 'createAgent').mockResolvedValue({
+      promptPath: '/tmp/p.md',
+      settingsPath: '/tmp/s.json',
+      error: undefined,
+    } as any);
     vi.spyOn(AgentManager.prototype, 'listAgents').mockResolvedValue(['- agent1'] as any);
-    vi.spyOn(AgentManager.prototype, 'deleteAgent').mockResolvedValue({ deletedFiles: ['/tmp/p.md'], errors: [] } as any);
-    vi.spyOn(AgentManager.prototype, 'updateAgentConfig').mockResolvedValue(['- Modèle : old -> new']);
+    vi.spyOn(AgentManager.prototype, 'deleteAgent').mockResolvedValue({
+      deletedFiles: ['/tmp/p.md'],
+      errors: [],
+    } as any);
+    vi.spyOn(AgentManager.prototype, 'updateAgentConfig').mockResolvedValue([
+      '- Modèle : old -> new',
+    ]);
 
-    vi.spyOn(PromptManager.prototype, 'createPrompt').mockResolvedValue({ filePath: '/tmp/p.md', existed: false } as any);
+    vi.spyOn(PromptManager.prototype, 'createPrompt').mockResolvedValue({
+      filePath: '/tmp/p.md',
+      existed: false,
+    } as any);
     vi.spyOn(PromptManager.prototype, 'editPrompt').mockResolvedValue({ success: true } as any);
 
-    vi.spyOn(ClaudeRunner.prototype, 'runAgent').mockResolvedValue({ result: 'Hello', sessionId: '123' } as any);
+    vi.spyOn(ClaudeRunner.prototype, 'runAgent').mockResolvedValue({
+      result: 'Hello',
+      sessionId: '123',
+    } as any);
   });
 
   it('createAgent creates an agent successfully', async () => {

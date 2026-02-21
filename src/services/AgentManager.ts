@@ -180,7 +180,9 @@ export class AgentManager {
         if (sourceJson.env) envVars = { ...envVars, ...sourceJson.env };
         if (sourceJson.enabledMcpjsonServers) mcpServers = sourceJson.enabledMcpjsonServers;
       } catch (e) {
-        console.warn(`⚠️ Impossible de copier la config depuis ${copyEnvFrom}: ${(e as Error).message}`);
+        console.warn(
+          `⚠️ Impossible de copier la config depuis ${copyEnvFrom}: ${(e as Error).message}`,
+        );
       }
     }
 

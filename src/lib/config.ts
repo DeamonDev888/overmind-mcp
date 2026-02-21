@@ -34,7 +34,7 @@ export function getWorkspaceDir(): string {
   if (process.env.OVERMIND_WORKSPACE) {
     return path.resolve(process.env.OVERMIND_WORKSPACE);
   }
-  
+
   // 2. Local Project mode if .mcp.json exists in cwd
   const cwd = process.cwd();
   if (fs.existsSync(path.join(cwd, '.mcp.json'))) {
@@ -42,18 +42,18 @@ export function getWorkspaceDir(): string {
   }
 
   // 3. Fallback: global directory in user profile
-  const homedir = os.homedir(); 
+  const homedir = os.homedir();
   const globalDir = path.join(homedir, '.overmind-mcp');
-  
+
   if (!fs.existsSync(globalDir)) {
     fs.mkdirSync(globalDir, { recursive: true });
     // Create an empty .mcp.json so claude CLI doesn't crash
     fs.writeFileSync(
-      path.join(globalDir, '.mcp.json'), 
-      JSON.stringify({ mcpServers: {} }, null, 2)
+      path.join(globalDir, '.mcp.json'),
+      JSON.stringify({ mcpServers: {} }, null, 2),
     );
   }
-  
+
   return globalDir;
 }
 
