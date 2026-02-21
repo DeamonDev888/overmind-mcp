@@ -22,11 +22,35 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 
 ## 🚀 Commencer (Guide Facile)
 
-### 1. Installation
+### Option 1 : Utilisation Globale ou Package distant NPM
+
+Si vous souhaitez l'installer globalement sans cloner de repo, vous pouvez utiliser :
+
+```bash
+npm install -g overmind-mcp
+```
+
+**Configuration MCP (Client) pour l'Option 1 :**
+Pour connecter l'orchestrateur distant à un client ou à Cursor, pointez simplement via `npx` :
+
+```json
+{
+  "mcpServers": {
+    "overmind": {
+      "command": "npx",
+      "args": ["-y", "overmind-mcp@latest"]
+    }
+  }
+}
+```
+
+---
+
+### Option 2 : Installation Locale (Développement ou hébergement précis)
 
 ```bash
 # 1. Cloner le repo localement
-git clone <votre_repo> overmind-mcp
+git clone https://github.com/DeamonDev888/overmind-mcp overmind-mcp
 cd overmind-mcp
 
 # 2. Installer les dépendances
@@ -36,14 +60,24 @@ pnpm install
 pnpm run build
 ```
 
-_(Si vous souhaitez l'installer globalement sans cloner, vous pouvez utiliser `npm install -g overmind-mcp`)_
-
-### 2. Configuration MCP
-
-Pour que l'agent puisse voir vos autres serveurs MCP, copiez le fichier d'exemple :
+Pour que l'agent puisse voir vos autres serveurs MCP locaux, copiez le fichier d'exemple :
 
 ```bash
 cp .mcp.json.example .mcp.json
+```
+
+**Configuration MCP (Client) pour l'Option 2 :**
+Pour connecter ce runner à un client en pointant vers votre version locale compilée :
+
+```json
+{
+  "mcpServers": {
+    "overmind": {
+      "command": "node",
+      "args": ["/LE_CHEMIN_ABSOLU_VERS_VOTRE_DOSSIER/overmind-mcp/dist/bin/cli.js"]
+    }
+  }
+}
 ```
 
 ---
@@ -69,25 +103,6 @@ const result = await runner.runAgent({
 
 console.log(result.result);
 ```
-
----
-
-## 🛠️ Configuration MCP (Client)
-
-Pour connecter ce runner à un client (Cursor, Claude Desktop, etc.), pointez vers le nouvel entrypoint CLI :
-
-```json
-{
-  "mcpServers": {
-    "overmind": {
-      "command": "node",
-      "args": ["/LE_CHEMIN_ABSOLU_VERS_VOTRE_DOSSIER/overmind-mcp/dist/bin/cli.js"]
-    }
-  }
-}
-```
-
-_(Note : Si vous avez fait le choix d'utiliser le package NPM en global, la configuration serait `{"command": "npx", "args": ["-y", "overmind-mcp@latest"]}`)_
 
 ---
 
