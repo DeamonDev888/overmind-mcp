@@ -2,15 +2,15 @@
 import { createServer } from '../server.js';
 import { updateConfig } from '../lib/config.js';
 
-const args = process.argv.slice(2);
+const cliArgs = process.argv.slice(2);
 let settingsPath, mcpPath;
 
-for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--settings' && args[i + 1]) {
-    settingsPath = args[i + 1];
+for (let i = 0; i < cliArgs.length; i++) {
+  if (cliArgs[i] === '--settings' && cliArgs[i + 1]) {
+    settingsPath = cliArgs[i + 1];
     i++;
-  } else if (args[i] === '--mcp-config' && args[i + 1]) {
-    mcpPath = args[i + 1];
+  } else if (cliArgs[i] === '--mcp-config' && cliArgs[i + 1]) {
+    mcpPath = cliArgs[i + 1];
     i++;
   }
 }
