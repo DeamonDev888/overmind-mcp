@@ -11,8 +11,12 @@ export const memoryStoreSchema = z.object({
   agent_name: z.string().optional().describe("Nom de l'agent pour lequel cette mémoire est spécifique"),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function memoryStoreTool(args: z.infer<typeof memoryStoreSchema>): Promise<any> {
+export async function memoryStoreTool(
+  args: z.infer<typeof memoryStoreSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   try {
     const provider = getMemoryProvider();
     const id = await provider.storeKnowledge({ 

@@ -25,8 +25,12 @@ export const runClineSchema = z.object({
     ),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function runClineAgent(args: z.infer<typeof runClineSchema>): Promise<any> {
+export async function runClineAgent(
+  args: z.infer<typeof runClineSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const runner = new ClineRunner();
   const { prompt, agentName, autoResume, sessionId, mode } = args;
 

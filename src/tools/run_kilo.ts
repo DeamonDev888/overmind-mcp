@@ -25,8 +25,12 @@ export const runKiloSchema = z.object({
     ),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function runKiloAgent(args: z.infer<typeof runKiloSchema>): Promise<any> {
+export async function runKiloAgent(
+  args: z.infer<typeof runKiloSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const runner = new KiloRunner();
   const { prompt, agentName, autoResume, sessionId, mode } = args;
 

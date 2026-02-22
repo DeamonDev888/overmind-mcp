@@ -154,7 +154,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
          FROM knowledge_chunks 
          WHERE embedding IS NOT NULL`;
       
-      const values: any[] = [embStr, limit];
+      const values: (string | number)[] = [embStr, limit];
       if (params.agentName) {
         query += ` AND (source = $3 OR source = 'user' OR source = 'global')`;
         values.push(`agent:${params.agentName}`);
@@ -184,7 +184,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
          FROM knowledge_chunks
          WHERE (text ILIKE $2 OR text % $1)`;
       
-      const values: any[] = [params.query, `%${params.query}%`, textLimit];
+      const values: (string | number)[] = [params.query, `%${params.query}%`, textLimit];
       if (params.agentName) {
         query += ` AND (source = $4 OR source = 'user' OR source = 'global')`;
         values.push(`agent:${params.agentName}`);

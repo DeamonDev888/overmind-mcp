@@ -12,8 +12,12 @@ export const memorySearchSchema = z.object({
   agent_name: z.string().optional().describe("Filtrer par nom d'agent (pour ses propres souvenirs)"),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function memorySearchTool(args: z.infer<typeof memorySearchSchema>): Promise<any> {
+export async function memorySearchTool(
+  args: z.infer<typeof memorySearchSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const provider = getMemoryProvider();
   const results = await provider.searchMemory({
     query: args.query,

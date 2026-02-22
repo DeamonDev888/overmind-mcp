@@ -21,8 +21,12 @@ export const runGeminiSchema = z.object({
     ),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>): Promise<any> {
+export async function runGeminiAgent(
+  args: z.infer<typeof runGeminiSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const runner = new GeminiRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 

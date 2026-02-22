@@ -28,8 +28,12 @@ export const runAgentSchema = z.object({
     ),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Promise<any> {
+export async function runClaudeAgent(
+  args: z.infer<typeof runAgentSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const runner = new ClaudeRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 

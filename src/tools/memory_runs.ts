@@ -14,8 +14,12 @@ export const memoryRunsSchema = z.object({
     .describe("Afficher les statistiques globales d'orchestration"),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Promise<any> {
+export async function memoryRunsTool(
+  args: z.infer<typeof memoryRunsSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const provider = getMemoryProvider();
 
   if (args.stats) {

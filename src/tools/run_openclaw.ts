@@ -21,8 +21,12 @@ export const runOpenClawSchema = z.object({
     ),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function runOpenClawAgent(args: z.infer<typeof runOpenClawSchema>): Promise<any> {
+export async function runOpenClawAgent(
+  args: z.infer<typeof runOpenClawSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const runner = new OpenClawRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 

@@ -21,8 +21,12 @@ export const runQwenSchema = z.object({
     ),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function runQwenAgent(args: z.infer<typeof runQwenSchema>): Promise<any> {
+export async function runQwenAgent(
+  args: z.infer<typeof runQwenSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const runner = new QwenRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 
