@@ -21,9 +21,7 @@ export const runGeminiSchema = z.object({
     ),
 });
 
-export async function runGeminiAgent(
-  args: z.infer<typeof runGeminiSchema>,
-): Promise<{
+export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {

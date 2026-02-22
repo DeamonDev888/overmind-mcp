@@ -21,9 +21,7 @@ export const runTraeSchema = z.object({
     ),
 });
 
-export async function runTraeAgent(
-  args: z.infer<typeof runTraeSchema>,
-): Promise<{
+export async function runTraeAgent(args: z.infer<typeof runTraeSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {

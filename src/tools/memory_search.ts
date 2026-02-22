@@ -9,12 +9,13 @@ export const memorySearchSchema = z.object({
     .optional()
     .default(false)
     .describe("Inclure l'historique des runs d'agents dans la recherche"),
-  agent_name: z.string().optional().describe("Filtrer par nom d'agent (pour ses propres souvenirs)"),
+  agent_name: z
+    .string()
+    .optional()
+    .describe("Filtrer par nom d'agent (pour ses propres souvenirs)"),
 });
 
-export async function memorySearchTool(
-  args: z.infer<typeof memorySearchSchema>,
-): Promise<{
+export async function memorySearchTool(args: z.infer<typeof memorySearchSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {

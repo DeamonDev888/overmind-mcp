@@ -24,9 +24,7 @@ export const createAgentSchema = z.object({
     ),
 });
 
-export async function createAgent(
-  args: z.infer<typeof createAgentSchema>,
-): Promise<{
+export async function createAgent(args: z.infer<typeof createAgentSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {

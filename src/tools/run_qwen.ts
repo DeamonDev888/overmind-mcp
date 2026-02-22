@@ -21,9 +21,7 @@ export const runQwenSchema = z.object({
     ),
 });
 
-export async function runQwenAgent(
-  args: z.infer<typeof runQwenSchema>,
-): Promise<{
+export async function runQwenAgent(args: z.infer<typeof runQwenSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
@@ -60,9 +58,7 @@ export async function runQwenAgent(
 
   if (result.error) {
     return {
-      content: [
-        { type: 'text', text: `❌ Erreur lors de l'exécution Qwen Code: ${result.error}` },
-      ],
+      content: [{ type: 'text', text: `❌ Erreur lors de l'exécution Qwen Code: ${result.error}` }],
       isError: true,
     };
   }

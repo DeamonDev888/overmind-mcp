@@ -16,9 +16,7 @@ export const editPromptSchema = z.object({
 
 // --- Tools ---
 
-export async function createPrompt(
-  args: z.infer<typeof createPromptSchema>,
-): Promise<{
+export async function createPrompt(args: z.infer<typeof createPromptSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
@@ -37,9 +35,7 @@ export async function createPrompt(
   };
 }
 
-export async function editPrompt(
-  args: z.infer<typeof editPromptSchema>,
-): Promise<{
+export async function editPrompt(args: z.infer<typeof editPromptSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {

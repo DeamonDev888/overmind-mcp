@@ -30,7 +30,9 @@ describe('MCP Tools Unit Tests', () => {
       filePath: '/tmp/p.md',
       existed: false,
     } as { filePath: string; existed: boolean });
-    vi.spyOn(PromptManager.prototype, 'editPrompt').mockResolvedValue({ success: true } as { success: boolean });
+    vi.spyOn(PromptManager.prototype, 'editPrompt').mockResolvedValue({ success: true } as {
+      success: boolean;
+    });
 
     vi.spyOn(ClaudeRunner.prototype, 'runAgent').mockResolvedValue({
       result: 'Hello',

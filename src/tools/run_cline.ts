@@ -25,9 +25,7 @@ export const runClineSchema = z.object({
     ),
 });
 
-export async function runClineAgent(
-  args: z.infer<typeof runClineSchema>,
-): Promise<{
+export async function runClineAgent(args: z.infer<typeof runClineSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
@@ -64,9 +62,7 @@ export async function runClineAgent(
 
   if (result.error) {
     return {
-      content: [
-        { type: 'text', text: `❌ Erreur lors de l'exécution Cline: ${result.error}` },
-      ],
+      content: [{ type: 'text', text: `❌ Erreur lors de l'exécution Cline: ${result.error}` }],
       isError: true,
     };
   }

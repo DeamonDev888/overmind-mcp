@@ -7,22 +7,25 @@ export const memoryStoreSchema = z.object({
     .enum(['user', 'agent', 'pattern', 'error', 'decision'])
     .optional()
     .default('user')
-    .describe('Type de connaissance : user (manuel), agent (auto), pattern (workflow), error (bug connu), decision (choix architectural)'),
-  agent_name: z.string().optional().describe("Nom de l'agent pour lequel cette mémoire est spécifique"),
+    .describe(
+      'Type de connaissance : user (manuel), agent (auto), pattern (workflow), error (bug connu), decision (choix architectural)',
+    ),
+  agent_name: z
+    .string()
+    .optional()
+    .describe("Nom de l'agent pour lequel cette mémoire est spécifique"),
 });
 
-export async function memoryStoreTool(
-  args: z.infer<typeof memoryStoreSchema>,
-): Promise<{
+export async function memoryStoreTool(args: z.infer<typeof memoryStoreSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
   try {
     const provider = getMemoryProvider();
-    const id = await provider.storeKnowledge({ 
-      text: args.text, 
+    const id = await provider.storeKnowledge({
+      text: args.text,
       source: args.source,
-      agentName: args.agent_name
+      agentName: args.agent_name,
     });
     return {
       content: [

@@ -61,7 +61,7 @@ export class GeminiRunner {
     }
 
     const argsSpawn: string[] = ['--yes', '@google/gemini-cli'];
-    
+
     // Pass the prompt
     argsSpawn.push(prompt);
 

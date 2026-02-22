@@ -40,9 +40,7 @@ export const updateAgentConfigSchema = z.object({
 
 // --- Tools ---
 
-export async function listAgents(
-  args: z.infer<typeof listAgentsSchema>,
-): Promise<{
+export async function listAgents(args: z.infer<typeof listAgentsSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
@@ -77,9 +75,7 @@ export async function listAgents(
   }
 }
 
-export async function deleteAgent(
-  args: z.infer<typeof deleteAgentSchema>,
-): Promise<{
+export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
@@ -108,9 +104,7 @@ export async function deleteAgent(
   };
 }
 
-export async function updateAgentConfig(
-  args: z.infer<typeof updateAgentConfigSchema>,
-): Promise<{
+export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
