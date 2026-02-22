@@ -42,22 +42,6 @@ window.addEventListener('resize', () => {
     canvas.height = window.innerHeight;
 });
 
-// Header scroll effect
-const header = document.querySelector('header');
-let lastScroll = 0;
-
-window.addEventListener('scroll', () => {
-    const currentScroll = window.pageYOffset;
-
-    if (currentScroll > 100) {
-        header.classList.add('scrolled');
-    } else {
-        header.classList.remove('scrolled');
-    }
-
-    lastScroll = currentScroll;
-});
-
 // Tab functionality
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
@@ -255,18 +239,121 @@ featureCards.forEach(card => {
     });
 });
 
-// Brain core click effect
-const brainCore = document.querySelector('.brain-core');
-if (brainCore) {
-    brainCore.addEventListener('click', () => {
-        brainCore.style.animation = 'none';
-        brainCore.offsetHeight; // Trigger reflow
-        brainCore.style.animation = 'brainPulse 0.5s ease-in-out';
+// Orchestration Cortex Animation
+const cortex = document.querySelector('.orchestration-cortex');
+const fleetContainer = document.getElementById('agent-fleet');
+const linksContainer = document.getElementById('cortex-links');
+const hologramData = document.querySelector('.hologram-data');
 
-        // Create particles explosion
-        for (let i = 0; i < 20; i++) {
-            createParticle(brainCore);
+if (cortex) {
+    const agents = [];
+    const numAgents = 15;
+    const missions = [
+        'MISSION: CLAUDE_REFactor',
+        'MISSION: GEMINI_STRAT',
+        'MISSION: QWEN_OPTIMIZE',
+        'MISSION: KILO_DEPLOY',
+        'MISSION: CLINE_ARCHITECT',
+        'MISSION: OPENCLAW_SUBMIT',
+        'MISSION: DEEPSEEK_ANALYZE',
+        'MISSION: OLLAMA_LOCAL_SYNC'
+    ];
+
+    // Initialize Fleet
+    for (let i = 0; i < numAgents; i++) {
+        const node = document.createElement('div');
+        node.className = 'agent-node';
+        fleetContainer.appendChild(node);
+
+        agents.push({
+            el: node,
+            angle: Math.random() * Math.PI * 2,
+            radius: 120 + Math.random() * 100,
+            speed: 0.005 + Math.random() * 0.015,
+            active: false
+        });
+    }
+
+    // SVG for links
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    linksContainer.appendChild(svg);
+
+    function animateFleet() {
+        const centerX = 250;
+        const centerY = 250;
+
+        // Clear previous links
+        svg.innerHTML = '';
+
+        agents.forEach((agent, i) => {
+            agent.angle += agent.speed;
+            const x = centerX + Math.cos(agent.angle) * agent.radius;
+            const y = centerY + Math.sin(agent.angle) * agent.radius;
+
+            agent.el.style.left = `${x - 6}px`;
+            agent.el.style.top = `${y - 6}px`;
+
+            if (agent.active) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', centerX);
+                line.setAttribute('y1', centerY);
+                line.setAttribute('x2', x);
+                line.setAttribute('y2', y);
+                line.setAttribute('class', 'link-line active');
+                svg.appendChild(line);
+            }
+        });
+
+        requestAnimationFrame(animateFleet);
+    }
+
+    animateFleet();
+
+    // Orchestration Logic: Activate random agents
+    setInterval(() => {
+        const randomIndex = Math.floor(Math.random() * agents.length);
+        const agent = agents[randomIndex];
+
+        agent.active = true;
+        agent.el.classList.add('active');
+
+        // Update hologram
+        if (Math.random() > 0.7) {
+            const missionLines = hologramData.querySelectorAll('.data-line');
+            missionLines[2].textContent = missions[Math.floor(Math.random() * missions.length)];
+            missionLines[2].style.color = '#ff006e';
+            setTimeout(() => {
+                missionLines[2].style.color = '';
+            }, 500);
         }
+
+        setTimeout(() => {
+            agent.active = false;
+            agent.el.classList.remove('active');
+        }, 1000 + Math.random() * 2000);
+    }, 800);
+
+    // Cortex Core interactions
+    const cortexCore = document.querySelector('.cortex-core');
+    cortexCore.addEventListener('click', () => {
+        // Massive burst
+        agents.forEach(agent => {
+            agent.active = true;
+            agent.el.classList.add('active');
+            setTimeout(() => {
+                agent.active = false;
+                agent.el.classList.remove('active');
+            }, 1000);
+        });
+
+        const originalText = hologramData.querySelector('.data-line:first-child').textContent;
+        hologramData.querySelector('.data-line:first-child').textContent = 'STATUS: OVERDRIVE';
+        hologramData.querySelector('.data-line:first-child').style.color = '#ff006e';
+
+        setTimeout(() => {
+            hologramData.querySelector('.data-line:first-child').textContent = originalText;
+            hologramData.querySelector('.data-line:first-child').style.color = '';
+        }, 1000);
     });
 }
 

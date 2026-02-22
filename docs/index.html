@@ -43,54 +43,72 @@
         <section class="hero">
             <div class="container">
                 <div class="hero-content">
-                    <div class="hero-badge">
-                        <i class="fas fa-bolt"></i>
-                        <span>NOUVEAU 2026</span>
+                    <div class="hero-badge elite-badge">
+                        <i class="fas fa-crown"></i>
+                        <span>ELITE EDITION 2026</span>
                     </div>
                     <h1 class="hero-title">
                         <span class="glitch" data-text="OverMind">OverMind</span>
                         <span class="gradient-text">-MCP</span>
                     </h1>
-                    <p class="hero-subtitle">
-                        Orchestrateur universel d'agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini, Qwen, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite.
+                    <p class="hero-subtitle elite-subtitle">
+                        Orchestrateur universel d'agents IA multi-modeles via MCP pour piloter <span class="highlight-model">Claude-Code</span>, <span class="highlight-model">Gemini</span>, <span class="highlight-model">Qwen</span>, <span class="highlight-model">Kilo/Cline</span>, <span class="rebel-model">OpenClaw</span>, <span class="highlight-model">GLM</span>, <span class="highlight-model">Minimax</span>, <span class="highlight-model">Kimi</span>, <span class="highlight-model">Ollama</span> et plus sans limite.
+                    </p>
+                    <p class="hero-note">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Note : L'OverMind maintient l'ordre parmi tous les agents IA. Même les <strong>OpenClaw</strong> rebelles finissent par obéir. 😈
                     </p>
                     <div class="hero-actions">
-                        <a href="#install" class="btn btn-primary">
+                        <a href="#install" class="btn btn-primary elite-btn">
                             <i class="fas fa-rocket"></i>
-                            <span>Commencer</span>
+                            <span>Déploier l'OverMind</span>
                             <div class="btn-glow"></div>
                         </a>
-                        <a href="https://deamondev888.github.io/PostgreSQL-MCP-Serveur/" target="_blank" class="btn btn-secondary">
+                        <a href="https://deamondev888.github.io/PostgreSQL-MCP-Serveur/" target="_blank" class="btn btn-secondary elite-btn-secondary">
                             <i class="fas fa-database"></i>
                             <span>PostgreSQL-MCP</span>
                         </a>
-                        <a href="https://discord.gg/4AR82phtBz" target="_blank" class="btn btn-secondary">
+                        <a href="https://discord.gg/4AR82phtBz" target="_blank" class="btn btn-secondary elite-btn-secondary">
                             <i class="fab fa-discord"></i>
                             <span>Discord</span>
                         </a>
                     </div>
-                    <div class="hero-stats">
-                        <div class="stat">
+                    <div class="hero-stats elite-stats">
+                        <div class="stat elite-stat">
                             <div class="stat-value" data-target="10">0</div>
                             <div class="stat-label">Modèles Supportés</div>
                         </div>
-                        <div class="stat">
+                        <div class="stat elite-stat">
                             <div class="stat-value" data-target="4096">0</div>
                             <div class="stat-label">Dimensions Mémoire</div>
                         </div>
-                        <div class="stat">
+                        <div class="stat elite-stat">
                             <div class="stat-value" data-target="100">0</div>
-                            <div class="stat-label">% Performance</div>
+                            <div class="stat-label">% Domination</div>
                         </div>
                     </div>
                 </div>
                 <div class="hero-visual">
-                    <div class="brain-container">
-                        <div class="brain-core"></div>
-                        <div class="brain-ring ring-1"></div>
-                        <div class="brain-ring ring-2"></div>
-                        <div class="brain-ring ring-3"></div>
-                        <div class="brain-particles"></div>
+                    <div class="orchestration-cortex">
+                        <div class="cortex-core">
+                            <i class="fas fa-brain"></i>
+                            <div class="core-rings">
+                                <div class="ring ring-1"></div>
+                                <div class="ring ring-2"></div>
+                                <div class="ring ring-3"></div>
+                            </div>
+                        </div>
+                        <div class="agent-fleet" id="agent-fleet">
+                            <!-- Dynamically generated agent nodes -->
+                        </div>
+                        <div class="cortex-links" id="cortex-links">
+                            <!-- Dynamically generated connections -->
+                        </div>
+                        <div class="hologram-data">
+                            <div class="data-line">STATUS: SUPREME</div>
+                            <div class="data-line">NODES: ACTIVE</div>
+                            <div class="data-line">MISSION: DOMINATION</div>
+                        </div>
                     </div>
                 </div>
             </div>
