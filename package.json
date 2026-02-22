@@ -22,6 +22,8 @@
   ],
   "scripts": {
     "build": "tsc",
+    "rebuild": "rimraf dist && tsc",
+    "clean": "rimraf dist",
     "start": "node dist/bin/cli.js",
     "bot:news": "node dist/start_bot.js",
     "dev": "tsc -w",
@@ -48,26 +50,27 @@
   },
   "homepage": "https://discord.gg/4AR82phtBz",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0 <25"
   },
   "packageManager": "pnpm@10.18.0",
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@types/node": "^25.0.3",
+    "@types/node": "^22.15.0",
     "@types/pg": "^8.16.0",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.1.0",
     "prettier": "^3.8.1",
+    "rimraf": "^6.0.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.53.1",
     "vitest": "^4.0.18"
   },
   "dependencies": {
     "dotenv": "^17.3.1",
-    "fastmcp": "^3.29.0",
+    "fastmcp": "^3.33.0",
     "pg": "^8.18.0",
     "overmind-postgres-mcp": "^1.1.0",
-    "zod": "^3.24.1"
+    "zod": "^4.2.1"
   }
 }
