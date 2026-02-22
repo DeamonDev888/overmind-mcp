@@ -1,6 +1,5 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
 
 export interface AgentConfigUpdates {

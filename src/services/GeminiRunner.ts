@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
-import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
+import { getLastSessionId } from '../lib/sessions.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -30,7 +30,7 @@ export class GeminiRunner {
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
     const { prompt, agentName, autoResume } = options;
     let { sessionId } = options;
-    const { CORE, PERMISSIONS, PATHS } = this.config;
+    const { PATHS } = this.config;
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {

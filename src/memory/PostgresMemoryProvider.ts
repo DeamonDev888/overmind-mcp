@@ -2,14 +2,13 @@ import { Pool } from 'pg';
 import { getPool } from 'postgresql-mcp-server';
 import crypto from 'crypto';
 import { embedText } from './embeddings.js';
-import { 
-  MemoryProvider, 
-  AgentRun, 
-  KnowledgeChunk, 
-  SearchResult, 
-  MemoryStats, 
-  StoreRunParams, 
-  SearchMemoryParams 
+import {
+  MemoryProvider,
+  AgentRun,
+  SearchResult,
+  MemoryStats,
+  StoreRunParams,
+  SearchMemoryParams
 } from './types.js';
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
@@ -233,7 +232,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
     await this.ensureSchema();
     const limit = params.limit || 20;
     let query = 'SELECT * FROM agent_runs ORDER BY created_at DESC LIMIT $1';
-    let values: any[] = [limit];
+    let values: (string | number)[] = [limit];
 
     if (params.runner) {
       query = 'SELECT * FROM agent_runs WHERE runner = $1 ORDER BY created_at DESC LIMIT $2';
@@ -241,7 +240,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
     }
 
     const res = await this.pool.query(query, values);
-    return res.rows.map((r: any) => ({
+    return res.rows.map((r: AgentRun & { created_at: string; duration_ms: string | null }) => ({
       ...r,
       created_at: parseInt(r.created_at, 10),
       duration_ms: r.duration_ms ? parseInt(r.duration_ms, 10) : null
@@ -261,7 +260,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
     return {
       totalRuns: parseInt(totalRunsRes.rows[0].count, 10),
       totalKnowledge: parseInt(totalKnowledgeRes.rows[0].count, 10),
-      byRunner: byRunnerRes.rows.map((r: any) => ({
+      byRunner: byRunnerRes.rows.map((r: { runner: string; count: string; successes: string }) => ({
         runner: r.runner,
         count: parseInt(r.count, 10),
         successes: parseInt(r.successes || '0', 10)

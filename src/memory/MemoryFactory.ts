@@ -1,4 +1,4 @@
-import { MemoryProvider } from './types.js';
+import { MemoryProvider, StoreRunParams } from './types.js';
 import { PostgresMemoryProvider } from './PostgresMemoryProvider.js';
 
 let _provider: MemoryProvider | null = null;
@@ -16,6 +16,6 @@ export function getMemoryProvider(): MemoryProvider {
 /**
  * Convenience helper for runners to record activity without fetching the provider manually.
  */
-export function storeRun(params: any): Promise<string> | string {
+export function storeRun(params: StoreRunParams): Promise<string> | string {
   return getMemoryProvider().storeRun(params);
 }
