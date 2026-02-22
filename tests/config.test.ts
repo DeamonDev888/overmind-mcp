@@ -22,7 +22,9 @@ describe('Workspace Directory Resolution - 4 Level Fallback (Auto-Portable)', ()
     // Restore original directory first
     try {
       process.chdir(originalCwd);
-    } catch {}
+    } catch {
+      // Ignore errors
+    }
 
     // Remove test directories
     for (const dir of testDirs) {
@@ -30,7 +32,7 @@ describe('Workspace Directory Resolution - 4 Level Fallback (Auto-Portable)', ()
         if (fs.existsSync(dir)) {
           fs.rmSync(dir, { recursive: true, force: true });
         }
-      } catch (e) {
+      } catch {
         // Ignore cleanup errors on Windows
       }
     }
@@ -46,7 +48,7 @@ describe('Workspace Directory Resolution - 4 Level Fallback (Auto-Portable)', ()
           fs.rmSync(globalDir, { recursive: true, force: true });
         }
       }
-    } catch (e) {
+    } catch {
       // Ignore
     }
   }
@@ -174,7 +176,7 @@ describe('Workspace Directory Resolution - 4 Level Fallback (Auto-Portable)', ()
       // Create .mcp.json in the simulated root
       fs.writeFileSync(
         path.join(simulatedRoot, '.mcp.json'),
-        JSON.stringify({ mcpServers: {}, simulated: true })
+        JSON.stringify({ mcpServers: {}, simulated: true }),
       );
 
       // Change to a directory without .mcp.json

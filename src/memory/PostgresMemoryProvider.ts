@@ -49,7 +49,8 @@ export class PostgresMemoryProvider implements MemoryProvider {
     await this.ensureDatabaseExists(dbName);
 
     // Create a new pool for this specific database
-    const poolOptions = (this.maintenancePool as unknown as { options: Record<string, unknown> }).options || {};
+    const poolOptions =
+      (this.maintenancePool as unknown as { options: Record<string, unknown> }).options || {};
 
     // Defensive password retrieval
     let password = process.env.POSTGRES_PASSWORD || '';
@@ -59,9 +60,12 @@ export class PostgresMemoryProvider implements MemoryProvider {
       password = String(poolOptions.password);
     }
 
-    const host = (poolOptions.host as string | undefined) || process.env.POSTGRES_HOST || '127.0.0.1';
-    const port = (poolOptions.port as number | undefined) || parseInt(process.env.POSTGRES_PORT || '5432', 10);
-    const user = (poolOptions.user as string | undefined) || process.env.POSTGRES_USER || 'postgres';
+    const host =
+      (poolOptions.host as string | undefined) || process.env.POSTGRES_HOST || '127.0.0.1';
+    const port =
+      (poolOptions.port as number | undefined) || parseInt(process.env.POSTGRES_PORT || '5432', 10);
+    const user =
+      (poolOptions.user as string | undefined) || process.env.POSTGRES_USER || 'postgres';
     const max = (poolOptions.max as number | undefined) || 10;
     const idleTimeoutMillis = (poolOptions.idleTimeoutMillis as number | undefined) || 30000;
 
@@ -86,7 +90,8 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
   private async ensureDatabaseExists(dbName: string): Promise<void> {
     // We create a one-off connection to 'postgres' to create the new database
-    const poolOptions = (this.maintenancePool as unknown as { options: Record<string, unknown> }).options || {};
+    const poolOptions =
+      (this.maintenancePool as unknown as { options: Record<string, unknown> }).options || {};
 
     // Defensive password retrieval
     let password = process.env.POSTGRES_PASSWORD || '';
@@ -98,7 +103,9 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
     const maintenanceClientConfig = {
       host: (poolOptions.host as string | undefined) || process.env.POSTGRES_HOST || '127.0.0.1',
-      port: (poolOptions.port as number | undefined) || parseInt(process.env.POSTGRES_PORT || '5432', 10),
+      port:
+        (poolOptions.port as number | undefined) ||
+        parseInt(process.env.POSTGRES_PORT || '5432', 10),
       user: (poolOptions.user as string | undefined) || process.env.POSTGRES_USER || 'postgres',
       password: password,
       database: 'postgres' as const, // ALWAYS connect to postgres for DDL
@@ -307,34 +314,9 @@ export class PostgresMemoryProvider implements MemoryProvider {
             }
           }
         } catch {
-          // operator doesn't exist (pgvector missing), gracefully ignore.
-        }
-      }
-
-      // 2. Text Search FALLBACK
-      const textLimit = limit - merged.length;
-      if (textLimit > 0) {
-        const textRes = await pool.query(
-          `SELECT id, text, source, created_at, similarity(text, $1) as score
-           FROM knowledge_chunks
-           WHERE (text ILIKE $2 OR text % $1)
-           ORDER BY score DESC
-           LIMIT $3`,
-          [params.query, `%${params.query}%`, textLimit],
-        );
-
-        for (const row of textRes.rows) {
-          if (!seen.has(row.id)) {
-            seen.add(row.id);
-            merged.push({
-              id: row.id,
-              text: row.text,
-              source: `[${dbName}] ${row.source}`,
-              score: parseFloat(row.score) || 0.5,
-              created_at: parseInt(row.created_at, 10),
-              match_type: 'fts',
-            });
-          }
+          throw new Error(
+            "❌ CORTEX STRICT RULE: L'extension pgvector est REQUISE pour la recherche. Pas de fallback autorisé.",
+          );
         }
       }
     }
