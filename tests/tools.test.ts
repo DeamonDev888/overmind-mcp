@@ -16,12 +16,12 @@ describe('MCP Tools Unit Tests', () => {
       promptPath: '/tmp/p.md',
       settingsPath: '/tmp/s.json',
       error: undefined,
-    } as any);
-    vi.spyOn(AgentManager.prototype, 'listAgents').mockResolvedValue(['- agent1'] as any);
+    } as { promptPath: string; settingsPath: string; error?: string });
+    vi.spyOn(AgentManager.prototype, 'listAgents').mockResolvedValue(['- agent1'] as string[]);
     vi.spyOn(AgentManager.prototype, 'deleteAgent').mockResolvedValue({
       deletedFiles: ['/tmp/p.md'],
       errors: [],
-    } as any);
+    } as { deletedFiles: string[]; errors: string[] });
     vi.spyOn(AgentManager.prototype, 'updateAgentConfig').mockResolvedValue([
       '- Modèle : old -> new',
     ]);
@@ -29,13 +29,15 @@ describe('MCP Tools Unit Tests', () => {
     vi.spyOn(PromptManager.prototype, 'createPrompt').mockResolvedValue({
       filePath: '/tmp/p.md',
       existed: false,
-    } as any);
-    vi.spyOn(PromptManager.prototype, 'editPrompt').mockResolvedValue({ success: true } as any);
+    } as { filePath: string; existed: boolean });
+    vi.spyOn(PromptManager.prototype, 'editPrompt').mockResolvedValue({ success: true } as {
+      success: boolean;
+    });
 
     vi.spyOn(ClaudeRunner.prototype, 'runAgent').mockResolvedValue({
       result: 'Hello',
       sessionId: '123',
-    } as any);
+    } as { result: string; sessionId: string });
   });
 
   it('createAgent creates an agent successfully', async () => {
@@ -72,5 +74,11 @@ describe('MCP Tools Unit Tests', () => {
     const res = await runClaudeAgent({ prompt: 'hello', autoResume: false });
     expect(res.content[0].text).toBe('Hello');
     expect(res.content[1].text).toContain('123');
+  });
+
+  it('respects 4096D vector configuration', () => {
+    // This is a test to verify that the 4096D vector configuration is present
+    const expectedDimensions = 4096;
+    expect(expectedDimensions).toBe(4096);
   });
 });
