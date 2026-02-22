@@ -188,7 +188,7 @@ export class ClaudeRunner {
             sessionId: response.session_id,
             rawOutput: stdout,
           });
-        } catch (error: unknown) {
+        } catch (_error) {
           resolve({
             result: '',
             error: 'JSON_PARSE_ERROR',

@@ -25,7 +25,7 @@ function loadEnvQuietly(envPath: string) {
         }
       });
     }
-  } catch (e) {
+  } catch (_e) {
     // Ignore silently
   }
 }

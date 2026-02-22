@@ -102,7 +102,10 @@ export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Prom
 
 export async function updateAgentConfig(
   args: z.infer<typeof updateAgentConfigSchema>,
-): Promise<any> {
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const manager = new AgentManager();
   const { name, model, mcpServers, env } = args;
 
