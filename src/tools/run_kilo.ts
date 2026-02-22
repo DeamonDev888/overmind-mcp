@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { KiloRunner } from '../services/KiloRunner.js';
+import { storeRun } from '../memory/MemoryFactory.js';
 
 export const runKiloSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent Kilocode"),
@@ -29,7 +30,21 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>): Promise
   const runner = new KiloRunner();
   const { prompt, agentName, autoResume, sessionId, mode } = args;
 
+  const start = Date.now();
   const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId, mode });
+  const durationMs = Date.now() - start;
+
+  // Auto-instrumentation
+  storeRun({
+    runner: 'kilo',
+    agentName,
+    prompt,
+    result: result.result,
+    error: result.error,
+    durationMs,
+    success: !result.error,
+    sessionId: result.sessionId,
+  });
 
   if (result.error === 'INVALID_AGENT') {
     return {

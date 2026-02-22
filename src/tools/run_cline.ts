@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ClineRunner } from '../services/ClineRunner.js';
+import { storeRun } from '../memory/MemoryFactory.js';
 
 export const runClineSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent Cline"),
@@ -29,7 +30,21 @@ export async function runClineAgent(args: z.infer<typeof runClineSchema>): Promi
   const runner = new ClineRunner();
   const { prompt, agentName, autoResume, sessionId, mode } = args;
 
+  const start = Date.now();
   const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId, mode });
+  const durationMs = Date.now() - start;
+
+  // Auto-instrumentation
+  storeRun({
+    runner: 'cline',
+    agentName,
+    prompt,
+    result: result.result,
+    error: result.error,
+    durationMs,
+    success: !result.error,
+    sessionId: result.sessionId,
+  });
 
   if (result.error === 'INVALID_AGENT') {
     return {

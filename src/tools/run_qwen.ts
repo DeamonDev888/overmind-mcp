@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { QwenRunner } from '../services/QwenRunner.js';
+import { storeRun } from '../memory/MemoryFactory.js';
 
 export const runQwenSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent Qwen Code"),
@@ -25,7 +26,21 @@ export async function runQwenAgent(args: z.infer<typeof runQwenSchema>): Promise
   const runner = new QwenRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 
+  const start = Date.now();
   const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId });
+  const durationMs = Date.now() - start;
+
+  // Auto-instrumentation
+  storeRun({
+    runner: 'qwen',
+    agentName,
+    prompt,
+    result: result.result,
+    error: result.error,
+    durationMs,
+    success: !result.error,
+    sessionId: result.sessionId,
+  });
 
   if (result.error === 'INVALID_AGENT') {
     return {

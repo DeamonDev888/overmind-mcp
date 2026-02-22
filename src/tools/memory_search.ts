@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { searchMemory } from '../memory/OverMindMemory.js';
+import { getMemoryProvider } from '../memory/MemoryFactory.js';
 
 export const memorySearchSchema = z.object({
   query: z.string().describe('Requête de recherche (sémantique + full-text)'),
@@ -13,7 +13,8 @@ export const memorySearchSchema = z.object({
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function memorySearchTool(args: z.infer<typeof memorySearchSchema>): Promise<any> {
-  const results = await searchMemory({
+  const provider = getMemoryProvider();
+  const results = await provider.searchMemory({
     query: args.query,
     limit: args.limit,
     includeRuns: args.include_runs,

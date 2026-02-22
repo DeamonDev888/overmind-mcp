@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { OpenClawRunner } from '../services/OpenClawRunner.js';
+import { storeRun } from '../memory/MemoryFactory.js';
 
 export const runOpenClawSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent OpenClaw"),
@@ -25,7 +26,21 @@ export async function runOpenClawAgent(args: z.infer<typeof runOpenClawSchema>):
   const runner = new OpenClawRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 
+  const start = Date.now();
   const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId });
+  const durationMs = Date.now() - start;
+
+  // Auto-instrumentation
+  storeRun({
+    runner: 'openclaw',
+    agentName,
+    prompt,
+    result: result.result,
+    error: result.error,
+    durationMs,
+    success: !result.error,
+    sessionId: result.sessionId,
+  });
 
   if (result.error === 'INVALID_AGENT') {
     return {

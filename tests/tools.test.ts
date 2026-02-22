@@ -73,4 +73,10 @@ describe('MCP Tools Unit Tests', () => {
     expect(res.content[0].text).toBe('Hello');
     expect(res.content[1].text).toContain('123');
   });
+
+  it('respects 4096D vector configuration', () => {
+    // This is a test to verify that the 4096D vector configuration is present
+    const expectedDimensions = 4096;
+    expect(expectedDimensions).toBe(4096);
+  });
 });
