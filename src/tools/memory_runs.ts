@@ -5,22 +5,26 @@ export const memoryRunsSchema = z.object({
   runner: z
     .string()
     .optional()
-    .describe("Filtrer par runner (ex: 'claude', 'gemini', 'kilo', 'qwen'…). Vide = tous les runners."),
-  limit: z.number().int().min(1).max(100).optional().default(20).describe('Nombre de runs à retourner'),
+    .describe(
+      "Filtrer par runner (ex: 'claude', 'gemini', 'kilo', 'qwen'…). Vide = tous les runners.",
+    ),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional()
+    .default(20)
+    .describe('Nombre de runs à retourner'),
   stats: z
     .boolean()
     .optional()
     .default(false)
     .describe("Afficher les statistiques globales d'orchestration"),
-  agent_name: z
-    .string()
-    .optional()
-    .describe("Filtrer par agent spécifique (ex: 'agent_finance')."),
+  agent_name: z.string().optional().describe("Filtrer par agent spécifique (ex: 'agent_finance')."),
 });
 
-export async function memoryRunsTool(
-  args: z.infer<typeof memoryRunsSchema>,
-): Promise<{
+export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
@@ -43,7 +47,11 @@ export async function memoryRunsTool(
     };
   }
 
-  const runs = await provider.getRecentRuns({ runner: args.runner, limit: args.limit, agentName: args.agent_name });
+  const runs = await provider.getRecentRuns({
+    runner: args.runner,
+    limit: args.limit,
+    agentName: args.agent_name,
+  });
 
   if (runs.length === 0) {
     return {

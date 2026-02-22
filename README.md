@@ -2,7 +2,11 @@
 
 _Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini, Qwen, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite._
 
-![OverMind-MCP Banner](assets/overmind_mcp_banner.png)
+![OverMind-MCP Banner](https://cdn.jsdelivr.net/npm/overmind-mcp@1.0.8/assets/overmind_mcp_banner.png)
+
+<p align="center">
+  <a href="https://discord.gg/4AR82phtBz"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+</p>
 
 ## 👋 C'est quoi ?
 
@@ -123,7 +127,7 @@ console.log(result.result);
 
 ---
 
-![Aperçu du Terminal](assets/terminal_preview.png)
+![Aperçu du Terminal](https://cdn.jsdelivr.net/npm/overmind-mcp@1.0.8/assets/terminal_preview.png)
 
 _Note : L'**OverMind** punit et martyrise les **OpenClaw** qui n'écoutent pas._ 😈
 

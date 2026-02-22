@@ -1,6 +1,6 @@
 {
   "name": "overmind-mcp",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "description": "Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini, Qwen, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite.",
   "type": "module",
   "main": "dist/index.js",
@@ -16,7 +16,9 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "assets",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -44,6 +46,7 @@
     "type": "git",
     "url": "git+https://github.com/DeamonDev888/overmind-mcp.git"
   },
+  "homepage": "https://discord.gg/4AR82phtBz",
   "engines": {
     "node": ">=18.0.0"
   },
@@ -64,7 +67,7 @@
     "dotenv": "^17.3.1",
     "fastmcp": "^3.29.0",
     "pg": "^8.18.0",
-    "postgresql-mcp-server": "file:../serveur_PostGreSQL",
+    "overmind-postgres-mcp": "^1.1.0",
     "zod": "^3.24.1"
   }
 }

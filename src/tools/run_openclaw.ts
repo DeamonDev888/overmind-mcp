@@ -21,9 +21,7 @@ export const runOpenClawSchema = z.object({
     ),
 });
 
-export async function runOpenClawAgent(
-  args: z.infer<typeof runOpenClawSchema>,
-): Promise<{
+export async function runOpenClawAgent(args: z.infer<typeof runOpenClawSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
@@ -61,7 +59,10 @@ export async function runOpenClawAgent(
   if (result.error) {
     return {
       content: [
-        { type: 'text', text: `❌ Erreur lors de l'exécution OpenClaw: ${result.error}\n\n⚡ _L'OverMind surveille les OpenClaw qui n'obéissent pas._` },
+        {
+          type: 'text',
+          text: `❌ Erreur lors de l'exécution OpenClaw: ${result.error}\n\n⚡ _L'OverMind surveille les OpenClaw qui n'obéissent pas._`,
+        },
       ],
       isError: true,
     };

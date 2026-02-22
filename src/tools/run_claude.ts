@@ -28,9 +28,7 @@ export const runAgentSchema = z.object({
     ),
 });
 
-export async function runClaudeAgent(
-  args: z.infer<typeof runAgentSchema>,
-): Promise<{
+export async function runClaudeAgent(args: z.infer<typeof runAgentSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
@@ -43,8 +41,19 @@ export async function runClaudeAgent(
 
   // Auto-instrument: record every run in OverMind memory
   try {
-    storeRun({ runner: 'claude', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
-  } catch { /* silent — memory must never block the runner */ }
+    storeRun({
+      runner: 'claude',
+      agentName,
+      prompt,
+      result: result.result,
+      error: result.error,
+      durationMs,
+      success: !result.error,
+      sessionId: result.sessionId,
+    });
+  } catch {
+    /* silent — memory must never block the runner */
+  }
 
   if (result.error === 'INVALID_AGENT') {
     return {

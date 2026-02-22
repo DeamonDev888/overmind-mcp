@@ -25,9 +25,7 @@ export const runKiloSchema = z.object({
     ),
 });
 
-export async function runKiloAgent(
-  args: z.infer<typeof runKiloSchema>,
-): Promise<{
+export async function runKiloAgent(args: z.infer<typeof runKiloSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {

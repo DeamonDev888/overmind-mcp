@@ -76,7 +76,8 @@ export function createServer(name: string = 'OverMind-MCP') {
   // Outil : Exécuter l'agent Cline
   server.addTool({
     name: 'run_cline',
-    description: "Exécute une commande sur l'agent Cline via CLI (cline -y). Supporte les modes : plan, act",
+    description:
+      "Exécute une commande sur l'agent Cline via CLI (cline -y). Supporte les modes : plan, act",
     parameters: runClineSchema,
     execute: runClineAgent,
   });
@@ -92,7 +93,8 @@ export function createServer(name: string = 'OverMind-MCP') {
   // Outil : Exécuter l'agent Trae (SOLO headless)
   server.addTool({
     name: 'run_trae',
-    description: "Exécute une mission sur l'agent Trae en mode SOLO headless (trae solo --headless)",
+    description:
+      "Exécute une mission sur l'agent Trae en mode SOLO headless (trae solo --headless)",
     parameters: runTraeSchema,
     execute: runTraeAgent,
   });
@@ -150,7 +152,8 @@ export function createServer(name: string = 'OverMind-MCP') {
   // ── Mémoire OverMind ───────────────────────────────────────────────────────────────
   server.addTool({
     name: 'memory_search',
-    description: 'Recherche sémantique + full-text dans la mémoire d’orchestration OverMind (connaissances + historique)',
+    description:
+      'Recherche sémantique + full-text dans la mémoire d’orchestration OverMind (connaissances + historique)',
     parameters: memorySearchSchema,
     execute: memorySearchTool,
   });
@@ -164,7 +167,8 @@ export function createServer(name: string = 'OverMind-MCP') {
 
   server.addTool({
     name: 'memory_runs',
-    description: 'Liste l’historique des runs d’agents enregistrés par OverMind (avec stats optionnelles)',
+    description:
+      'Liste l’historique des runs d’agents enregistrés par OverMind (avec stats optionnelles)',
     parameters: memoryRunsSchema,
     execute: memoryRunsTool,
   });

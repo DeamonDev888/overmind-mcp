@@ -21,9 +21,7 @@ export const runOpenCodeSchema = z.object({
     ),
 });
 
-export async function runOpenCodeAgent(
-  args: z.infer<typeof runOpenCodeSchema>,
-): Promise<{
+export async function runOpenCodeAgent(args: z.infer<typeof runOpenCodeSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
@@ -60,9 +58,7 @@ export async function runOpenCodeAgent(
 
   if (result.error) {
     return {
-      content: [
-        { type: 'text', text: `❌ Erreur lors de l'exécution OpenCode: ${result.error}` },
-      ],
+      content: [{ type: 'text', text: `❌ Erreur lors de l'exécution OpenCode: ${result.error}` }],
       isError: true,
     };
   }
