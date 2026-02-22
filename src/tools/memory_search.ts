@@ -9,6 +9,7 @@ export const memorySearchSchema = z.object({
     .optional()
     .default(false)
     .describe("Inclure l'historique des runs d'agents dans la recherche"),
+  agent_name: z.string().optional().describe("Filtrer par nom d'agent (pour ses propres souvenirs)"),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -18,6 +19,7 @@ export async function memorySearchTool(args: z.infer<typeof memorySearchSchema>)
     query: args.query,
     limit: args.limit,
     includeRuns: args.include_runs,
+    agentName: args.agent_name,
   });
 
   if (results.length === 0) {
