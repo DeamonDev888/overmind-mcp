@@ -65,9 +65,9 @@ export class PostgresMemoryProvider implements MemoryProvider {
     const max = (poolOptions.max as number | undefined) || 10;
     const idleTimeoutMillis = (poolOptions.idleTimeoutMillis as number | undefined) || 30000;
 
-    console.log(`[PostgresMemory] 📥 Creating connection pool for physical vault: ${dbName}`);
-    console.log(`               Host: ${host}`);
-    console.log(`               User: ${user}`);
+    console.error(`[PostgresMemory] 📥 Creating connection pool for physical vault: ${dbName}`);
+    console.error(`               Host: ${host}`);
+    console.error(`               User: ${user}`);
 
     const newPool = new Pool({
       host,
@@ -105,7 +105,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
       ssl: poolOptions.ssl as boolean | undefined,
     };
 
-    console.log(
+    console.error(
       `[PostgresMemory] Attempting to ensure DB ${dbName} exists via postgres maintenance DB...`,
     );
     const client = new Client(maintenanceClientConfig);
@@ -113,12 +113,12 @@ export class PostgresMemoryProvider implements MemoryProvider {
       await client.connect();
       const res = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName]);
       if (res.rows.length === 0) {
-        console.log(`[PostgresMemory] 🏗️  Creating new physical database: ${dbName}`);
+        console.error(`[PostgresMemory] 🏗️  Creating new physical database: ${dbName}`);
         // Double quote database name to handle special characters or names
         await client.query(`CREATE DATABASE "${dbName}"`);
-        console.log(`[PostgresMemory] ✅ Database ${dbName} created.`);
+        console.error(`[PostgresMemory] ✅ Database ${dbName} created.`);
       } else {
-        console.log(`[PostgresMemory] ℹ️  Database ${dbName} already exists.`);
+        console.error(`[PostgresMemory] ℹ️  Database ${dbName} already exists.`);
       }
     } catch (err: unknown) {
       if (err instanceof Error && (err as { code?: string }).code === '42P04') return; // Duplicate database
@@ -197,7 +197,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
       await client.query('COMMIT');
       this.initializedDbs.add(dbName);
-      console.log(
+      console.error(
         `[PostgresMemory] ✅ Physical vault ${dbName} initialized (Vector: ${hasVector ? 'ON' : 'OFF'}).`,
       );
     } catch (e) {
@@ -282,28 +282,32 @@ export class PostgresMemoryProvider implements MemoryProvider {
       // 1. Vector Search
       if (queryEmb.length > 0) {
         const embStr = `[${queryEmb.join(',')}]`;
-        const vecRes = await pool.query(
-          `SELECT id, text, source, created_at, 
-                  (1 - (embedding <=> $1)) as score 
-           FROM knowledge_chunks 
-           WHERE embedding IS NOT NULL
-           ORDER BY embedding <=> $1 
-           LIMIT $2`,
-          [embStr, limit - merged.length],
-        );
+        try {
+          const vecRes = await pool.query(
+            `SELECT id, text, source, created_at, 
+                    (1 - (embedding <=> $1)) as score 
+             FROM knowledge_chunks 
+             WHERE embedding IS NOT NULL
+             ORDER BY embedding <=> $1 
+             LIMIT $2`,
+            [embStr, limit - merged.length],
+          );
 
-        for (const row of vecRes.rows) {
-          if (!seen.has(row.id)) {
-            seen.add(row.id);
-            merged.push({
-              id: row.id,
-              text: row.text,
-              source: `[${dbName}] ${row.source}`,
-              score: parseFloat(row.score),
-              created_at: parseInt(row.created_at, 10),
-              match_type: 'vector',
-            });
+          for (const row of vecRes.rows) {
+            if (!seen.has(row.id)) {
+              seen.add(row.id);
+              merged.push({
+                id: row.id,
+                text: row.text,
+                source: `[${dbName}] ${row.source}`,
+                score: parseFloat(row.score),
+                created_at: parseInt(row.created_at, 10),
+                match_type: 'vector',
+              });
+            }
           }
+        } catch {
+          // operator doesn't exist (pgvector missing), gracefully ignore.
         }
       }
 
