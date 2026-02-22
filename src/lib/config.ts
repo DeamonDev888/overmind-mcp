@@ -1,6 +1,7 @@
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 export interface ConfigType {
   CLAUDE: {
@@ -13,6 +14,9 @@ export interface ConfigType {
   };
   TIMEOUT_MS: number;
 }
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const DEFAULT_CONFIG: ConfigType = {
   TIMEOUT_MS: 300000, // 5 minutes
@@ -29,24 +33,31 @@ export const DEFAULT_CONFIG: ConfigType = {
 export const CONFIG = { ...DEFAULT_CONFIG };
 
 export function getWorkspaceDir(): string {
-  // 1. Environment Variable
+  // 1. Environment Variable (User Override)
   if (process.env.OVERMIND_WORKSPACE) {
     return path.resolve(process.env.OVERMIND_WORKSPACE);
   }
 
-  // 2. Local Project mode if .mcp.json exists in cwd
+  // 2. Local Project mode if .mcp.json exists in current working directory
   const cwd = process.cwd();
   if (fs.existsSync(path.join(cwd, '.mcp.json'))) {
     return cwd;
   }
 
-  // 3. Fallback: global directory in user profile
+  // 3. Auto-detect from code location (Noob-proof: finds the folder where Overmind is cloned)
+  // We are in dist/lib or src/lib, so root is 2 levels up
+  const codeRoot = path.resolve(__dirname, '../..');
+  if (fs.existsSync(path.join(codeRoot, '.mcp.json'))) {
+    return codeRoot;
+  }
+
+  // 4. Global fallback in user profile
   const homedir = os.homedir();
   const globalDir = path.join(homedir, '.overmind-mcp');
 
   if (!fs.existsSync(globalDir)) {
     fs.mkdirSync(globalDir, { recursive: true });
-    // Create an empty .mcp.json so claude CLI doesn't crash
+    // Create an empty .mcp.json so the orchestrator has a base to work from
     fs.writeFileSync(
       path.join(globalDir, '.mcp.json'),
       JSON.stringify({ mcpServers: {} }, null, 2),
