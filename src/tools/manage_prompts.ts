@@ -16,8 +16,10 @@ export const editPromptSchema = z.object({
 
 // --- Tools ---
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function createPrompt(args: z.infer<typeof createPromptSchema>): Promise<any> {
+export async function createPrompt(args: z.infer<typeof createPromptSchema>): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const manager = new PromptManager();
   const { name, content } = args;
 
@@ -33,8 +35,10 @@ export async function createPrompt(args: z.infer<typeof createPromptSchema>): Pr
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function editPrompt(args: z.infer<typeof editPromptSchema>): Promise<any> {
+export async function editPrompt(args: z.infer<typeof editPromptSchema>): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const manager = new PromptManager();
   const { name, search, replace } = args;
 

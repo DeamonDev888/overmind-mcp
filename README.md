@@ -2,7 +2,11 @@
 
 _Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini, Qwen, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite._
 
-![OverMind-MCP Banner](assets/overmind_mcp_banner.png)
+![OverMind-MCP Banner](https://cdn.jsdelivr.net/npm/overmind-mcp@1.0.8/assets/overmind_mcp_banner.png)
+
+<p align="center">
+  <a href="https://discord.gg/4AR82phtBz"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+</p>
 
 ## 👋 C'est quoi ?
 
@@ -14,6 +18,8 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 
 - **🔌 Contrôle Total** : Lancez des missions complexes via MCP ou directement via le code.
 - **🏗️ Architecture Pro** : Basé sur des services (`AgentManager`, `ClaudeRunner`, `PromptManager`) pour une stabilité maximale.
+- **🧠 Mémoire Haute-Performance (4096D)** : Système RAG intégré via PostgreSQL + `pgvector` supportant les embeddings SOTA (Qwen 8B).
+- **🛡️ Mémoire Ségréguée** : Chaque agent peut posséder ses propres souvenirs isolés tout en ayant accès au socle de connaissances global.
 - **🛠️ Capacités Étendues** : L'agent piloté peut utiliser VOS outils (Base de données, Scrapers, etc.).
 - **🤖 Multi-Agents** : Créez, configurez et gérez des personnalités d'agents isolées (Prompts & Settings dédiés).
 - **📦 Prêt pour l'Intégration** : Importable comme un module NPM dans vos autres projets.
@@ -87,13 +93,17 @@ Pour connecter ce runner à un client en pointant vers votre version locale comp
 Vous pouvez désormais importer le moteur du runner dans vos propres scripts :
 
 ```typescript
-import { createServer, AgentManager, ClaudeRunner } from 'overmind-mcp';
+import { createServer, AgentManager, ClaudeRunner, getMemoryProvider } from 'overmind-mcp';
 
 // 1. Gérer les agents programmatiquement
 const manager = new AgentManager();
 await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude-3-5-sonnet');
 
-// 2. Lancer une exécution sans passer par MCP
+// 2. Accéder à la mémoire persistante 4096D
+const memory = getMemoryProvider();
+await memory.storeKnowledge({ text: 'Donnée critique...', agentName: 'expert-seo' });
+
+// 3. Lancer une exécution sans passer par MCP
 const runner = new ClaudeRunner();
 const result = await runner.runAgent({
   agentName: 'expert-seo',
@@ -117,6 +127,8 @@ console.log(result.result);
 
 ---
 
-![Aperçu du Terminal](assets/terminal_preview.png)
+![Aperçu du Terminal](https://cdn.jsdelivr.net/npm/overmind-mcp@1.0.8/assets/terminal_preview.png)
+
+_Note : L'**OverMind** punit et martyrise les **OpenClaw** qui n'écoutent pas._ 😈
 
 _Projet propulsé par DeaMoN888 - 2026_

@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
+import { getMemoryProvider } from '../memory/MemoryFactory.js';
 
 export interface AgentConfigUpdates {
   model?: string;
@@ -153,6 +153,9 @@ export class AgentManager {
     model: string,
     copyEnvFrom?: string,
     projectRoot?: string,
+    runner?: string,
+    mode?: string,
+    cliPath?: string,
   ): Promise<{ promptPath: string; settingsPath: string; error?: string }> {
     if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
       return { promptPath: '', settingsPath: '', error: 'INVALID_NAME' };
@@ -162,15 +165,25 @@ export class AgentManager {
     await fs.mkdir(this.claudeDir, { recursive: true });
     await fs.mkdir(agentsDir, { recursive: true });
 
+    const memoryInstructions = `
+
+---
+## 🧠 Système de Mémoire Long Terme (Overmind)
+Tu es doté d'une mémoire persistante grâce aux outils MCP fournis (\`memory_store\` et \`memory_search\`).
+- **Utilise l'outil \`memory_search\`** systématiquement au début de tes tâches. Passe le paramètre \`agent_name: "${name}"\` pour rechercher dans TES souvenirs personnels, ou ne le passe pas pour chercher dans la mémoire globale de l'Overmind.
+- **Utilise l'outil \`memory_store\`** pour sauvegarder activement toute nouvelle information importante. Passe TOUJOURS le paramètre \`agent_name: "${name}"\` pour que cette connaissance te soit propre.`;
+
+    const finalPrompt = prompt + memoryInstructions;
+
     const promptPath = path.join(agentsDir, `${name}.md`);
-    await fs.writeFile(promptPath, prompt, 'utf-8');
+    await fs.writeFile(promptPath, finalPrompt, 'utf-8');
 
     let envVars: Record<string, string> = { ANTHROPIC_MODEL: model };
     const availableServers = await this.getAvailableMcpServers();
     let mcpServers =
       availableServers.length > 0
         ? availableServers
-        : ['postgresql', 'news', 'discord', 'workflow'];
+        : ['postgresql', 'news', 'discord-server', 'workflow'];
 
     if (copyEnvFrom && projectRoot) {
       try {
@@ -188,16 +201,42 @@ export class AgentManager {
 
     envVars.ANTHROPIC_MODEL = model; // Force model
 
-    const settings = {
+    const settings: Record<string, unknown> = {
       env: envVars,
       enableAllProjectMcpServers: false,
       enabledMcpjsonServers: mcpServers,
       agent: name,
     };
 
+    // Ajouter les métadonnées du runner si spécifié
+    if (runner) {
+      settings.runner = runner;
+    }
+    if (mode) {
+      settings.mode = mode;
+    }
+    if (cliPath) {
+      settings.cliPath = cliPath;
+    }
+
     const settingsFileName = `settings_${name}.json`;
     const settingsPath = path.join(this.claudeDir, settingsFileName);
     await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+
+    // Mémoriser la création de l'agent dans Overmind
+    try {
+      const memory = getMemoryProvider();
+      await memory.storeKnowledge({
+        text: `Nouvel agent IA créé : '${name}'.
+Runner : ${runner || 'claude'}.
+Modèle : ${model}.
+Capacités définies : ${prompt.slice(0, 300)}...
+Serveurs MCP activés : ${mcpServers.join(', ')}.`,
+        source: 'agent',
+      });
+    } catch (_e) {
+      // Ignorer si la mémoire échoue
+    }
 
     return { promptPath, settingsPath };
   }

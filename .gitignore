@@ -32,5 +32,9 @@ coverage/
 
 # Misc local files
 *.log
+*.txt
 votes_sentinel.csv
 embed-analytics.json
+create_test_agent.js
+run_mission.js
+verify_memory.js
