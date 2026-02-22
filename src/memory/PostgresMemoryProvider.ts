@@ -115,10 +115,10 @@ export class PostgresMemoryProvider implements MemoryProvider {
     return id;
   }
 
-  async storeKnowledge(params: { text: string; source?: string }): Promise<string> {
+  async storeKnowledge(params: { text: string; source?: string; agentName?: string }): Promise<string> {
     await this.ensureSchema();
     const id = `k_${sha256(params.text)}_${randomId()}`;
-    const source = params.source || 'user';
+    const source = params.agentName ? `agent:${params.agentName}` : (params.source || 'user');
     
     const { embedding, model } = await embedText(params.text);
     
@@ -149,15 +149,20 @@ export class PostgresMemoryProvider implements MemoryProvider {
     // 1. Vector Search
     if (queryEmb.length > 0) {
       const embStr = `[${queryEmb.join(',')}]`;
-      const vecRes = await this.pool.query(
-        `SELECT id, text, source, created_at, 
+      let query = `SELECT id, text, source, created_at, 
                 (1 - (embedding <=> $1)) as score 
          FROM knowledge_chunks 
-         WHERE embedding IS NOT NULL
-         ORDER BY embedding <=> $1 
-         LIMIT $2`,
-        [embStr, limit]
-      );
+         WHERE embedding IS NOT NULL`;
+      
+      const values: any[] = [embStr, limit];
+      if (params.agentName) {
+        query += ` AND (source = $3 OR source = 'user' OR source = 'global')`;
+        values.push(`agent:${params.agentName}`);
+      }
+
+      query += ` ORDER BY embedding <=> $1 LIMIT $2`;
+
+      const vecRes = await this.pool.query(query, values);
 
       for (const row of vecRes.rows) {
         seen.add(row.id);
@@ -175,14 +180,19 @@ export class PostgresMemoryProvider implements MemoryProvider {
     // 2. Text Search (Trigram / ILIKE fallback for when no embedding is available or as hybrid)
     const textLimit = limit - merged.length;
     if (textLimit > 0) {
-      const textRes = await this.pool.query(
-        `SELECT id, text, source, created_at, similarity(text, $1) as score
+      let query = `SELECT id, text, source, created_at, similarity(text, $1) as score
          FROM knowledge_chunks
-         WHERE text ILIKE $2 OR text % $1
-         ORDER BY score DESC
-         LIMIT $3`,
-        [params.query, `%${params.query}%`, textLimit]
-      );
+         WHERE (text ILIKE $2 OR text % $1)`;
+      
+      const values: any[] = [params.query, `%${params.query}%`, textLimit];
+      if (params.agentName) {
+        query += ` AND (source = $4 OR source = 'user' OR source = 'global')`;
+        values.push(`agent:${params.agentName}`);
+      }
+
+      query += ` ORDER BY score DESC LIMIT $3`;
+
+      const textRes = await this.pool.query(query, values);
 
       for (const row of textRes.rows) {
         if (!seen.has(row.id)) {

@@ -55,11 +55,12 @@ export interface SearchMemoryParams {
   query: string;
   limit?: number;
   includeRuns?: boolean;
+  agentName?: string;
 }
 
 export interface MemoryProvider {
   storeRun(params: StoreRunParams): Promise<string> | string;
-  storeKnowledge(params: { text: string; source?: string }): Promise<string>;
+  storeKnowledge(params: { text: string; source?: string; agentName?: string }): Promise<string>;
   searchMemory(params: SearchMemoryParams): Promise<SearchResult[]>;
   getRecentRuns(params: { runner?: string; limit?: number }): Promise<AgentRun[]>;
   getStats(): Promise<MemoryStats> | MemoryStats;

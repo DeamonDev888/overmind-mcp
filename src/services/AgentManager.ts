@@ -161,8 +161,18 @@ export class AgentManager {
     await fs.mkdir(this.claudeDir, { recursive: true });
     await fs.mkdir(agentsDir, { recursive: true });
 
+    const memoryInstructions = `
+
+---
+## 🧠 Système de Mémoire Long Terme (Overmind)
+Tu es doté d'une mémoire persistante grâce aux outils MCP fournis (\`memory_store\` et \`memory_search\`).
+- **Utilise l'outil \`memory_search\`** systématiquement au début de tes tâches. Passe le paramètre \`agent_name: "${name}"\` pour rechercher dans TES souvenirs personnels, ou ne le passe pas pour chercher dans la mémoire globale de l'Overmind.
+- **Utilise l'outil \`memory_store\`** pour sauvegarder activement toute nouvelle information importante. Passe TOUJOURS le paramètre \`agent_name: "${name}"\` pour que cette connaissance te soit propre.`;
+
+    const finalPrompt = prompt + memoryInstructions;
+
     const promptPath = path.join(agentsDir, `${name}.md`);
-    await fs.writeFile(promptPath, prompt, 'utf-8');
+    await fs.writeFile(promptPath, finalPrompt, 'utf-8');
 
     let envVars: Record<string, string> = { ANTHROPIC_MODEL: model };
     const availableServers = await this.getAvailableMcpServers();
