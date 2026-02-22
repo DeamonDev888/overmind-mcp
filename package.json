@@ -1,0 +1,42 @@
+{
+  "name": "overmind-mcp",
+  "version": "1.1.1",
+  "description": "MCP Server for Overmind integration with cyberpunk website",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src --ext .ts",
+    "prepare": "npm run build"
+  },
+  "bin": {
+    "overmind-mcp": "dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "overmind",
+    "cyberpunk"
+  ],
+  "author": "DeamonDev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deamondev888/overmind-mcp.git"
+  },
+  "homepage": "https://deamondev888.github.io/overmind-mcp/",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "typescript": "^5.3.3",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0"
+  },
+  "files": [
+    "dist",
+    "docs"
+  ]
+}
