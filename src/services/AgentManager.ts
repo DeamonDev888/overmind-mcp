@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
+import { getMemoryProvider } from '../memory/MemoryFactory.js';
 
 export interface AgentConfigUpdates {
   model?: string;
@@ -182,7 +183,7 @@ Tu es doté d'une mémoire persistante grâce aux outils MCP fournis (\`memory_s
     let mcpServers =
       availableServers.length > 0
         ? availableServers
-        : ['postgresql', 'news', 'discord', 'workflow'];
+        : ['postgresql', 'news', 'discord-server', 'workflow'];
 
     if (copyEnvFrom && projectRoot) {
       try {
@@ -221,6 +222,21 @@ Tu es doté d'une mémoire persistante grâce aux outils MCP fournis (\`memory_s
     const settingsFileName = `settings_${name}.json`;
     const settingsPath = path.join(this.claudeDir, settingsFileName);
     await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+
+    // Mémoriser la création de l'agent dans Overmind
+    try {
+      const memory = getMemoryProvider();
+      await memory.storeKnowledge({
+        text: `Nouvel agent IA créé : '${name}'.
+Runner : ${runner || 'claude'}.
+Modèle : ${model}.
+Capacités définies : ${prompt.slice(0, 300)}...
+Serveurs MCP activés : ${mcpServers.join(', ')}.`,
+        source: 'agent',
+      });
+    } catch (_e) {
+      // Ignorer si la mémoire échoue
+    }
 
     return { promptPath, settingsPath };
   }
