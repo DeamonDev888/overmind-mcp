@@ -251,7 +251,11 @@ export class PostgresMemoryProvider implements MemoryProvider {
     await this.initializeDb(dbName, pool);
 
     const id = `k_${sha256(params.text)}_${randomId()}`;
-    const source = params.agentName ? `agent:${params.agentName}` : params.source || 'user';
+    // Format source: type|name (ex: agent|sniper, decision|system)
+    let source = params.source || 'user';
+    if (params.agentName) {
+      source = `agent|${params.agentName}`;
+    }
 
     const { embedding, model } = await embedText(params.text);
     const embStr = embedding.length > 0 ? `[${embedding.join(',')}]` : null;
@@ -303,13 +307,14 @@ export class PostgresMemoryProvider implements MemoryProvider {
           for (const row of vecRes.rows) {
             if (!seen.has(row.id)) {
               seen.add(row.id);
+              const [type, origin] = row.source.split('|');
               merged.push({
                 id: row.id,
                 text: row.text,
-                source: `[${dbName}] ${row.source}`,
+                source: row.source,
                 score: parseFloat(row.score),
                 created_at: parseInt(row.created_at, 10),
-                match_type: 'vector',
+                match_type: type === 'pattern' || type === 'decision' ? 'structural' : 'vector',
               });
             }
           }

@@ -27,7 +27,7 @@ export interface SearchResult {
   source: string;
   score: number;
   created_at: number;
-  match_type: 'vector' | 'fts' | 'combined';
+  match_type: 'vector' | 'fts' | 'combined' | 'structural' | 'pattern';
 }
 
 export interface MemoryStats {

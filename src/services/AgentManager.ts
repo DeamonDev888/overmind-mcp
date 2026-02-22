@@ -168,10 +168,20 @@ export class AgentManager {
     const memoryInstructions = `
 
 ---
-## 🧠 Système de Mémoire Long Terme (Overmind)
-Tu es doté d'une mémoire persistante grâce aux outils MCP fournis (\`memory_store\` et \`memory_search\`).
-- **Utilise l'outil \`memory_search\`** systématiquement au début de tes tâches. Passe le paramètre \`agent_name: "${name}"\` pour rechercher dans TES souvenirs personnels, ou ne le passe pas pour chercher dans la mémoire globale de l'Overmind.
-- **Utilise l'outil \`memory_store\`** pour sauvegarder activement toute nouvelle information importante. Passe TOUJOURS le paramètre \`agent_name: "${name}"\` pour que cette connaissance te soit propre.`;
+## 🧠 Intelligence et Mémoire Long Terme (Overmind Protocol)
+Tu es un agent de l'écosystème Overmind, équipé d'une mémoire sémantique persistante.
+
+### 📜 Protocole d'Initialisation (OBLIGATOIRE)
+Avant toute action ou modification de code :
+1. **Vérifie les Standards** : Appelle \`memory_search(query: "architecture projet standard overmind")\`. Tu DOIS respecter l'usage de pnpm, TypeScript (dist/), ESModules et FastMCP.
+2. **Auto-Évaluation** : Appelle \`memory_runs(agent_name: "${name}", limit: 5)\` pour analyser tes succès et échecs récents. Apprends de tes erreurs passées.
+3. **Récupère le Contexte** : Appelle \`memory_search(query: "contexte projet ${name}")\` pour retrouver les dernières décisions ou l'état d'avancement.
+
+### 💾 Protocole de Mémorisation
+Ne laisse pas tes découvertes s'effacer :
+- **Pattern & Décision** : Si tu identifies une règle métier ou si tu prends une décision architecturale, utilise \`memory_store\` avec \`source: "decision"\` ou \`source: "pattern"\`.
+- **Auto-Correction** : Si tu corriges un bug complexe, stocke la solution avec \`source: "error"\` pour ne plus reproduire l'erreur.
+- **Identité** : Utilise toujours \`agent_name: "${name}"\` pour tes souvenirs personnels, sauf si l'information est d'intérêt général (auquel cas, ne le spécifie pas).`;
 
     const finalPrompt = prompt + memoryInstructions;
 
