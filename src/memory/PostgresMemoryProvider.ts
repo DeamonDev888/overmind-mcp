@@ -25,26 +25,41 @@ function sha256(text: string): string {
 
 export class PostgresMemoryProvider implements MemoryProvider {
   private pool: Pool;
-  private initialized = false;
+  private initializedSchemas = new Set<string>();
 
   constructor() {
     this.pool = getPool();
   }
 
-  private async ensureSchema(): Promise<void> {
-    if (this.initialized) return;
+  private sanitizeIdentifier(name: string): string {
+    return name.replace(/[^a-z0-9_]/gi, '_').toLowerCase();
+  }
+
+  private getTablePath(tableName: string, agentName?: string): string {
+    const schema = agentName ? `agent_${this.sanitizeIdentifier(agentName)}` : 'public';
+    return `"${schema}"."${tableName}"`;
+  }
+
+  private async ensureSchema(agentName?: string): Promise<string> {
+    const schema = agentName ? `agent_${this.sanitizeIdentifier(agentName)}` : 'public';
+    if (this.initializedSchemas.has(schema)) return schema;
     
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       
-      // Extensions
-      await client.query('CREATE EXTENSION IF NOT EXISTS vector');
-      await client.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+      // Extensions (Shared globally)
+      await client.query('CREATE EXTENSION IF NOT EXISTS vector SCHEMA public');
+      await client.query('CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA public');
       
-      // Agent Runs
+      // Create Schema if not public
+      if (schema !== 'public') {
+        await client.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+      }
+
+      // Agent Runs Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS agent_runs (
+        CREATE TABLE IF NOT EXISTS "${schema}"."agent_runs" (
           id TEXT PRIMARY KEY,
           runner TEXT NOT NULL,
           agent_name TEXT,
@@ -58,13 +73,13 @@ export class PostgresMemoryProvider implements MemoryProvider {
         )
       `);
 
-      // Knowledge Chunks
+      // Knowledge Chunks Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS knowledge_chunks (
+        CREATE TABLE IF NOT EXISTS "${schema}"."knowledge_chunks" (
           id TEXT PRIMARY KEY,
           source TEXT NOT NULL,
           text TEXT NOT NULL,
-          embedding vector(4096),
+          embedding public.vector(4096),
           model TEXT,
           created_at BIGINT DEFAULT extract(epoch from now()) * 1000,
           updated_at BIGINT DEFAULT extract(epoch from now()) * 1000
@@ -72,21 +87,20 @@ export class PostgresMemoryProvider implements MemoryProvider {
       `);
 
       // Indexes
-      await client.query('CREATE INDEX IF NOT EXISTS idx_agent_runs_runner ON agent_runs(runner)');
-      await client.query('CREATE INDEX IF NOT EXISTS idx_agent_runs_session ON agent_runs(session_id)');
-      
-      // HNSW Index for 4096D vectors (Cosine similarity)
-      // Note: pgvector HNSW limits dimensions to 2000 by default. 
-      // We are using 4096D (Qwen) so we rely on exact nearest neighbor search (no index) which is perfectly fast for moderate scales.
+      await client.query(`CREATE INDEX IF NOT EXISTS "idx_agent_runs_runner_${schema}" ON "${schema}"."agent_runs"(runner)`);
+      if (schema === 'public') {
+        await client.query(`CREATE INDEX IF NOT EXISTS "idx_agent_runs_session_${schema}" ON "${schema}"."agent_runs"(session_id)`);
+      }
 
-      // GIN index for text search (trigram & fts fallback)
-      await client.query('CREATE INDEX IF NOT EXISTS idx_knowledge_text_trgm ON knowledge_chunks USING gin (text gin_trgm_ops)');
+      // GIN index for text search
+      await client.query(`CREATE INDEX IF NOT EXISTS "idx_knowledge_text_trgm_${schema}" ON "${schema}"."knowledge_chunks" USING gin (text public.gin_trgm_ops)`);
 
       await client.query('COMMIT');
-      this.initialized = true;
+      this.initializedSchemas.add(schema);
+      return schema;
     } catch (e) {
       await client.query('ROLLBACK');
-      console.error('[PostgresMemory] Schema initialization failed:', e);
+      console.error(`[PostgresMemory] Schema initialization failed for ${schema}:`, e);
       throw e;
     } finally {
       client.release();
@@ -94,10 +108,12 @@ export class PostgresMemoryProvider implements MemoryProvider {
   }
 
   async storeRun(params: StoreRunParams): Promise<string> {
-    await this.ensureSchema();
+    const schema = await this.ensureSchema(params.agentName || undefined);
     const id = randomId();
+    const table = `"${schema}"."agent_runs"`;
+    
     await this.pool.query(
-      `INSERT INTO agent_runs 
+      `INSERT INTO ${table} 
         (id, runner, agent_name, prompt, result, error, duration_ms, success, session_id) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
@@ -116,17 +132,16 @@ export class PostgresMemoryProvider implements MemoryProvider {
   }
 
   async storeKnowledge(params: { text: string; source?: string; agentName?: string }): Promise<string> {
-    await this.ensureSchema();
+    const schema = await this.ensureSchema(params.agentName);
     const id = `k_${sha256(params.text)}_${randomId()}`;
     const source = params.agentName ? `agent:${params.agentName}` : (params.source || 'user');
     
     const { embedding, model } = await embedText(params.text);
-    
-    // Convert array to pgvector string format: [1,2,3]
     const embStr = embedding.length > 0 ? `[${embedding.join(',')}]` : null;
+    const table = `"${schema}"."knowledge_chunks"`;
 
     await this.pool.query(
-      `INSERT INTO knowledge_chunks (id, source, text, embedding, model) 
+      `INSERT INTO ${table} (id, source, text, embedding, model) 
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id) DO UPDATE SET 
          text = EXCLUDED.text, 
@@ -139,81 +154,82 @@ export class PostgresMemoryProvider implements MemoryProvider {
   }
 
   async searchMemory(params: SearchMemoryParams): Promise<SearchResult[]> {
-    await this.ensureSchema();
+    const agentSchema = await this.ensureSchema(params.agentName);
     const limit = params.limit || 10;
     const { embedding: queryEmb } = await embedText(params.query);
     
     const merged: SearchResult[] = [];
     const seen = new Set<string>();
 
-    // 1. Vector Search
-    if (queryEmb.length > 0) {
-      const embStr = `[${queryEmb.join(',')}]`;
-      let query = `SELECT id, text, source, created_at, 
-                (1 - (embedding <=> $1)) as score 
-         FROM knowledge_chunks 
-         WHERE embedding IS NOT NULL`;
-      
-      const values: (string | number)[] = [embStr, limit];
-      if (params.agentName) {
-        query += ` AND (source = $3 OR source = 'user' OR source = 'global')`;
-        values.push(`agent:${params.agentName}`);
+    // We can search in BOTH the agent's private schema AND the public schema for global knowledge
+    const schemasToSearch = params.agentName ? [agentSchema, 'public'] : ['public'];
+
+    for (const schema of schemasToSearch) {
+      if (merged.length >= limit) break;
+      const knowledgeTable = `"${schema}"."knowledge_chunks"`;
+
+      // 1. Vector Search
+      if (queryEmb.length > 0) {
+        const embStr = `[${queryEmb.join(',')}]`;
+        const vecRes = await this.pool.query(
+          `SELECT id, text, source, created_at, 
+                  (1 - (embedding <=> $1)) as score 
+           FROM ${knowledgeTable} 
+           WHERE embedding IS NOT NULL
+           ORDER BY embedding <=> $1 
+           LIMIT $2`,
+          [embStr, limit - merged.length]
+        );
+
+        for (const row of vecRes.rows) {
+          if (!seen.has(row.id)) {
+            seen.add(row.id);
+            merged.push({
+              id: row.id,
+              text: row.text,
+              source: `[${schema}] ${row.source}`,
+              score: parseFloat(row.score),
+              created_at: parseInt(row.created_at, 10),
+              match_type: 'vector'
+            });
+          }
+        }
       }
 
-      query += ` ORDER BY embedding <=> $1 LIMIT $2`;
+      // 2. Text Search FALLBACK
+      const textLimit = limit - merged.length;
+      if (textLimit > 0) {
+        const textRes = await this.pool.query(
+          `SELECT id, text, source, created_at, similarity(text, $1) as score
+           FROM ${knowledgeTable}
+           WHERE (text ILIKE $2 OR text % $1)
+           ORDER BY score DESC
+           LIMIT $3`,
+          [params.query, `%${params.query}%`, textLimit]
+        );
 
-      const vecRes = await this.pool.query(query, values);
-
-      for (const row of vecRes.rows) {
-        seen.add(row.id);
-        merged.push({
-          id: row.id,
-          text: row.text,
-          source: row.source,
-          score: parseFloat(row.score),
-          created_at: parseInt(row.created_at, 10),
-          match_type: 'vector'
-        });
-      }
-    }
-
-    // 2. Text Search (Trigram / ILIKE fallback for when no embedding is available or as hybrid)
-    const textLimit = limit - merged.length;
-    if (textLimit > 0) {
-      let query = `SELECT id, text, source, created_at, similarity(text, $1) as score
-         FROM knowledge_chunks
-         WHERE (text ILIKE $2 OR text % $1)`;
-      
-      const values: (string | number)[] = [params.query, `%${params.query}%`, textLimit];
-      if (params.agentName) {
-        query += ` AND (source = $4 OR source = 'user' OR source = 'global')`;
-        values.push(`agent:${params.agentName}`);
-      }
-
-      query += ` ORDER BY score DESC LIMIT $3`;
-
-      const textRes = await this.pool.query(query, values);
-
-      for (const row of textRes.rows) {
-        if (!seen.has(row.id)) {
-          seen.add(row.id);
-          merged.push({
-            id: row.id,
-            text: row.text,
-            source: row.source,
-            score: parseFloat(row.score) || 0.5,
-            created_at: parseInt(row.created_at, 10),
-            match_type: 'fts'
-          });
+        for (const row of textRes.rows) {
+          if (!seen.has(row.id)) {
+            seen.add(row.id);
+            merged.push({
+              id: row.id,
+              text: row.text,
+              source: `[${schema}] ${row.source}`,
+              score: parseFloat(row.score) || 0.5,
+              created_at: parseInt(row.created_at, 10),
+              match_type: 'fts'
+            });
+          }
         }
       }
     }
 
-    // 3. Runs History Search
+    // 3. Runs History Search (only in the requested schema)
     if (params.includeRuns) {
+      const runsTable = `"${agentSchema}"."agent_runs"`;
       const runRes = await this.pool.query(
         `SELECT id, runner, prompt, result, created_at
-         FROM agent_runs
+         FROM ${runsTable}
          WHERE prompt ILIKE $1 OR result ILIKE $1
          ORDER BY created_at DESC
          LIMIT $2`,
@@ -238,14 +254,16 @@ export class PostgresMemoryProvider implements MemoryProvider {
     return merged.sort((a, b) => b.score - a.score).slice(0, limit);
   }
 
-  async getRecentRuns(params: { runner?: string; limit?: number }): Promise<AgentRun[]> {
-    await this.ensureSchema();
+  async getRecentRuns(params: { runner?: string; limit?: number; agentName?: string }): Promise<AgentRun[]> {
+    const schema = await this.ensureSchema(params.agentName);
     const limit = params.limit || 20;
-    let query = 'SELECT * FROM agent_runs ORDER BY created_at DESC LIMIT $1';
+    const table = `"${schema}"."agent_runs"`;
+
+    let query = `SELECT * FROM ${table} ORDER BY created_at DESC LIMIT $1`;
     let values: (string | number)[] = [limit];
 
     if (params.runner) {
-      query = 'SELECT * FROM agent_runs WHERE runner = $1 ORDER BY created_at DESC LIMIT $2';
+      query = `SELECT * FROM ${table} WHERE runner = $1 ORDER BY created_at DESC LIMIT $2`;
       values = [params.runner, limit];
     }
 
@@ -257,13 +275,13 @@ export class PostgresMemoryProvider implements MemoryProvider {
     }));
   }
 
-  async getStats(): Promise<MemoryStats> {
-    await this.ensureSchema();
-    const totalRunsRes = await this.pool.query('SELECT COUNT(*) as count FROM agent_runs');
-    const totalKnowledgeRes = await this.pool.query('SELECT COUNT(*) as count FROM knowledge_chunks');
+  async getStats(agentName?: string): Promise<MemoryStats> {
+    const schema = await this.ensureSchema(agentName);
+    const totalRunsRes = await this.pool.query(`SELECT COUNT(*) as count FROM "${schema}"."agent_runs"`);
+    const totalKnowledgeRes = await this.pool.query(`SELECT COUNT(*) as count FROM "${schema}"."knowledge_chunks"`);
     const byRunnerRes = await this.pool.query(`
       SELECT runner, COUNT(*) as count, SUM(success) as successes 
-      FROM agent_runs 
+      FROM "${schema}"."agent_runs" 
       GROUP BY runner
     `);
 
