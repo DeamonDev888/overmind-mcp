@@ -12,6 +12,10 @@ export const memoryRunsSchema = z.object({
     .optional()
     .default(false)
     .describe("Afficher les statistiques globales d'orchestration"),
+  agent_name: z
+    .string()
+    .optional()
+    .describe("Filtrer par agent spécifique (ex: 'agent_finance')."),
 });
 
 export async function memoryRunsTool(
@@ -23,22 +27,23 @@ export async function memoryRunsTool(
   const provider = getMemoryProvider();
 
   if (args.stats) {
-    const s = await provider.getStats();
+    const s = await provider.getStats(args.agent_name);
     const rows = s.byRunner
       .map((r) => `  • **${r.runner}** : ${r.count} runs (${r.successes} ✅)`)
       .join('\n');
 
+    const scopeLabel = args.agent_name ? `pour l'agent **${args.agent_name}**` : 'globales';
     return {
       content: [
         {
           type: 'text',
-          text: `📊 **OverMind Statistics**\n\n- Runs totaux : **${s.totalRuns}**\n- Connaissances stockées : **${s.totalKnowledge}**\n\n**Par runner :**\n${rows || '  _(aucun run enregistré)_'}`,
+          text: `📊 **OverMind Statistics (${scopeLabel})**\n\n- Runs totaux : **${s.totalRuns}**\n- Connaissances stockées : **${s.totalKnowledge}**\n\n**Par runner :**\n${rows || '  _(aucun run enregistré)_'}`,
         },
       ],
     };
   }
 
-  const runs = await provider.getRecentRuns({ runner: args.runner, limit: args.limit });
+  const runs = await provider.getRecentRuns({ runner: args.runner, limit: args.limit, agentName: args.agent_name });
 
   if (runs.length === 0) {
     return {
