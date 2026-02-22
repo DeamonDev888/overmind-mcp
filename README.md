@@ -6,6 +6,7 @@ _Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Cod
 
 <p align="center">
   <a href="https://discord.gg/4AR82phtBz"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://deamondev888.github.io/overmind-mcp/"><img src="https://img.shields.io/badge/Documentation-Live-00fff5?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Live Doc"></a>
 </p>
 
 ## 👋 C'est quoi ?
