@@ -22,6 +22,7 @@ docs/
 ## 🚀 Fonctionnalités
 
 ### Effets Visuels
+
 - ✨ Matrix rain en arrière-plan (canvas)
 - 🌐 Grille perspective animée
 - 🔮 Orbes lumineux flottants
@@ -30,6 +31,7 @@ docs/
 - 🌊 Gradient animé
 
 ### Interactions
+
 - 🖱️ Parallaxe au mouvement de souris
 - 🎴 Effet 3D sur les cartes
 - ⚡ Compteurs animés au scroll
@@ -38,6 +40,7 @@ docs/
 - 📑 Onglets pour installation
 
 ### Animations CSS
+
 - `@keyframes float` - Animation flottante
 - `@keyframes pulse` - Pulsation lumineuse
 - `@keyframes glitch` - Effet glitch
@@ -48,16 +51,18 @@ docs/
 ## 🎯 Personnalisation
 
 ### Couleurs (CSS Variables)
+
 ```css
 :root {
-    --neon-pink: #ff006e;
-    --neon-cyan: #00fff5;
-    --neon-purple: #b537f2;
-    --neon-blue: #3b82f6;
+  --neon-pink: #ff006e;
+  --neon-cyan: #00fff5;
+  --neon-purple: #b537f2;
+  --neon-blue: #3b82f6;
 }
 ```
 
 ### Polices
+
 - **Orbitron**: Titres et logos (Google Fonts)
 - **Rajdhani**: Corps du texte (Google Fonts)
 - **Fira Code**: Blocs de code (Google Fonts)
@@ -65,9 +70,11 @@ docs/
 ## 📦 Déploiement
 
 ### GitHub Pages
+
 Le site est automatiquement déployé via GitHub Actions à chaque push sur la branche `main`.
 
 ### Déploiement Local
+
 ```bash
 # Serveur de développement Python
 python -m http.server 8000
@@ -79,9 +86,11 @@ npx serve docs
 ## 🔧 Configuration
 
 ### GitHub Actions
+
 Le workflow `.github/workflows/deploy.yml` gère le déploiement automatique.
 
 ### Settings Repository
+
 - Source: GitHub Actions
 - Branch: main
 - Folder: /docs
@@ -115,3 +124,5 @@ Le workflow `.github/workflows/deploy.yml` gère le déploiement automatique.
 ---
 
 **Créé avec ❤️ et beaucoup de néon par DeaMoN888 - 2026**
+
+<!-- Last Deploy: 2026-02-22T14:15:00 -->
