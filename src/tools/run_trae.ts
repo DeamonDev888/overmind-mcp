@@ -21,8 +21,12 @@ export const runTraeSchema = z.object({
     ),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function runTraeAgent(args: z.infer<typeof runTraeSchema>): Promise<any> {
+export async function runTraeAgent(
+  args: z.infer<typeof runTraeSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const runner = new TraeRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 

@@ -21,8 +21,12 @@ export const runOpenCodeSchema = z.object({
     ),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function runOpenCodeAgent(args: z.infer<typeof runOpenCodeSchema>): Promise<any> {
+export async function runOpenCodeAgent(
+  args: z.infer<typeof runOpenCodeSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const runner = new OpenCodeRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 

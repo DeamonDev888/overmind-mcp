@@ -40,8 +40,12 @@ export const updateAgentConfigSchema = z.object({
 
 // --- Tools ---
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function listAgents(args: z.infer<typeof listAgentsSchema>): Promise<any> {
+export async function listAgents(
+  args: z.infer<typeof listAgentsSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const manager = new AgentManager();
   try {
     const agentsList = await manager.listAgents(args.details);
@@ -73,8 +77,12 @@ export async function listAgents(args: z.infer<typeof listAgentsSchema>): Promis
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Promise<any> {
+export async function deleteAgent(
+  args: z.infer<typeof deleteAgentSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const manager = new AgentManager();
   const { name } = args;
 

@@ -24,8 +24,12 @@ export const createAgentSchema = z.object({
     ),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function createAgent(args: z.infer<typeof createAgentSchema>): Promise<any> {
+export async function createAgent(
+  args: z.infer<typeof createAgentSchema>,
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
   const manager = new AgentManager();
   const { name, prompt, model, copyEnvFrom } = args;
 
