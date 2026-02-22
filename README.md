@@ -14,6 +14,8 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 
 - **🔌 Contrôle Total** : Lancez des missions complexes via MCP ou directement via le code.
 - **🏗️ Architecture Pro** : Basé sur des services (`AgentManager`, `ClaudeRunner`, `PromptManager`) pour une stabilité maximale.
+- **🧠 Mémoire Haute-Performance (4096D)** : Système RAG intégré via PostgreSQL + `pgvector` supportant les embeddings SOTA (Qwen 8B).
+- **🛡️ Mémoire Ségréguée** : Chaque agent peut posséder ses propres souvenirs isolés tout en ayant accès au socle de connaissances global.
 - **🛠️ Capacités Étendues** : L'agent piloté peut utiliser VOS outils (Base de données, Scrapers, etc.).
 - **🤖 Multi-Agents** : Créez, configurez et gérez des personnalités d'agents isolées (Prompts & Settings dédiés).
 - **📦 Prêt pour l'Intégration** : Importable comme un module NPM dans vos autres projets.
@@ -87,13 +89,17 @@ Pour connecter ce runner à un client en pointant vers votre version locale comp
 Vous pouvez désormais importer le moteur du runner dans vos propres scripts :
 
 ```typescript
-import { createServer, AgentManager, ClaudeRunner } from 'overmind-mcp';
+import { createServer, AgentManager, ClaudeRunner, getMemoryProvider } from 'overmind-mcp';
 
 // 1. Gérer les agents programmatiquement
 const manager = new AgentManager();
 await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude-3-5-sonnet');
 
-// 2. Lancer une exécution sans passer par MCP
+// 2. Accéder à la mémoire persistante 4096D
+const memory = getMemoryProvider();
+await memory.storeKnowledge({ text: 'Donnée critique...', agentName: 'expert-seo' });
+
+// 3. Lancer une exécution sans passer par MCP
 const runner = new ClaudeRunner();
 const result = await runner.runAgent({
   agentName: 'expert-seo',
