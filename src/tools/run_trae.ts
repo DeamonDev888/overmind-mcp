@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TraeRunner } from '../services/TraeRunner.js';
+import { storeRun } from '../memory/MemoryFactory.js';
 
 export const runTraeSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent Trae (mode SOLO)"),
@@ -25,7 +26,21 @@ export async function runTraeAgent(args: z.infer<typeof runTraeSchema>): Promise
   const runner = new TraeRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 
+  const start = Date.now();
   const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId });
+  const durationMs = Date.now() - start;
+
+  // Auto-instrumentation
+  storeRun({
+    runner: 'trae',
+    agentName,
+    prompt,
+    result: result.result,
+    error: result.error,
+    durationMs,
+    success: !result.error,
+    sessionId: result.sessionId,
+  });
 
   if (result.error === 'INVALID_AGENT') {
     return {

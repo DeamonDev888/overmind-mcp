@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ClaudeRunner } from '../services/ClaudeRunner.js';
-import { storeRun } from '../memory/OverMindMemory.js';
+import { storeRun } from '../memory/MemoryFactory.js';
 
 // export const runAgentSchema = z.object({
 //     prompt: z.string().describe("Le prompt à envoyer à l'agent"),

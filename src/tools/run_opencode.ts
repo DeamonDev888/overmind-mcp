@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { OpenCodeRunner } from '../services/OpenCodeRunner.js';
+import { storeRun } from '../memory/MemoryFactory.js';
 
 export const runOpenCodeSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent OpenCode"),
@@ -25,7 +26,21 @@ export async function runOpenCodeAgent(args: z.infer<typeof runOpenCodeSchema>):
   const runner = new OpenCodeRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 
+  const start = Date.now();
   const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId });
+  const durationMs = Date.now() - start;
+
+  // Auto-instrumentation
+  storeRun({
+    runner: 'opencode',
+    agentName,
+    prompt,
+    result: result.result,
+    error: result.error,
+    durationMs,
+    success: !result.error,
+    sessionId: result.sessionId,
+  });
 
   if (result.error === 'INVALID_AGENT') {
     return {

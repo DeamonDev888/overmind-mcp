@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { GeminiRunner } from '../services/GeminiRunner.js';
+import { storeRun } from '../memory/MemoryFactory.js';
 
 export const runGeminiSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent Gemini"),
@@ -25,7 +26,21 @@ export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>): Pro
   const runner = new GeminiRunner();
   const { prompt, agentName, autoResume, sessionId } = args;
 
+  const start = Date.now();
   const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId });
+  const durationMs = Date.now() - start;
+
+  // Auto-instrumentation
+  storeRun({
+    runner: 'gemini',
+    agentName,
+    prompt,
+    result: result.result,
+    error: result.error,
+    durationMs,
+    success: !result.error,
+    sessionId: result.sessionId,
+  });
 
   if (result.error === 'INVALID_AGENT') {
     return {

@@ -51,6 +51,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/node": "^25.0.3",
+    "@types/pg": "^8.16.0",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.1.0",
@@ -60,8 +61,10 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "dotenv": "^17.3.1",
     "fastmcp": "^3.29.0",
     "pg": "^8.18.0",
+    "postgresql-mcp-server": "file:../serveur_PostGreSQL",
     "zod": "^3.24.1"
   }
 }

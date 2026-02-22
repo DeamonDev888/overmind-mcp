@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getRecentRuns, getStats } from '../memory/OverMindMemory.js';
+import { getMemoryProvider } from '../memory/MemoryFactory.js';
 
 export const memoryRunsSchema = z.object({
   runner: z
@@ -15,13 +15,11 @@ export const memoryRunsSchema = z.object({
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): any {
+export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Promise<any> {
+  const provider = getMemoryProvider();
+
   if (args.stats) {
-    const s = getStats() as {
-      totalRuns: number;
-      totalKnowledge: number;
-      byRunner: Array<{ runner: string; count: number; successes: number }>;
-    };
+    const s = await provider.getStats();
     const rows = s.byRunner
       .map((r) => `  • **${r.runner}** : ${r.count} runs (${r.successes} ✅)`)
       .join('\n');
@@ -36,7 +34,7 @@ export function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): any {
     };
   }
 
-  const runs = getRecentRuns({ runner: args.runner, limit: args.limit });
+  const runs = await provider.getRecentRuns({ runner: args.runner, limit: args.limit });
 
   if (runs.length === 0) {
     return {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { storeKnowledge } from '../memory/OverMindMemory.js';
+import { getMemoryProvider } from '../memory/MemoryFactory.js';
 
 export const memoryStoreSchema = z.object({
   text: z.string().min(1).describe('Texte ou connaissance à mémoriser durablement'),
@@ -13,7 +13,8 @@ export const memoryStoreSchema = z.object({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function memoryStoreTool(args: z.infer<typeof memoryStoreSchema>): Promise<any> {
   try {
-    const id = await storeKnowledge({ text: args.text, source: args.source });
+    const provider = getMemoryProvider();
+    const id = await provider.storeKnowledge({ text: args.text, source: args.source });
     return {
       content: [
         {
