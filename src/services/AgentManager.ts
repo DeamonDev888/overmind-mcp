@@ -152,6 +152,9 @@ export class AgentManager {
     model: string,
     copyEnvFrom?: string,
     projectRoot?: string,
+    runner?: string,
+    mode?: string,
+    cliPath?: string,
   ): Promise<{ promptPath: string; settingsPath: string; error?: string }> {
     if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
       return { promptPath: '', settingsPath: '', error: 'INVALID_NAME' };
@@ -197,12 +200,23 @@ Tu es doté d'une mémoire persistante grâce aux outils MCP fournis (\`memory_s
 
     envVars.ANTHROPIC_MODEL = model; // Force model
 
-    const settings = {
+    const settings: Record<string, unknown> = {
       env: envVars,
       enableAllProjectMcpServers: false,
       enabledMcpjsonServers: mcpServers,
       agent: name,
     };
+
+    // Ajouter les métadonnées du runner si spécifié
+    if (runner) {
+      settings.runner = runner;
+    }
+    if (mode) {
+      settings.mode = mode;
+    }
+    if (cliPath) {
+      settings.cliPath = cliPath;
+    }
 
     const settingsFileName = `settings_${name}.json`;
     const settingsPath = path.join(this.claudeDir, settingsFileName);
