@@ -1,12 +1,5 @@
 import { FastMCP } from 'fastmcp';
-import { runClaudeAgent, runAgentSchema } from './tools/run_claude.js';
-import { runGeminiAgent, runGeminiSchema } from './tools/run_gemini.js';
-import { runKiloAgent, runKiloSchema } from './tools/run_kilo.js';
-import { runQwenAgent, runQwenSchema } from './tools/run_qwen.js';
-import { runOpenClawAgent, runOpenClawSchema } from './tools/run_openclaw.js';
-import { runClineAgent, runClineSchema } from './tools/run_cline.js';
-import { runOpenCodeAgent, runOpenCodeSchema } from './tools/run_opencode.js';
-import { runTraeAgent, runTraeSchema } from './tools/run_trae.js';
+import { runAgent, runAgentSchema } from './tools/run_agent.js';
 import { memorySearchTool, memorySearchSchema } from './tools/memory_search.js';
 import { memoryStoreTool, memoryStoreSchema } from './tools/memory_store.js';
 import { memoryRunsTool, memoryRunsSchema } from './tools/memory_runs.js';
@@ -32,77 +25,42 @@ export function createServer(name: string = 'OverMind-MCP') {
     version: '1.0.0',
   });
 
-  // Outil principal : Exécuter l'agent Claude
+  // ─── OUTIL UNIFIÉ D'EXÉCUTION D'AGENT ────────────────────────────────────────
   server.addTool({
     name: 'run_agent',
-    description: "Exécute une commande sur l'agent Claude configuré via CLI",
+    description: `Exécute une commande sur un agent IA via le runner spécifié.
+
+**Runners disponibles:**
+- claude: Claude Code (claude -p)
+- gemini: Gemini CLI
+- kilo: Kilocode (modes: code, architect, ask, debug, orchestrator)
+- qwen: Qwen Code (qwen -p)
+- openclaw: OpenClaw (openclaw message send)
+- cline: Cline (modes: plan, act)
+- opencode: OpenCode (opencode run)
+- trae: Trae (trae solo --headless)
+
+**Exemples:**
+run_agent(runner: "claude", agentName: "expert_python", prompt: "Analyse ce code")
+run_agent(runner: "kilo", agentName: "architect", mode: "architect", prompt: "Conçois une API REST")
+run_agent(runner: "cline", agentName: "planner", mode: "plan", prompt: "Planifie l'implémentation")`,
     parameters: runAgentSchema,
-    execute: runClaudeAgent,
+    execute: runAgent,
   });
 
-  // Outil : Exécuter l'agent Gemini
-  server.addTool({
-    name: 'run_gemini',
-    description: "Exécute une commande sur l'agent Gemini configuré via CLI",
-    parameters: runGeminiSchema,
-    execute: runGeminiAgent,
-  });
+  // ─── GESTION DES AGENTS ───────────────────────────────────────────────────────
 
-  // Outil : Exécuter l'agent Kilocode
-  server.addTool({
-    name: 'run_kilo',
-    description:
-      "Exécute une commande sur l'agent Kilocode via CLI. Supporte les modes : code, architect, ask, debug, orchestrator",
-    parameters: runKiloSchema,
-    execute: runKiloAgent,
-  });
-
-  // Outil : Exécuter l'agent Qwen Code
-  server.addTool({
-    name: 'run_qwen',
-    description: "Exécute une commande sur l'agent Qwen Code via CLI (qwen -p)",
-    parameters: runQwenSchema,
-    execute: runQwenAgent,
-  });
-
-  // Outil : Exécuter l'agent OpenClaw
-  server.addTool({
-    name: 'run_openclaw',
-    description: "Exécute une commande sur l'agent OpenClaw via CLI (openclaw message send)",
-    parameters: runOpenClawSchema,
-    execute: runOpenClawAgent,
-  });
-
-  // Outil : Exécuter l'agent Cline
-  server.addTool({
-    name: 'run_cline',
-    description:
-      "Exécute une commande sur l'agent Cline via CLI (cline -y). Supporte les modes : plan, act",
-    parameters: runClineSchema,
-    execute: runClineAgent,
-  });
-
-  // Outil : Exécuter l'agent OpenCode
-  server.addTool({
-    name: 'run_opencode',
-    description: "Exécute une commande sur l'agent OpenCode via CLI (opencode run)",
-    parameters: runOpenCodeSchema,
-    execute: runOpenCodeAgent,
-  });
-
-  // Outil : Exécuter l'agent Trae (SOLO headless)
-  server.addTool({
-    name: 'run_trae',
-    description:
-      "Exécute une mission sur l'agent Trae en mode SOLO headless (trae solo --headless)",
-    parameters: runTraeSchema,
-    execute: runTraeAgent,
-  });
-
-  // Outil : Créer un nouvel agent
+  // Outil : Créer un nouvel agent (tous runners supportés)
   server.addTool({
     name: 'create_agent',
-    description: 'Crée un nouvel agent (Prompt + Config) compatible avec ce runner',
+    description: `Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.
+
+**Runners supportés:** claude, gemini, kilo, qwen, openclaw, cline, opencode, trae
+
+**Exemples:**
+create_agent(name: "expert_python", runner: "claude", prompt: "Tu es un expert Python...")
+create_agent(name: "architecte", runner: "kilo", mode: "architect", prompt: "Tu es un architecte logiciel...")
+create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un planificateur de tâches...")`,
     parameters: createAgentSchema,
     execute: createAgent,
   });
@@ -128,10 +86,12 @@ export function createServer(name: string = 'OverMind-MCP') {
   server.addTool({
     name: 'update_agent_config',
     description:
-      "Modifie la configuration technique d'un agent (Modèle, Serveurs MCP, Variables d'environnement)",
+      "Modifie la configuration technique d'un agent (Runner, Modèle, Serveurs MCP, Variables d'environnement)",
     parameters: updateAgentConfigSchema,
     execute: updateAgentConfig,
   });
+
+  // ─── GESTION DES PROMPTS ─────────────────────────────────────────────────────
 
   // Outil : Créer un prompt seul
   server.addTool({
@@ -149,18 +109,19 @@ export function createServer(name: string = 'OverMind-MCP') {
     execute: editPrompt,
   });
 
-  // ── Mémoire OverMind ───────────────────────────────────────────────────────────────
+  // ─── MÉMOIRE OVERMIND ─────────────────────────────────────────────────────────
+
   server.addTool({
     name: 'memory_search',
     description:
-      'Recherche sémantique + full-text dans la mémoire d’orchestration OverMind (connaissances + historique)',
+      'Recherche sémantique + full-text dans la mémoire OverMind (connaissances + historique)',
     parameters: memorySearchSchema,
     execute: memorySearchTool,
   });
 
   server.addTool({
     name: 'memory_store',
-    description: 'Mémorise durablement une connaissance, décision ou pattern d’orchestration',
+    description: "Mémorise durablement une connaissance, décision ou pattern d'orchestration",
     parameters: memoryStoreSchema,
     execute: memoryStoreTool,
   });
@@ -168,7 +129,7 @@ export function createServer(name: string = 'OverMind-MCP') {
   server.addTool({
     name: 'memory_runs',
     description:
-      'Liste l’historique des runs d’agents enregistrés par OverMind (avec stats optionnelles)',
+      "Liste l'historique des runs d'agents enregistrés par OverMind (avec stats optionnelles)",
     parameters: memoryRunsSchema,
     execute: memoryRunsTool,
   });
