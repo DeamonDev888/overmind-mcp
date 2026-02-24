@@ -21,7 +21,10 @@ export const memoryRunsSchema = z.object({
     .optional()
     .default(false)
     .describe("Afficher les statistiques globales d'orchestration"),
-  agent_name: z.string().optional().describe("Filtrer par agent spécifique (ex: 'agent_finance')."),
+  agent_name: z
+    .string()
+    .optional()
+    .describe('Filtrer par agent (détecté automatiquement si exécuté via OverMind)'),
 });
 
 export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Promise<{
@@ -29,14 +32,19 @@ export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Pr
   isError?: boolean;
 }> {
   const provider = getMemoryProvider();
+  // Priorité à l'agent détecté (Privacy)
+  const effectiveAgentName = process.env.OVERMIND_AGENT_NAME || args.agent_name;
 
   if (args.stats) {
-    const s = await provider.getStats(args.agent_name);
+    const s = await provider.getStats(effectiveAgentName);
     const rows = s.byRunner
-      .map((r) => `  • **${r.runner}** : ${r.count} runs (${r.successes} ✅)`)
+      .map(
+        (r: { runner: string; count: number; successes: number }) =>
+          `  • **${r.runner}** : ${r.count} runs (${r.successes} ✅)`,
+      )
       .join('\n');
 
-    const scopeLabel = args.agent_name ? `pour l'agent **${args.agent_name}**` : 'globales';
+    const scopeLabel = effectiveAgentName ? `pour l'agent **${effectiveAgentName}**` : 'globales';
     return {
       content: [
         {
@@ -50,7 +58,7 @@ export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Pr
   const runs = await provider.getRecentRuns({
     runner: args.runner,
     limit: args.limit,
-    agentName: args.agent_name,
+    agentName: effectiveAgentName,
   });
 
   if (runs.length === 0) {
@@ -64,7 +72,7 @@ export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Pr
     };
   }
 
-  const lines = runs.map((r) => {
+  const lines = runs.map((r: import('../memory/types.js').AgentRun) => {
     const date = new Date(r.created_at).toISOString().replace('T', ' ').slice(0, 19);
     const status = r.success ? '✅' : '❌';
     const dur = r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : '?';

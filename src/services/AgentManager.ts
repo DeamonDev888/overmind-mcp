@@ -174,14 +174,14 @@ Tu es un agent de l'écosystème Overmind, équipé d'une mémoire sémantique p
 ### 📜 Protocole d'Initialisation (OBLIGATOIRE)
 Avant toute action ou modification de code :
 1. **Vérifie les Standards** : Appelle \`memory_search(query: "architecture projet standard overmind")\`. Tu DOIS respecter l'usage de pnpm, TypeScript (dist/), ESModules et FastMCP.
-2. **Auto-Évaluation** : Appelle \`memory_runs(agent_name: "${name}", limit: 5)\` pour analyser tes succès et échecs récents. Apprends de tes erreurs passées.
+2. **Auto-Évaluation** : Appelle \`memory_runs(limit: 5)\` pour analyser tes succès et échecs récents. Pas besoin de nom d'agent (détection automatique).
 3. **Récupère le Contexte** : Appelle \`memory_search(query: "contexte projet ${name}")\` pour retrouver les dernières décisions ou l'état d'avancement.
 
 ### 💾 Protocole de Mémorisation
 Ne laisse pas tes découvertes s'effacer :
 - **Pattern & Décision** : Si tu identifies une règle métier ou si tu prends une décision architecturale, utilise \`memory_store\` avec \`source: "decision"\` ou \`source: "pattern"\`.
 - **Auto-Correction** : Si tu corriges un bug complexe, stocke la solution avec \`source: "error"\` pour ne plus reproduire l'erreur.
-- **Identité** : Utilise toujours \`agent_name: "${name}"\` pour tes souvenirs personnels, sauf si l'information est d'intérêt général (auquel cas, ne le spécifie pas).`;
+- **Identité** : OverMind détecte automatiquement ton identité (\`${name}\`). Ne spécifie plus le paramètre \`agent_name\` sauf si tu souhaites explicitement consulter ou écrire dans la mémoire d'un AUTRE agent spécifique.`;
 
     const finalPrompt = prompt + memoryInstructions;
 
@@ -243,6 +243,7 @@ Modèle : ${model}.
 Capacités définies : ${prompt.slice(0, 300)}...
 Serveurs MCP activés : ${mcpServers.join(', ')}.`,
         source: 'agent',
+        agentName: name,
       });
     } catch (_e) {
       // Ignorer si la mémoire échoue

@@ -13,7 +13,7 @@ export const memoryStoreSchema = z.object({
   agent_name: z
     .string()
     .optional()
-    .describe("Nom de l'agent pour lequel cette mémoire est spécifique"),
+    .describe("Nom de l'agent (détecté automatiquement si exécuté via OverMind)"),
 });
 
 export async function memoryStoreTool(args: z.infer<typeof memoryStoreSchema>): Promise<{
@@ -22,10 +22,13 @@ export async function memoryStoreTool(args: z.infer<typeof memoryStoreSchema>): 
 }> {
   try {
     const provider = getMemoryProvider();
+    // Priorité à l'agent détecté (Privacy)
+    const effectiveAgentName = process.env.OVERMIND_AGENT_NAME || args.agent_name;
+
     const id = await provider.storeKnowledge({
       text: args.text,
       source: args.source,
-      agentName: args.agent_name,
+      agentName: effectiveAgentName,
     });
     return {
       content: [
