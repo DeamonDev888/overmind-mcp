@@ -44,7 +44,9 @@ const { createServer } = await import('../server.js');
 const { updateConfig } = await import('../lib/config.js');
 
 const cliArgs = process.argv.slice(2);
-let settingsPath, mcpPath;
+let settingsPath,
+  mcpPath,
+  memoryOnly = false;
 
 for (let i = 0; i < cliArgs.length; i++) {
   if (cliArgs[i] === '--settings' && cliArgs[i + 1]) {
@@ -53,6 +55,8 @@ for (let i = 0; i < cliArgs.length; i++) {
   } else if (cliArgs[i] === '--mcp-config' && cliArgs[i + 1]) {
     mcpPath = cliArgs[i + 1];
     i++;
+  } else if (cliArgs[i] === '--memory-only') {
+    memoryOnly = true;
   }
 }
 
@@ -61,5 +65,6 @@ if (settingsPath || mcpPath) {
   // Do NOT log to stderr during MCP initialization as it can cause EOF errors in some clients
 }
 
-const server = createServer();
+const serverName = memoryOnly ? 'OverMind-Memory' : 'OverMind-MCP';
+const server = createServer(serverName, memoryOnly);
 server.start({ transportType: 'stdio' });

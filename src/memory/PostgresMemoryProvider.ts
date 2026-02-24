@@ -307,7 +307,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
           for (const row of vecRes.rows) {
             if (!seen.has(row.id)) {
               seen.add(row.id);
-              const [type, origin] = row.source.split('|');
+              const [type] = row.source.split('|');
               merged.push({
                 id: row.id,
                 text: row.text,
