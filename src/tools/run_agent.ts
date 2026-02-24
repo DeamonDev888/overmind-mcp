@@ -184,11 +184,14 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
   }
 
   if (result.error) {
+    const debugInfo = result.rawOutput
+      ? `\n\n🔍 **Détails Erreur (Raw Output):**\n\`\`\`text\n${result.rawOutput.trim()}\n\`\`\``
+      : '';
     return {
       content: [
         {
           type: 'text',
-          text: `❌ Erreur lors de l'exécution du runner ${runner}: ${result.error}`,
+          text: `❌ Erreur lors de l'exécution du runner ${runner}: ${result.error}${debugInfo}`,
         },
       ],
       isError: true,

@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { AgentManager } from '../services/AgentManager.js';
+import { getAgentMcpGenerator } from '../services/AgentMcpGenerator.js';
 
 export const createAgentSchema = z.object({
   name: z
@@ -61,6 +62,16 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>): Prom
     mode,
     cliPath,
   );
+
+  // Générer le fichier MCP individuel pour l'agent
+  if (!result.error) {
+    try {
+      const mcpGen = getAgentMcpGenerator();
+      mcpGen.generateAgentMcp(name);
+    } catch (err) {
+      console.warn(`[createAgent] Impossible de générer le fichier MCP pour ${name}:`, err);
+    }
+  }
 
   if (result.error === 'INVALID_NAME') {
     return {

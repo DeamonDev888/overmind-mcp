@@ -17,18 +17,21 @@ import {
   deleteAgentSchema,
   updateAgentConfig,
   updateAgentConfigSchema,
+  regenerateMcpFiles,
+  regenerateMcpFilesSchema,
 } from './tools/manage_agents.js';
 
-export function createServer(name: string = 'OverMind-MCP') {
+export function createServer(name: string = 'OverMind-MCP', memoryOnly: boolean = false) {
   const server = new FastMCP({
     name,
     version: '1.0.0',
   });
 
-  // ─── OUTIL UNIFIÉ D'EXÉCUTION D'AGENT ────────────────────────────────────────
-  server.addTool({
-    name: 'run_agent',
-    description: `Exécute une commande sur un agent IA via le runner spécifié.
+  if (!memoryOnly) {
+    // ─── OUTIL UNIFIÉ D'EXÉCUTION D'AGENT ────────────────────────────────────────
+    server.addTool({
+      name: 'run_agent',
+      description: `Exécute une commande sur un agent IA via le runner spécifié.
 
 **Runners disponibles:**
 - claude: Claude Code (claude -p)
@@ -44,16 +47,16 @@ export function createServer(name: string = 'OverMind-MCP') {
 run_agent(runner: "claude", agentName: "expert_python", prompt: "Analyse ce code")
 run_agent(runner: "kilo", agentName: "architect", mode: "architect", prompt: "Conçois une API REST")
 run_agent(runner: "cline", agentName: "planner", mode: "plan", prompt: "Planifie l'implémentation")`,
-    parameters: runAgentSchema,
-    execute: runAgent,
-  });
+      parameters: runAgentSchema,
+      execute: runAgent,
+    });
 
-  // ─── GESTION DES AGENTS ───────────────────────────────────────────────────────
+    // ─── GESTION DES AGENTS ───────────────────────────────────────────────────────
 
-  // Outil : Créer un nouvel agent (tous runners supportés)
-  server.addTool({
-    name: 'create_agent',
-    description: `Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.
+    // Outil : Créer un nouvel agent (tous runners supportés)
+    server.addTool({
+      name: 'create_agent',
+      description: `Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.
 
 **Runners supportés:** claude, gemini, kilo, qwen, openclaw, cline, opencode, trae
 
@@ -61,53 +64,63 @@ run_agent(runner: "cline", agentName: "planner", mode: "plan", prompt: "Planifie
 create_agent(name: "expert_python", runner: "claude", prompt: "Tu es un expert Python...")
 create_agent(name: "architecte", runner: "kilo", mode: "architect", prompt: "Tu es un architecte logiciel...")
 create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un planificateur de tâches...")`,
-    parameters: createAgentSchema,
-    execute: createAgent,
-  });
+      parameters: createAgentSchema,
+      execute: createAgent,
+    });
 
-  // Outil : Lister les agents
-  server.addTool({
-    name: 'list_agents',
-    description:
-      "Liste tous les agents disponibles. Option 'details=true' pour voir la config complète.",
-    parameters: listAgentsSchema,
-    execute: listAgents,
-  });
+    // Outil : Lister les agents
+    server.addTool({
+      name: 'list_agents',
+      description:
+        "Liste tous les agents disponibles. Option 'details=true' pour voir la config complète.",
+      parameters: listAgentsSchema,
+      execute: listAgents,
+    });
 
-  // Outil : Supprimer un agent
-  server.addTool({
-    name: 'delete_agent',
-    description: 'Supprime définitivement un agent (Prompt et Config)',
-    parameters: deleteAgentSchema,
-    execute: deleteAgent,
-  });
+    // Outil : Supprimer un agent
+    server.addTool({
+      name: 'delete_agent',
+      description: 'Supprime définitivement un agent (Prompt et Config)',
+      parameters: deleteAgentSchema,
+      execute: deleteAgent,
+    });
 
-  // Outil : Mettre à jour la config d'un agent
-  server.addTool({
-    name: 'update_agent_config',
-    description:
-      "Modifie la configuration technique d'un agent (Runner, Modèle, Serveurs MCP, Variables d'environnement)",
-    parameters: updateAgentConfigSchema,
-    execute: updateAgentConfig,
-  });
+    // Outil : Mettre à jour la config d'un agent
+    server.addTool({
+      name: 'update_agent_config',
+      description:
+        "Modifie la configuration technique d'un agent (Runner, Modèle, Serveurs MCP, Variables d'environnement)",
+      parameters: updateAgentConfigSchema,
+      execute: updateAgentConfig,
+    });
 
-  // ─── GESTION DES PROMPTS ─────────────────────────────────────────────────────
+    // Outil : Régénérer tous les fichiers MCP individuels
+    server.addTool({
+      name: 'regenerate_mcp_files',
+      description:
+        'Régénère les fichiers MCP individuels pour tous les agents (après modification de .mcp.local.json par exemple)',
+      parameters: regenerateMcpFilesSchema,
+      execute: regenerateMcpFiles,
+    });
 
-  // Outil : Créer un prompt seul
-  server.addTool({
-    name: 'create_prompt',
-    description: 'Crée ou écrase un fichier prompt Markdown (Persona)',
-    parameters: createPromptSchema,
-    execute: createPrompt,
-  });
+    // ─── GESTION DES PROMPTS ─────────────────────────────────────────────────────
 
-  // Outil : Éditer un prompt par search/replace (Diff)
-  server.addTool({
-    name: 'edit_prompt',
-    description: 'Modifie un prompt existant en remplaçant un bloc de texte spécifique',
-    parameters: editPromptSchema,
-    execute: editPrompt,
-  });
+    // Outil : Créer un prompt seul
+    server.addTool({
+      name: 'create_prompt',
+      description: 'Crée ou écrase un fichier prompt Markdown (Persona)',
+      parameters: createPromptSchema,
+      execute: createPrompt,
+    });
+
+    // Outil : Éditer un prompt par search/replace (Diff)
+    server.addTool({
+      name: 'edit_prompt',
+      description: 'Modifie un prompt existant en remplaçant un bloc de texte spécifique',
+      parameters: editPromptSchema,
+      execute: editPrompt,
+    });
+  }
 
   // ─── MÉMOIRE OVERMIND ─────────────────────────────────────────────────────────
 

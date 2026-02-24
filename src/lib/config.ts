@@ -38,16 +38,22 @@ export function getWorkspaceDir(): string {
     return path.resolve(process.env.OVERMIND_WORKSPACE);
   }
 
-  // 2. Local Project mode if .mcp.json exists in current working directory
+  // 2. Local Project mode if .mcp.json or .mcp.local.json exists in current working directory
   const cwd = process.cwd();
-  if (fs.existsSync(path.join(cwd, '.mcp.json'))) {
+  if (
+    fs.existsSync(path.join(cwd, '.mcp.json')) ||
+    fs.existsSync(path.join(cwd, '.mcp.local.json'))
+  ) {
     return cwd;
   }
 
   // 3. Auto-detect from code location (Noob-proof: finds the folder where Overmind is cloned)
   // We are in dist/lib or src/lib, so root is 2 levels up
   const codeRoot = path.resolve(__dirname, '../..');
-  if (fs.existsSync(path.join(codeRoot, '.mcp.json'))) {
+  if (
+    fs.existsSync(path.join(codeRoot, '.mcp.json')) ||
+    fs.existsSync(path.join(codeRoot, '.mcp.local.json'))
+  ) {
     return codeRoot;
   }
 
@@ -71,7 +77,17 @@ export function resolveConfigPath(configPath: string): string {
   if (path.isAbsolute(configPath)) return configPath;
 
   const workspaceDir = getWorkspaceDir();
-  return path.resolve(workspaceDir, configPath);
+  const absolutePath = path.resolve(workspaceDir, configPath);
+
+  // Si c'est .mcp.json, vérifier d'abord si .mcp.local.json existe
+  if (path.basename(absolutePath) === '.mcp.json') {
+    const localPath = absolutePath.replace('.mcp.json', '.mcp.local.json');
+    if (fs.existsSync(localPath)) {
+      return localPath;
+    }
+  }
+
+  return absolutePath;
 }
 
 export function updateConfig(newSettingsPath?: string, newMcpPath?: string) {

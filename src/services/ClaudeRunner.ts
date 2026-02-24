@@ -64,15 +64,15 @@ export class ClaudeRunner {
     }
 
     let mcpPath = resolveConfigPath(PATHS.MCP);
-    let tmpMcpPathToDelete: string | null = null;
     let customTimeoutMs = this.timeoutMs;
 
-    // --- Isolation ---
+    // --- Isolation & MCP dédié par agent ---
     if (agentName) {
       try {
         const agentSettingsPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
         );
+
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
 
@@ -80,10 +80,24 @@ export class ClaudeRunner {
             customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
           }
 
-          if (
+          // Chercher d'abord le fichier MCP individuel pré-généré
+          const agentMcpDir = path.dirname(agentSettingsPath);
+          const agentMcpPath = path.join(agentMcpDir, `.mcp.${agentName}.json`);
+          const agentMcpPathAlt = path.join(agentMcpDir, `mcp_${agentName}.json`);
+
+          if (fs.existsSync(agentMcpPath)) {
+            // Utiliser le fichier MCP individuel de l'agent
+            mcpPath = agentMcpPath;
+            console.log(`[ClaudeRunner] ✅ Using agent MCP file: ${agentMcpPath}`);
+          } else if (fs.existsSync(agentMcpPathAlt)) {
+            // Fallback: utiliser le nom sans point
+            mcpPath = agentMcpPathAlt;
+            console.log(`[ClaudeRunner] ✅ Using alt agent MCP file: ${agentMcpPathAlt}`);
+          } else if (
             settings.enableAllProjectMcpServers === false &&
             Array.isArray(settings.enabledMcpjsonServers)
           ) {
+            // Fallback: générer à la volée si le fichier n'existe pas
             if (fs.existsSync(mcpPath)) {
               const fullMcp = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
               const filteredMcp: { mcpServers: Record<string, unknown> } = { mcpServers: {} };
@@ -94,13 +108,10 @@ export class ClaudeRunner {
                 }
               }
 
-              const tmpMcpPath = path.join(
-                path.dirname(agentSettingsPath),
-                `mcp_${agentName}_tmp.json`,
-              );
-              fs.writeFileSync(tmpMcpPath, JSON.stringify(filteredMcp, null, 2));
-              mcpPath = tmpMcpPath;
-              tmpMcpPathToDelete = tmpMcpPath;
+              const agentMcpPathAlt = path.join(agentMcpDir, `mcp_${agentName}.json`);
+              fs.writeFileSync(agentMcpPathAlt, JSON.stringify(filteredMcp, null, 2));
+              mcpPath = agentMcpPathAlt;
+              console.log(`[ClaudeRunner] ⚠️ Generated MCP file on-the-fly: ${agentMcpPathAlt}`);
             }
           }
         }
@@ -118,23 +129,15 @@ export class ClaudeRunner {
     if (CORE) argsSpawn.push(...CORE.split(' ').filter(Boolean));
     if (PERMISSIONS) argsSpawn.push(...PERMISSIONS.split(' ').filter(Boolean));
     argsSpawn.push('--settings', `"${settingsPath}"`);
-    argsSpawn.push('--mcp-config', `"${mcpPath}"`);
+    argsSpawn.push('--mcp-config', `"${mcpPath.replace(/"/g, '\\"')}"`);
 
-    if (sessionId) {
+    // N'utiliser --resume QUE si sessionId est explicitement fourni par l'utilisateur
+    // Ne PAS utiliser autoResume pour éviter les sessions expirées
+    if (sessionId && !autoResume) {
       argsSpawn.push('--resume', sessionId);
     }
 
     return new Promise((resolve) => {
-      const cleanupTmpFiles = () => {
-        if (tmpMcpPathToDelete && fs.existsSync(tmpMcpPathToDelete)) {
-          try {
-            fs.unlinkSync(tmpMcpPathToDelete);
-          } catch (_e) {
-            // Ignore unlink errors
-          }
-        }
-      };
-
       const isWin = process.platform === 'win32';
       const command = isWin ? `claude ${argsSpawn.join(' ')}` : 'claude';
       const spawnArgs = isWin ? [] : argsSpawn;
@@ -147,6 +150,7 @@ export class ClaudeRunner {
 
       let stdout = '';
       let stderr = '';
+      const fullOutput: string[] = [];
 
       if (child.stdout) {
         child.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
@@ -157,13 +161,16 @@ export class ClaudeRunner {
 
       const timeout = setTimeout(() => {
         child.kill();
-        cleanupTmpFiles();
         resolve({ result: '', error: `TIMEOUT`, rawOutput: stdout });
       }, customTimeoutMs);
 
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
-        cleanupTmpFiles();
+
+        // DEBUG: Logger la sortie stderr pour voir l'erreur de Claude
+        console.error('[ClaudeRunner] Claude EXIT CODE:', code);
+        console.error('[ClaudeRunner] Claude stderr:', stderr);
+        console.error('[ClaudeRunner] Claude stdout:', stdout);
 
         if (code !== 0 && !stdout) {
           return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr });
@@ -198,7 +205,6 @@ export class ClaudeRunner {
       });
 
       child.on('error', (err: Error) => {
-        cleanupTmpFiles();
         resolve({ result: '', error: err.message, rawOutput: '' });
       });
 

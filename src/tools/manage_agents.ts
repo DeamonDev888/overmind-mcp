@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import path from 'path';
+import fs from 'fs';
 import { AgentManager } from '../services/AgentManager.js';
+import { getAgentMcpGenerator } from '../services/AgentMcpGenerator.js';
 
 // --- Schemas ---
 
@@ -36,6 +38,14 @@ export const updateAgentConfigSchema = z.object({
     .describe(
       "Variables d'environnement supplémentaires à définir ou écraser (ex: { 'API_KEY': '123' })",
     ),
+});
+
+export const regenerateMcpFilesSchema = z.object({
+  force: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe('Si true, régénère même pour les agents qui utilisent tous les MCPs'),
 });
 
 // --- Tools ---
@@ -84,6 +94,18 @@ export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Prom
 
   const result = await manager.deleteAgent(name);
 
+  // Supprimer aussi le fichier MCP individuel
+  try {
+    const mcpGen = getAgentMcpGenerator();
+    const mcpPath = mcpGen.getAgentMcpPath(name);
+    if (mcpPath) {
+      fs.unlinkSync(mcpPath);
+      result.deletedFiles.push(mcpPath);
+    }
+  } catch (err) {
+    console.warn(`[deleteAgent] Impossible de supprimer le fichier MCP de ${name}:`, err);
+  }
+
   if (result.deletedFiles.length === 0 && result.errors.length === 0) {
     return {
       isError: true,
@@ -122,6 +144,14 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
       };
     }
 
+    // Régénérer le fichier MCP individuel si les serveurs MCP ont changé
+    try {
+      const mcpGen = getAgentMcpGenerator();
+      mcpGen.generateAgentMcp(name);
+    } catch (err) {
+      console.warn(`[updateAgentConfig] Impossible de régénérer le fichier MCP pour ${name}:`, err);
+    }
+
     return {
       content: [
         {
@@ -148,6 +178,36 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
         {
           type: 'text',
           text: `❌ Erreur lors de la mise à jour de '${name}': ${e instanceof Error ? e.message : String(e)}`,
+        },
+      ],
+    };
+  }
+}
+export async function regenerateMcpFiles(_args: z.infer<typeof regenerateMcpFilesSchema>): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}> {
+  // Le paramètre 'force' est disponible dans args mais la méthode regenerateAll() ne l'utilise pas encore
+
+  try {
+    const mcpGen = getAgentMcpGenerator();
+    const result = mcpGen.regenerateAll();
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `✅ **Fichiers MCP régénérés avec succès !**\n\n📊 Statistiques :\n- ✅ Générés : ${result.generated}\n- ⏭️  Ignorés : ${result.skipped}\n- ❌ Erreurs : ${result.errors}\n\n📂 Les fichiers sont dans : Workflow/.claude/`,
+        },
+      ],
+    };
+  } catch (e) {
+    return {
+      isError: true,
+      content: [
+        {
+          type: 'text',
+          text: `❌ Erreur lors de la régénération des fichiers MCP : ${e instanceof Error ? e.message : String(e)}`,
         },
       ],
     };
