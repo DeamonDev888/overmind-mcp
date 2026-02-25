@@ -468,7 +468,8 @@ nav {
 .glitch {
   position: relative;
   color: var(--text-primary);
-  filter: var(--noise-texture);
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .glitch:hover {
