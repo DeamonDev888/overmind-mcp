@@ -7,8 +7,8 @@ import { AgentManager } from '../services/AgentManager.js';
 export const createAgentSchema = z.object({
   name: z
     .string()
-    .describe("Nom de l'agent (ex: agent_finance). Sera utilisé pour les noms de fichiers."),
-  prompt: z.string().describe("Le prompt système (instructions) de l'agent."),
+    .describe("Nom unique de l'agent (ex: 'sniper_analyst'). Ce nom servira d'identifiant pour sa mémoire sémantique isolée."),
+  prompt: z.string().describe("Le prompt système OBLIGATOIRE. Tu DOIS y définir le persona de l'agent, ses missions, les outils MCP qu'il est autorisé à utiliser, et lui ordonner de consulter/enrichir systématiquement sa mémoire Overmind."),
   runner: z
     .enum(['claude', 'gemini', 'kilo', 'qwen', 'openclaw', 'cline', 'opencode', 'trae'])
     .optional()
