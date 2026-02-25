@@ -372,6 +372,9 @@ nav {
   font-weight: 900;
   line-height: 1.1;
   margin-bottom: 30px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
 }
 
 .glitch {
@@ -447,8 +450,30 @@ nav {
   font-size: 1.4rem;
   color: var(--text-secondary);
   line-height: 1.8;
-  margin-bottom: 50px;
+  margin-bottom: 20px;
   max-width: 600px;
+}
+
+.hero-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 30px;
+  padding: 10px 15px;
+  background: rgba(59, 130, 246, 0.05);
+  border-left: 3px solid var(--neon-blue);
+  border-radius: 4px;
+}
+
+.hero-note i {
+  color: var(--neon-cyan);
+}
+
+.hero-note strong {
+  color: var(--neon-cyan);
+  font-weight: 700;
 }
 
 /* Terminal Hero */
@@ -575,7 +600,7 @@ nav {
 }
 
 .btn-primary {
-  color: #000;
+  color: #fff;
   background: var(--neon-cyan);
   border: none;
   box-shadow: 0 0 20px rgba(0, 255, 245, 0.3);
@@ -641,7 +666,7 @@ nav {
 }
 
 .btn-secondary:hover {
-  color: #000;
+  color: #fff;
   border-color: var(--neon-cyan);
   transform: translateY(-5px);
   box-shadow: 0 0 30px rgba(0, 255, 245, 0.4);
@@ -664,10 +689,8 @@ nav {
   font-family: 'Orbitron', sans-serif;
   font-size: 3rem;
   font-weight: 900;
-  background: var(--gradient-cyber);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 20px rgba(0, 255, 245, 0.4);
   margin-bottom: 10px;
 }
 
@@ -801,15 +824,16 @@ nav {
 /* Agent Fleet */
 .agent-node {
   position: absolute;
-  width: 12px;
-  height: 12px;
-  background: var(--neon-cyan);
+  width: 10px;
+  height: 10px;
+  background: #3b82f6;
   border-radius: 50%;
-  box-shadow: 0 0 15px var(--neon-cyan);
+  box-shadow: 0 0 10px #3b82f6;
   z-index: 5;
   transition: opacity 0.5s ease, background 0.5s ease, box-shadow 0.5s ease;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  opacity: 0.6;
 }
 
 .agent-node.active {
