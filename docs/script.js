@@ -140,22 +140,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const heroStats = document.querySelector('.hero-stats');
   if (heroStats) statsObserver.observe(heroStats);
 
-  // Fade animations
-  const fadeElements = document.querySelectorAll('.feature-card, .section-header, .code-container');
-  const fadeObserver = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        entry.target.style.opacity = '1';
-        entry.target.style.transform = 'translateY(0)';
-      }
+  // Feature cards 3D effect
+  const featureCards = document.querySelectorAll('.feature-card');
+  featureCards.forEach((card) => {
+    card.addEventListener('mousemove', (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const rotateX = (y - centerY) / 20;
+      const rotateY = (centerX - x) / 20;
+      card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-10px)`;
     });
-  }, { threshold: 0.1 });
-
-  fadeElements.forEach((el) => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(30px)';
-    el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-    fadeObserver.observe(el);
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) translateY(0)';
+    });
   });
 
   // Mobile Menu
@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Orchestration Cortex Animation
+  // Orchestration Cortex Animation - SUPER UPGRADED
   const cortex = document.querySelector('.orchestration-cortex');
   const fleetContainer = document.getElementById('agent-fleet');
   const linksContainer = document.getElementById('cortex-links');
@@ -175,24 +175,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (cortex && fleetContainer && linksContainer) {
     const agents = [];
-    const numAgents = 15;
+    const numAgents = 20; // Increased
     const missions = [
       'MISSION: CLAUDE_REFACTOR', 'MISSION: GEMINI_STRAT', 'MISSION: QWEN_OPTIMIZE',
       'MISSION: KILO_DEPLOY', 'MISSION: CLINE_ARCHITECT', 'MISSION: OPENCLAW_SUBMIT',
-      'MISSION: DEEPSEEK_ANALYZE', 'MISSION: OLLAMA_LOCAL_SYNC'
+      'MISSION: DEEPSEEK_ANALYZE', 'MISSION: OLLAMA_LOCAL_SYNC', 'MISSION: NEURAL_OVERVIEW',
+      'MISSION: VECTOR_INGEST', 'MISSION: MCP_BRIDGE_ACTIVE'
     ];
 
     for (let i = 0; i < numAgents; i++) {
       const node = document.createElement('div');
       node.className = 'agent-node';
       fleetContainer.appendChild(node);
+      
+      const angle = (i / numAgents) * Math.PI * 2;
+      const baseRadius = 110 + (i % 3) * 40; // Rings effect
+
       agents.push({
         el: node,
-        angle: Math.random() * Math.PI * 2,
-        baseRadius: 100 + Math.random() * 120,
+        angle: angle,
+        baseRadius: baseRadius,
         radius: 0,
-        speed: 0.005 + Math.random() * 0.01,
-        active: false
+        speed: (0.003 + Math.random() * 0.005) * (i % 2 === 0 ? 1 : -1), // Reverse orbits
+        active: false,
+        pulseValue: 0
       });
     }
 
@@ -207,15 +213,44 @@ document.addEventListener('DOMContentLoaded', () => {
       return line;
     });
 
+    // Particle system for "packets"
+    function sendPacket(startX, startY, endX, endY) {
+      const p = document.createElement('div');
+      p.className = 'data-particle';
+      cortex.appendChild(p);
+      
+      let progress = 0;
+      const speed = 0.02 + Math.random() * 0.03;
+      
+      function animatePacket() {
+        progress += speed;
+        const curX = startX + (endX - startX) * progress;
+        const curY = startY + (endY - startY) * progress;
+        
+        p.style.left = `${curX}px`;
+        p.style.top = `${curY}px`;
+        
+        if (progress < 1) {
+          requestAnimationFrame(animatePacket);
+        } else {
+          p.remove();
+        }
+      }
+      animatePacket();
+    }
+
     function animateFleet() {
       const width = cortex.offsetWidth;
       const height = cortex.offsetHeight;
       const centerX = width / 2;
       const centerY = height / 2;
-      const scale = Math.max(0.5, width / 500);
+      const scale = Math.max(0.6, width / 550);
 
       const core = document.querySelector('.cortex-core');
-      if (core) core.style.transform = `translate(-50%, -50%) scale(${scale})`;
+      if (core) {
+        const coreScale = scale * (1 + Math.sin(Date.now() / 1000) * 0.05);
+        core.style.transform = `translate(-50%, -50%) scale(${coreScale})`;
+      }
 
       agents.forEach((agent, i) => {
         agent.angle += agent.speed;
@@ -225,7 +260,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         agent.el.style.left = `${x}px`;
         agent.el.style.top = `${y}px`;
-        agent.el.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        
+        const agentScale = agent.active ? scale * 1.5 : scale;
+        agent.el.style.transform = `translate(-50%, -50%) scale(${agentScale})`;
 
         const line = lines[i];
         if (agent.active) {
@@ -234,56 +271,88 @@ document.addEventListener('DOMContentLoaded', () => {
           line.setAttribute('x2', x);
           line.setAttribute('y2', y);
           line.setAttribute('class', 'link-line active');
-          line.setAttribute('style', `stroke-width: ${2 * scale}; stroke: #3b82f6;`);
+          line.setAttribute('style', `stroke-width: ${2 * scale}; stroke: #00fff5; opacity: 0.8;`);
+          
+          if (Math.random() > 0.9) sendPacket(centerX, centerY, x, y);
         } else {
           line.setAttribute('class', 'link-line');
-          line.setAttribute('style', 'opacity: 0;');
+          line.setAttribute('style', 'opacity: 0.1; stroke: rgba(0, 255, 245, 0.1);');
+          line.setAttribute('x1', centerX);
+          line.setAttribute('y1', centerY);
+          line.setAttribute('x2', x);
+          line.setAttribute('y2', y);
         }
       });
       requestAnimationFrame(animateFleet);
     }
     animateFleet();
 
+    // Minigame/Interactive cycle
     setInterval(() => {
-      const agent = agents[Math.floor(Math.random() * agents.length)];
-      agent.active = true;
-      agent.el.classList.add('active');
+      const activeCount = agents.filter(a => a.active).length;
+      if (activeCount < 5) {
+        const agent = agents[Math.floor(Math.random() * agents.length)];
+        if (!agent.active) {
+          agent.active = true;
+          agent.el.classList.add('active');
+          
+          if (Math.random() > 0.6 && hologramData) {
+            const missionLines = hologramData.querySelectorAll('.data-line');
+            missionLines[2].textContent = missions[Math.floor(Math.random() * missions.length)];
+          }
 
-      if (Math.random() > 0.7 && hologramData) {
-        const missionLines = hologramData.querySelectorAll('.data-line');
-        if (missionLines[2]) {
-          missionLines[2].textContent = missions[Math.floor(Math.random() * missions.length)];
-          missionLines[2].style.color = '#00fff5';
-          setTimeout(() => missionLines[2].style.color = '', 500);
+          setTimeout(() => {
+            agent.active = false;
+            agent.el.classList.remove('active');
+          }, 1000 + Math.random() * 3000);
         }
       }
+    }, 600);
 
-      setTimeout(() => {
-        agent.active = false;
-        agent.el.classList.remove('active');
-      }, 1500 + Math.random() * 2000);
-    }, 800);
-
+    // Interactive Core (Explosion game)
     const cortexCore = document.querySelector('.cortex-core');
     if (cortexCore) {
-      cortexCore.addEventListener('click', () => {
-        agents.forEach(a => {
-          a.active = true;
-          a.el.classList.add('active');
-          setTimeout(() => { a.active = false; a.el.classList.remove('active'); }, 1000);
+      cortexCore.addEventListener('mousedown', () => {
+        cortexCore.style.transform = 'translate(-50%, -50%) scale(0.9)';
+      });
+      cortexCore.addEventListener('mouseup', () => {
+        cortexCore.style.transform = 'translate(-50%, -50%) scale(1.1)';
+        // Trigger massive cascade
+        agents.forEach((a, idx) => {
+          setTimeout(() => {
+            a.active = true;
+            a.el.classList.add('active');
+            sendPacket(width/2, height/2, width/2 + Math.cos(a.angle)*a.radius, height/2 + Math.sin(a.angle)*a.radius);
+            setTimeout(() => { a.active = false; a.el.classList.remove('active'); }, 1500);
+          }, idx * 50);
         });
+        
         if (hologramData) {
           const status = hologramData.querySelector('.data-line:first-child');
-          const original = status.textContent;
-          status.textContent = 'STATUS: OVERDRIVE';
-          status.style.color = '#3b82f6';
-          setTimeout(() => { status.textContent = original; status.style.color = ''; }, 1000);
+          status.textContent = 'STATUS: OVERDRIVE_SYNC';
+          status.style.color = '#ff006e';
+          setTimeout(() => { status.textContent = 'STATUS: SUPREME'; status.style.color = ''; }, 2000);
         }
       });
     }
+    
+    // Mouse hover interaction
+    cortex.addEventListener('mousemove', (e) => {
+      const rect = cortex.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      
+      agents.forEach(a => {
+        const ax = cortex.offsetWidth / 2 + Math.cos(a.angle) * a.radius;
+        const ay = cortex.offsetHeight / 2 + Math.sin(a.angle) * a.radius;
+        const dist = Math.sqrt((mx - ax)**2 + (my - ay)**2);
+        
+        if (dist < 40) {
+          a.active = true;
+          a.el.classList.add('active');
+          setTimeout(() => { if (dist >= 40) { a.active = false; a.el.classList.remove('active'); } }, 500);
+        }
+      });
+    });
   }
-
-  // Easter Egg
-  console.log('%c🧠 OverMind-MCP', 'font-size: 20px; font-weight: bold; color: #00fff5;');
-  console.log('%cInfrastructure Orchestration Active', 'color: #3b82f6;');
 });
