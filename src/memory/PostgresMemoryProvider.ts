@@ -150,12 +150,6 @@ export class PostgresMemoryProvider implements MemoryProvider {
         console.warn(`[PostgresMemory] ⚠️ pgvector extension not available in ${dbName}.`);
       }
 
-      try {
-        await client.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
-      } catch {
-        console.warn(`[PostgresMemory] ⚠️ pg_trgm extension not available in ${dbName}.`);
-      }
-
       await client.query('BEGIN');
 
       // 1. Agent Runs Table
@@ -174,7 +168,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
         )
       `);
 
-      // 2. Knowledge Chunks Table
+      // 2. Knowledge Chunks Table (VECTOR ONLY ENFORCED)
       const embeddingType = hasVector ? 'vector(4096)' : 'TEXT';
       await client.query(`
         CREATE TABLE IF NOT EXISTS knowledge_chunks (
@@ -194,10 +188,9 @@ export class PostgresMemoryProvider implements MemoryProvider {
         'CREATE INDEX IF NOT EXISTS idx_agent_runs_session ON agent_runs(session_id)',
       );
 
-      // HNSW Index for ultra-fast vector search (4096D)
+      // HNSW Index for ultra-fast vector search (4096D) - NO TEXT FALLBACK ALLOWED
       if (hasVector) {
         try {
-          // Note: m=16, ef_construction=64 are good defaults for balanced speed/accuracy
           await client.query(`
             CREATE INDEX IF NOT EXISTS idx_knowledge_embedding_hnsw 
             ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)
@@ -206,14 +199,6 @@ export class PostgresMemoryProvider implements MemoryProvider {
         } catch (e) {
           console.warn(`[PostgresMemory] ⚠️ Could not create HNSW index: ${e instanceof Error ? e.message : String(e)}`);
         }
-      }
-
-      try {
-        await client.query(
-          'CREATE INDEX IF NOT EXISTS idx_knowledge_text_trgm ON knowledge_chunks USING gin (text gin_trgm_ops)',
-        );
-      } catch {
-        // Silently skip if extension wasn't loaded
       }
 
       await client.query('COMMIT');
