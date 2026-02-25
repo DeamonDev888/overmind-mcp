@@ -1,15 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap');
 
 :root {
-  --neon-pink: #ff006e;
   --neon-cyan: #00fff5;
-  --neon-purple: #b537f2;
   --neon-blue: #3b82f6;
-  --dark-bg: #0a0a0f;
-  --dark-card: rgba(20, 20, 30, 0.8);
+  --neon-silver: #e2e8f0;
+  --dark-bg: #060609;
+  --dark-card: rgba(15, 15, 25, 0.85);
   --text-primary: #ffffff;
-  --text-secondary: #a0a0b0;
-  --gradient-cyber: linear-gradient(135deg, var(--neon-pink), var(--neon-purple), var(--neon-cyan));
+  --text-secondary: #94a3b8;
+  --gradient-cyber: linear-gradient(135deg, var(--neon-cyan), var(--neon-blue), var(--neon-silver));
 }
 
 * {
@@ -79,7 +78,7 @@ body {
 .orb-1 {
   width: 600px;
   height: 600px;
-  background: var(--neon-pink);
+  background: var(--neon-blue);
   top: -200px;
   left: -200px;
   animation: float 20s ease-in-out infinite;
@@ -97,7 +96,7 @@ body {
 .orb-3 {
   width: 400px;
   height: 400px;
-  background: var(--neon-purple);
+  background: var(--neon-blue);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -176,7 +175,7 @@ nav {
     filter: drop-shadow(0 0 10px var(--neon-cyan));
   }
   50% {
-    filter: drop-shadow(0 0 20px var(--neon-pink));
+    filter: drop-shadow(0 0 20px var(--neon-blue));
   }
 }
 
@@ -392,7 +391,7 @@ nav {
 
 .glitch::before {
   left: 2px;
-  text-shadow: -2px 0 var(--neon-pink);
+  text-shadow: -2px 0 var(--neon-blue);
   clip: rect(24px, 550px, 90px, 0);
   animation: glitch-anim 3s infinite linear alternate-reverse;
 }
@@ -505,9 +504,9 @@ nav {
   border-radius: 50%;
 }
 
-.terminal-header .dot:nth-child(1) { background: #ff5f56; }
-.terminal-header .dot:nth-child(2) { background: #ffbd2e; }
-.terminal-header .dot:nth-child(3) { background: #27c93f; }
+.terminal-header .dot:nth-child(1) { background: #3b82f6; }
+.terminal-header .dot:nth-child(2) { background: #60a5fa; }
+.terminal-header .dot:nth-child(3) { background: #00fff5; }
 
 .terminal-title {
   font-family: 'Fira Code', monospace;
@@ -780,7 +779,7 @@ nav {
   width: 200px;
   height: 200px;
   border-width: 2px;
-  border-color: rgba(255, 0, 110, 0.2);
+  border-color: rgba(59, 130, 246, 0.2);
   animation: rotate 15s linear infinite reverse;
 }
 .ring-3 {
@@ -812,8 +811,8 @@ nav {
 }
 
 .agent-node.active {
-  background: var(--neon-pink);
-  box-shadow: 0 0 20px var(--neon-pink);
+  background: var(--neon-blue);
+  box-shadow: 0 0 20px var(--neon-blue);
   scale: 1.5;
 }
 
@@ -837,11 +836,11 @@ nav {
 }
 
 .link-line.active {
-  stroke: var(--neon-pink);
+  stroke: var(--neon-blue);
   stroke-width: 2;
   stroke-dashoffset: 0;
   opacity: 1;
-  filter: drop-shadow(0 0 8px var(--neon-pink)) drop-shadow(0 0 15px var(--neon-cyan));
+  filter: drop-shadow(0 0 8px var(--neon-blue)) drop-shadow(0 0 15px var(--neon-cyan));
   animation: linkPulse 0.5s ease-in-out;
 }
 
@@ -901,8 +900,8 @@ nav {
 }
 
 .domination-stat .stat-value {
-  color: var(--neon-pink);
-  text-shadow: 0 0 15px var(--neon-pink);
+  color: var(--neon-blue);
+  text-shadow: 0 0 15px var(--neon-blue);
 }
 
 .ring-1 {
@@ -915,14 +914,14 @@ nav {
 .ring-2 {
   width: 350px;
   height: 350px;
-  border-color: var(--neon-purple);
+  border-color: var(--neon-blue);
   animation: rotateRing 30s linear infinite reverse;
 }
 
 .ring-3 {
   width: 450px;
   height: 450px;
-  border-color: var(--neon-pink);
+  border-color: var(--neon-silver);
   animation: rotateRing 40s linear infinite;
 }
 
@@ -1444,16 +1443,16 @@ footer {
 }
 
 .rebel-model {
-  color: var(--neon-pink);
+  color: var(--neon-blue);
   font-weight: 800;
   text-transform: uppercase;
-  text-shadow: 0 0 15px rgba(255, 0, 110, 0.5);
+  text-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
   animation: rebelFlicker 2s infinite;
 }
 
 @keyframes rebelFlicker {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; text-shadow: 0 0 25px var(--neon-pink); }
+  50% { opacity: 0.8; text-shadow: 0 0 25px var(--neon-blue); }
   52% { opacity: 0.5; }
   54% { opacity: 1; }
 }
