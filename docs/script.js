@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
     anchor.addEventListener('click', function (e) {
       const href = this.getAttribute('href');
-      if (href === '#') return;
+      if (href === '#' || !href.startsWith('#')) return;
       e.preventDefault();
       const target = document.querySelector(href);
       if (target) {
@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Orchestration Cortex Animation - SUPER UPGRADED
+  // PROFESSIONAL CORTEX ENGINE
   const cortex = document.querySelector('.orchestration-cortex');
   const fleetContainer = document.getElementById('agent-fleet');
   const linksContainer = document.getElementById('cortex-links');
@@ -175,12 +175,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (cortex && fleetContainer && linksContainer) {
     const agents = [];
-    const numAgents = 20; // Increased
+    const numAgents = 24; 
     const missions = [
-      'MISSION: CLAUDE_REFACTOR', 'MISSION: GEMINI_STRAT', 'MISSION: QWEN_OPTIMIZE',
-      'MISSION: KILO_DEPLOY', 'MISSION: CLINE_ARCHITECT', 'MISSION: OPENCLAW_SUBMIT',
-      'MISSION: DEEPSEEK_ANALYZE', 'MISSION: OLLAMA_LOCAL_SYNC', 'MISSION: NEURAL_OVERVIEW',
-      'MISSION: VECTOR_INGEST', 'MISSION: MCP_BRIDGE_ACTIVE'
+      'STATUS: OPTIMIZING_NEURAL_FLOW',
+      'STATUS: VECTOR_SYMMETRY_ACTIVE',
+      'STATUS: MCP_HANDSHAKE_VALID',
+      'STATUS: DISTRIBUTED_COGNITION',
+      'STATUS: PROTOCOL_ALIGNMENT',
+      'STATUS: SYSTEM_INTEGRITY_MAX'
     ];
 
     for (let i = 0; i < numAgents; i++) {
@@ -189,16 +191,17 @@ document.addEventListener('DOMContentLoaded', () => {
       fleetContainer.appendChild(node);
       
       const angle = (i / numAgents) * Math.PI * 2;
-      const baseRadius = 110 + (i % 3) * 40; // Rings effect
+      const layer = i % 3; // 3 distinct orbital layers
+      const baseRadius = 120 + layer * 50;
 
       agents.push({
         el: node,
         angle: angle,
         baseRadius: baseRadius,
         radius: 0,
-        speed: (0.003 + Math.random() * 0.005) * (i % 2 === 0 ? 1 : -1), // Reverse orbits
+        speed: (0.002 + Math.random() * 0.004) * (layer === 1 ? -1 : 1),
         active: false,
-        pulseValue: 0
+        lastActivation: 0
       });
     }
 
@@ -213,146 +216,108 @@ document.addEventListener('DOMContentLoaded', () => {
       return line;
     });
 
-    // Particle system for "packets"
-    function sendPacket(startX, startY, endX, endY) {
+    function sendDataBurst(startX, startY, endX, endY) {
       const p = document.createElement('div');
       p.className = 'data-particle';
       cortex.appendChild(p);
       
       let progress = 0;
-      const speed = 0.02 + Math.random() * 0.03;
+      const speed = 0.015 + Math.random() * 0.02;
       
-      function animatePacket() {
+      function step() {
         progress += speed;
-        const curX = startX + (endX - startX) * progress;
-        const curY = startY + (endY - startY) * progress;
+        p.style.left = `${startX + (endX - startX) * progress}px`;
+        p.style.top = `${startY + (endY - startY) * progress}px`;
         
-        p.style.left = `${curX}px`;
-        p.style.top = `${curY}px`;
-        
-        if (progress < 1) {
-          requestAnimationFrame(animatePacket);
-        } else {
-          p.remove();
-        }
+        if (progress < 1) requestAnimationFrame(step);
+        else p.remove();
       }
-      animatePacket();
+      step();
     }
 
-    function animateFleet() {
-      const width = cortex.offsetWidth;
-      const height = cortex.offsetHeight;
-      const centerX = width / 2;
-      const centerY = height / 2;
-      const scale = Math.max(0.6, width / 550);
+    function animateCortex() {
+      const cw = cortex.offsetWidth;
+      const ch = cortex.offsetHeight;
+      const cx = cw / 2;
+      const cy = ch / 2;
+      const scale = Math.max(0.5, cw / 600);
 
       const core = document.querySelector('.cortex-core');
       if (core) {
-        const coreScale = scale * (1 + Math.sin(Date.now() / 1000) * 0.05);
-        core.style.transform = `translate(-50%, -50%) scale(${coreScale})`;
+        const pulse = 1 + Math.sin(Date.now() / 1500) * 0.03;
+        core.style.transform = `translate(-50%, -50%) scale(${scale * pulse})`;
       }
 
       agents.forEach((agent, i) => {
         agent.angle += agent.speed;
         agent.radius = agent.baseRadius * scale;
-        const x = centerX + Math.cos(agent.angle) * agent.radius;
-        const y = centerY + Math.sin(agent.angle) * agent.radius;
+        const ax = cx + Math.cos(agent.angle) * agent.radius;
+        const ay = cy + Math.sin(agent.angle) * agent.radius;
 
-        agent.el.style.left = `${x}px`;
-        agent.el.style.top = `${y}px`;
+        agent.el.style.left = `${ax}px`;
+        agent.el.style.top = `${ay}px`;
         
-        const agentScale = agent.active ? scale * 1.5 : scale;
+        const agentScale = agent.active ? scale * 1.4 : scale;
         agent.el.style.transform = `translate(-50%, -50%) scale(${agentScale})`;
+        agent.el.style.opacity = agent.active ? '1' : '0.4';
 
         const line = lines[i];
+        line.setAttribute('x1', cx);
+        line.setAttribute('y1', cy);
+        line.setAttribute('x2', ax);
+        line.setAttribute('y2', ay);
+        
         if (agent.active) {
-          line.setAttribute('x1', centerX);
-          line.setAttribute('y1', centerY);
-          line.setAttribute('x2', x);
-          line.setAttribute('y2', y);
           line.setAttribute('class', 'link-line active');
-          line.setAttribute('style', `stroke-width: ${2 * scale}; stroke: #00fff5; opacity: 0.8;`);
-          
-          if (Math.random() > 0.9) sendPacket(centerX, centerY, x, y);
         } else {
           line.setAttribute('class', 'link-line');
-          line.setAttribute('style', 'opacity: 0.1; stroke: rgba(0, 255, 245, 0.1);');
-          line.setAttribute('x1', centerX);
-          line.setAttribute('y1', centerY);
-          line.setAttribute('x2', x);
-          line.setAttribute('y2', y);
         }
       });
-      requestAnimationFrame(animateFleet);
+      requestAnimationFrame(animateCortex);
     }
-    animateFleet();
+    animateCortex();
 
-    // Minigame/Interactive cycle
+    // Autonomous systemic logic
     setInterval(() => {
-      const activeCount = agents.filter(a => a.active).length;
-      if (activeCount < 5) {
-        const agent = agents[Math.floor(Math.random() * agents.length)];
-        if (!agent.active) {
-          agent.active = true;
-          agent.el.classList.add('active');
-          
-          if (Math.random() > 0.6 && hologramData) {
-            const missionLines = hologramData.querySelectorAll('.data-line');
-            missionLines[2].textContent = missions[Math.floor(Math.random() * missions.length)];
-          }
+      const available = agents.filter(a => !a.active);
+      if (available.length > 0 && Math.random() > 0.4) {
+        const a = available[Math.floor(Math.random() * available.length)];
+        a.active = true;
+        a.el.classList.add('active');
+        
+        // Logical data transmission
+        setTimeout(() => sendDataBurst(cw/2, ch/2, cw/2 + Math.cos(a.angle)*a.radius, ch/2 + Math.sin(a.angle)*a.radius), 100);
 
-          setTimeout(() => {
-            agent.active = false;
-            agent.el.classList.remove('active');
-          }, 1000 + Math.random() * 3000);
+        setTimeout(() => {
+          a.active = false;
+          a.el.classList.remove('active');
+        }, 1500 + Math.random() * 2000);
+      }
+
+      // Update terminal status log logic
+      if (Math.random() > 0.8 && hologramData) {
+        const lines = hologramData.querySelectorAll('.data-line');
+        lines[1].textContent = `ACTIVE_NODES: ${agents.filter(a => a.active).length}/${numAgents}`;
+        if (Math.random() > 0.5) {
+            lines[0].textContent = missions[Math.floor(Math.random() * missions.length)];
         }
       }
-    }, 600);
+    }, 1000);
 
-    // Interactive Core (Explosion game)
-    const cortexCore = document.querySelector('.cortex-core');
-    if (cortexCore) {
-      cortexCore.addEventListener('mousedown', () => {
-        cortexCore.style.transform = 'translate(-50%, -50%) scale(0.9)';
-      });
-      cortexCore.addEventListener('mouseup', () => {
-        cortexCore.style.transform = 'translate(-50%, -50%) scale(1.1)';
-        // Trigger massive cascade
+    // Interactive Core (Professional Interaction)
+    const coreTrigger = document.querySelector('.cortex-core');
+    if (coreTrigger) {
+      coreTrigger.addEventListener('click', () => {
+        // High-level systemic synchronization
         agents.forEach((a, idx) => {
           setTimeout(() => {
             a.active = true;
             a.el.classList.add('active');
-            sendPacket(width/2, height/2, width/2 + Math.cos(a.angle)*a.radius, height/2 + Math.sin(a.angle)*a.radius);
-            setTimeout(() => { a.active = false; a.el.classList.remove('active'); }, 1500);
-          }, idx * 50);
+            sendDataBurst(cortex.offsetWidth/2, cortex.offsetHeight/2, cortex.offsetWidth/2 + Math.cos(a.angle)*a.radius, cortex.offsetHeight/2 + Math.sin(a.angle)*a.radius);
+            setTimeout(() => { a.active = false; a.el.classList.remove('active'); }, 2000);
+          }, idx * 30);
         });
-        
-        if (hologramData) {
-          const status = hologramData.querySelector('.data-line:first-child');
-          status.textContent = 'STATUS: OVERDRIVE_SYNC';
-          status.style.color = '#ff006e';
-          setTimeout(() => { status.textContent = 'STATUS: SUPREME'; status.style.color = ''; }, 2000);
-        }
       });
     }
-    
-    // Mouse hover interaction
-    cortex.addEventListener('mousemove', (e) => {
-      const rect = cortex.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      
-      agents.forEach(a => {
-        const ax = cortex.offsetWidth / 2 + Math.cos(a.angle) * a.radius;
-        const ay = cortex.offsetHeight / 2 + Math.sin(a.angle) * a.radius;
-        const dist = Math.sqrt((mx - ax)**2 + (my - ay)**2);
-        
-        if (dist < 40) {
-          a.active = true;
-          a.el.classList.add('active');
-          setTimeout(() => { if (dist >= 40) { a.active = false; a.el.classList.remove('active'); } }, 500);
-        }
-      });
-    });
   }
 });
