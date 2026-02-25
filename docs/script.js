@@ -59,12 +59,24 @@ tabBtns.forEach((btn) => {
 });
 
 // Copy functionality
-const copyBtns = document.querySelectorAll('.copy-btn');
+const copyBtns = document.querySelectorAll('.copy-btn, .terminal-copy');
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    // Alert or visual feedback could be added here
+    console.log('Copied to clipboard:', text);
+  });
+}
 
 copyBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
-    const codeContainer = btn.closest('.code-container');
-    const code = codeContainer.querySelector('code').textContent;
+    let code;
+    if (btn.classList.contains('terminal-copy')) {
+      code = btn.previousElementSibling.textContent;
+    } else {
+      const codeContainer = btn.closest('.code-container');
+      code = codeContainer.querySelector('code').textContent;
+    }
 
     navigator.clipboard.writeText(code).then(() => {
       const originalIcon = btn.innerHTML;
@@ -278,6 +290,7 @@ if (cortex) {
     agents.push({
       el: node,
       angle: Math.random() * Math.PI * 2,
+      baseRadius: 120 + Math.random() * 100,
       radius: 120 + Math.random() * 100,
       speed: 0.005 + Math.random() * 0.015,
       active: false,
@@ -289,19 +302,24 @@ if (cortex) {
   linksContainer.appendChild(svg);
 
   function animateFleet() {
-    const centerX = 250;
-    const centerY = 250;
+    const width = cortex.offsetWidth;
+    const height = cortex.offsetHeight;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const scale = width / 500; // Base design was 500px
 
     // Clear previous links
     svg.innerHTML = '';
 
     agents.forEach((agent, i) => {
       agent.angle += agent.speed;
+      agent.radius = agent.baseRadius * scale;
       const x = centerX + Math.cos(agent.angle) * agent.radius;
       const y = centerY + Math.sin(agent.angle) * agent.radius;
 
-      agent.el.style.left = `${x - 6}px`;
-      agent.el.style.top = `${y - 6}px`;
+      agent.el.style.left = `${x - 6 * scale}px`;
+      agent.el.style.top = `${y - 6 * scale}px`;
+      agent.el.style.scale = scale;
 
       if (agent.active) {
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -310,6 +328,7 @@ if (cortex) {
         line.setAttribute('x2', x);
         line.setAttribute('y2', y);
         line.setAttribute('class', 'link-line active');
+        line.setAttribute('style', `stroke-width: ${2 * scale}`);
         svg.appendChild(line);
       }
     });
