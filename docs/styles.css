@@ -368,10 +368,10 @@ nav {
 
 .hero-title {
   font-family: 'Orbitron', sans-serif;
-  font-size: 4.5rem;
+  font-size: 3.8rem;
   font-weight: 900;
   line-height: 1.1;
-  margin-bottom: 30px;
+  margin-bottom: 25px;
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -447,24 +447,26 @@ nav {
 }
 
 .hero-subtitle {
-  font-size: 1.4rem;
+  font-size: 1.15rem;
   color: var(--text-secondary);
-  line-height: 1.8;
+  line-height: 1.6;
   margin-bottom: 20px;
   max-width: 600px;
 }
 
 .hero-note {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.85rem;
   color: var(--text-secondary);
-  margin-bottom: 30px;
-  padding: 10px 15px;
-  background: rgba(59, 130, 246, 0.05);
-  border-left: 3px solid var(--neon-blue);
+  margin-bottom: 35px;
+  padding: 12px 18px;
+  background: rgba(59, 130, 246, 0.08);
+  border-left: 3px solid var(--neon-cyan);
   border-radius: 4px;
+  max-width: 550px;
+  line-height: 1.5;
 }
 
 .hero-note i {
@@ -478,14 +480,13 @@ nav {
 
 /* Terminal Hero */
 .hero-terminal {
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(0, 255, 245, 0.3);
-  border-radius: 10px;
-  max-width: 500px;
-  margin-top: 30px;
-  margin-bottom: 50px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(0, 255, 245, 0.2);
+  border-radius: 8px;
+  max-width: 440px;
+  margin-bottom: 40px;
   overflow: hidden;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 255, 245, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10px);
   animation: slideInLeft 1s ease;
   position: relative;
@@ -583,17 +584,17 @@ nav {
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 15px;
-  padding: 16px 40px;
-  border-radius: 12px;
-  font-weight: 800;
-  font-size: 1.1rem;
+  gap: 10px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
   text-decoration: none;
   text-transform: uppercase;
-  letter-spacing: 2.5px;
+  letter-spacing: 1.5px;
   position: relative;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   background: transparent;
   cursor: pointer;
   z-index: 1;
@@ -687,11 +688,11 @@ nav {
 
 .stat-value {
   font-family: 'Orbitron', sans-serif;
-  font-size: 3rem;
+  font-size: 2.2rem;
   font-weight: 900;
   color: var(--neon-cyan);
-  text-shadow: 0 0 20px rgba(0, 255, 245, 0.4);
-  margin-bottom: 10px;
+  text-shadow: 0 0 15px rgba(0, 255, 245, 0.4);
+  margin-bottom: 8px;
 }
 
 .stat-label {
