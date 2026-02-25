@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bibliothèque | OverMind-MCP - Documentation API</title>
+    <meta
+      name="description"
+      content="Documentation technique et API pour la bibliothèque OverMind-MCP."
+    />
+    <link
+      rel="shortcut icon"
+      href="https://cdn.jsdelivr.net/npm/overmind-mcp@1.0.8/assets/logo_overmind.png"
+      type="image/x-icon"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link rel="stylesheet" href="styles.css?v=1.3.4" />
+  </head>
+  <body>
+    <canvas class="matrix-bg" id="matrix"></canvas>
+    <div class="grid-overlay"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="main-content">
+      <header>
+        <div class="container">
+          <nav>
+            <div class="logo">
+              <i class="fas fa-brain"></i>
+              <span class="logo-text">OverMind-MCP</span>
+            </div>
+            <ul class="nav-links">
+              <li><a href="index.html" class="nav-link">Accueil</a></li>
+              <li><a href="index.html#features" class="nav-link">Fonctionnalités</a></li>
+              <li><a href="library.html" class="nav-link active">Bibliothèque</a></li>
+              <li>
+                <a
+                  href="https://deamondev888.github.io/PostgreSQL-MCP-Serveur/"
+                  target="_blank"
+                  class="nav-link nav-link-highlight"
+                  ><i class="fas fa-database"></i> PostgreSQL-MCP</a
+                >
+              </li>
+            </ul>
+            <div class="mobile-toggle">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </nav>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero-sub" style="padding: 140px 0 60px;">
+          <div class="container">
+            <h1 class="hero-title elite-title">
+              <span class="glitch" data-text="Documentation">Documentation</span>
+              <span class="gradient-text">Technique</span>
+            </h1>
+            <p class="hero-subtitle">
+              Explorez les modules fondamentaux de l'OverMind pour intégrer l'orchestration IA dans vos propres projets.
+            </p>
+          </div>
+        </section>
+
+        <section class="features" style="padding-top: 0;">
+          <div class="container">
+            <div class="features-grid">
+              <div class="feature-card">
+                <i class="fas fa-running card-icon"></i>
+                <h3>Runners IA</h3>
+                <p>Moteurs d'exécution pour Claude, Gemini, Qwen, Kilo, Cline et Trae.</p>
+                <a href="#runners" class="btn btn-secondary elite-btn-secondary" style="margin-top:20px; font-size: 0.8rem; padding: 8px 16px;">Voir les détails</a>
+              </div>
+              <div class="feature-card">
+                <i class="fas fa-users-cog card-icon"></i>
+                <h3>Gestionnaires</h3>
+                <p>Contrôle programmatique des agents, des prompts et des sessions.</p>
+                <a href="#managers" class="btn btn-secondary elite-btn-secondary" style="margin-top:20px; font-size: 0.8rem; padding: 8px 16px;">Voir les détails</a>
+              </div>
+              <div class="feature-card">
+                <i class="fas fa-memory card-icon"></i>
+                <h3>Memory Factory</h3>
+                <p>Système RAG haute performance compatible PostgreSQL + Vector.</p>
+                <a href="#memory" class="btn btn-secondary elite-btn-secondary" style="margin-top:20px; font-size: 0.8rem; padding: 8px 16px;">Voir les détails</a>
+              </div>
+            </div>
+
+            <!-- Content Sections -->
+            <div id="runners" class="doc-section" style="margin-top: 80px;">
+              <h2 class="section-title"><i class="fas fa-bolt"></i> Runners IA</h2>
+              <div class="code-container large" style="margin-top: 20px;">
+                <div class="code-header"><span class="code-title">ClaudeRunner</span></div>
+                <pre><code class="language-typescript">import { ClaudeRunner } from 'overmind-mcp';
+
+const runner = new ClaudeRunner();
+const { result, sessionId } = await runner.runAgent({
+  prompt: 'Ma mission pour Claude...',
+  agentName: 'mon-agent', // Utilise les settings de .claude/settings_mon-agent.json
+  autoResume: true        // Reprend la dernière session automatiquement
+});</code></pre>
+              </div>
+            </div>
+
+            <div id="managers" class="doc-section" style="margin-top: 80px;">
+              <h2 class="section-title"><i class="fas fa-cogs"></i> AgentManager</h2>
+              <div class="code-container large" style="margin-top: 20px;">
+                <div class="code-header"><span class="code-title">Configuration des Agents</span></div>
+                <pre><code class="language-typescript">import { AgentManager } from 'overmind-mcp';
+
+const manager = new AgentManager();
+
+// Créer un agent avec un prompt système dédié
+await manager.createAgent('architect', 'Tu es un architecte logiciel...', 'claude-3-5-sonnet');
+
+// Lister les agents avec détails (modèle, serveurs MCP actifs)
+const agents = await manager.listAgents(true);</code></pre>
+              </div>
+            </div>
+
+            <div id="memory" class="doc-section" style="margin-top: 80px;">
+              <h2 class="section-title"><i class="fas fa-microchip"></i> Système de Mémoire</h2>
+              <div class="code-container large" style="margin-top: 20px;">
+                <div class="code-header"><span class="code-title">RAG & Persistance</span></div>
+                <pre><code class="language-typescript">import { getMemoryProvider } from 'overmind-mcp';
+
+const memory = getMemoryProvider();
+
+// Stocker une information sémantique
+await memory.storeKnowledge({
+  text: 'Le standard du projet est le FastMCP avec TypeScript.',
+  source: 'documentation',
+  agentName: 'architect' // Optionnel: isole la donnée pour un agent
+});
+
+// Rechercher dans la mémoire globale
+const results = await memory.searchMemory({
+  query: 'workflow fastmcp',
+  limit: 5
+});</code></pre>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div class="container">
+        <p class="system-note">
+          <i class="fas fa-info-circle"></i>
+          La bibliothèque est conçue pour être modulaire. Vous pouvez utiliser chaque service indépendamment ou le serveur complet via <code style="color:var(--neon-cyan)">createServer()</code>.
+        </p>
+      </div>
+
+      <footer>
+        <div class="container">
+          <div class="footer-content">
+            <div class="footer-brand">
+              <div class="footer-logo">
+                <i class="fas fa-brain"></i>
+                <span>OverMind-MCP</span>
+              </div>
+              <p>Le futur de l'orchestration IA</p>
+            </div>
+            <div class="footer-social">
+              <a href="https://www.npmjs.com/package/overmind-mcp" target="_blank"><i class="fab fa-npm"></i></a>
+              <a href="https://github.com/DeamonDev888/overmind-mcp" target="_blank"><i class="fab fa-github"></i></a>
+              <a href="https://discord.gg/4AR82phtBz" target="_blank"><i class="fab fa-discord"></i></a>
+            </div>
+          </div>
+          <div class="footer-bottom">
+            <p>Projet propulsé par DeaMoN888 - 2026</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <!-- SVG Filters -->
+    <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
+      <defs>
+        <filter id="cyber-glitch">
+          <feTurbulence type="fractalNoise" baseFrequency="0.00001" numOctaves="1" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" />
+        </filter>
+        <filter id="noiseFilter">
+          <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="3" />
+          <feComponentTransfer><feFuncA type="linear" slope="0.05" /></feComponentTransfer>
+        </filter>
+      </defs>
+    </svg>
+
+    <script src="script.js?v=1.3.4" defer></script>
+  </body>
+</html>
