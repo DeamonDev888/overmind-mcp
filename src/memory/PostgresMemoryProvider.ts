@@ -194,6 +194,20 @@ export class PostgresMemoryProvider implements MemoryProvider {
         'CREATE INDEX IF NOT EXISTS idx_agent_runs_session ON agent_runs(session_id)',
       );
 
+      // HNSW Index for ultra-fast vector search (4096D)
+      if (hasVector) {
+        try {
+          // Note: m=16, ef_construction=64 are good defaults for balanced speed/accuracy
+          await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_knowledge_embedding_hnsw 
+            ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)
+            WITH (m = 16, ef_construction = 64)
+          `);
+        } catch (e) {
+          console.warn(`[PostgresMemory] ⚠️ Could not create HNSW index: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+
       try {
         await client.query(
           'CREATE INDEX IF NOT EXISTS idx_knowledge_text_trgm ON knowledge_chunks USING gin (text gin_trgm_ops)',
@@ -294,14 +308,22 @@ export class PostgresMemoryProvider implements MemoryProvider {
       if (queryEmb.length > 0) {
         const embStr = `[${queryEmb.join(',')}]`;
         try {
+          // Improved Query: Semantic search + Time Decay (Freshness boost)
+          // We fetch more candidates via HNSW index first, then re-rank with time decay
           const vecRes = await pool.query(
-            `SELECT id, text, source, created_at, 
-                    (1 - (embedding <=> $1)) as score 
-             FROM knowledge_chunks 
-             WHERE embedding IS NOT NULL
-             ORDER BY embedding <=> $1 
-             LIMIT $2`,
-            [embStr, limit - merged.length],
+            `SELECT * FROM (
+              SELECT id, text, source, created_at, 
+                     (1 - (embedding <=> $1)) as semantic_score 
+              FROM knowledge_chunks 
+              WHERE embedding IS NOT NULL
+              ORDER BY embedding <=> $1 
+              LIMIT $2
+            ) AS candidates
+            ORDER BY (
+              (semantic_score * 0.85) + 
+              (1.0 / (1.0 + ln(1.0 + (extract(epoch from now()) * 1000 - created_at) / 86400000.0))) * 0.15
+            ) DESC`,
+            [embStr, Math.max(limit * 3, 50)], // Fetch more candidates for re-ranking
           );
 
           for (const row of vecRes.rows) {
