@@ -94,25 +94,32 @@ Pour connecter ce runner à un client en pointant vers votre version locale comp
 Vous pouvez désormais importer le moteur du runner dans vos propres scripts :
 
 ```typescript
-import { createServer, AgentManager, ClaudeRunner, getMemoryProvider } from 'overmind-mcp';
+import { AgentManager, ClaudeRunner, getMemoryProvider, updateConfig } from 'overmind-mcp';
 
-// 1. Gérer les agents programmatiquement
+// 1. Initialisation (Optionnel: surcharger les chemins par défaut)
+updateConfig('./settings.json', './mcp.local.json');
+
+// 2. Gestion des agents programmatiquement
 const manager = new AgentManager();
 await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude-3-5-sonnet');
 
-// 2. Accéder à la mémoire persistante 4096D
+// 3. Accéder à la mémoire persistante 4096D
 const memory = getMemoryProvider();
-await memory.storeKnowledge({ text: 'Donnée critique...', agentName: 'expert-seo' });
+await memory.storeKnowledge({
+  text: 'Donnée critique sur le projet...',
+  agentName: 'expert-seo',
+  source: 'user',
+});
 
-// 3. Lancer une exécution sans passer par MCP
+// 4. Lancer une exécution via le Runner Overmind
 const runner = new ClaudeRunner();
-const result = await runner.runAgent({
+const { result, sessionId } = await runner.runAgent({
   agentName: 'expert-seo',
   prompt: 'Analyse le site example.com',
   autoResume: true,
 });
 
-console.log(result.result);
+console.log('🤖 Résultat:', result);
 ```
 
 ---
