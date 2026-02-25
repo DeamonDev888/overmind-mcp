@@ -17,7 +17,7 @@ for (let i = 0; i < columns; i++) {
 }
 
 function drawMatrix() {
-  ctx.fillStyle = 'rgba(10, 10, 15, 0.05)';
+  ctx.fillStyle = 'rgba(6, 6, 9, 0.08)'; // Matches new dark-bg
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.fillStyle = '#00fff5';
@@ -40,6 +40,11 @@ setInterval(drawMatrix, 50);
 window.addEventListener('resize', () => {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  // Recalculate columns for matrix
+  const newColumns = Math.floor(canvas.width / fontSize);
+  if (newColumns > drops.length) {
+    for (let i = drops.length; i < newColumns; i++) drops[i] = 1;
+  }
 });
 
 // Tab functionality
@@ -301,15 +306,28 @@ if (cortex) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   linksContainer.appendChild(svg);
 
+  // Initialize line pool
+  const lines = agents.map(() => {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('class', 'link-line');
+    svg.appendChild(line);
+    return line;
+  });
+
   function animateFleet() {
     const width = cortex.offsetWidth;
     const height = cortex.offsetHeight;
     const centerX = width / 2;
     const centerY = height / 2;
-    const scale = width / 500; // Base design was 500px
+    const scale = Math.max(0.4, width / 550); // Improved scaling factor
 
-    // Clear previous links
-    svg.innerHTML = '';
+    // Scale the core
+    const core = document.querySelector('.cortex-core');
+    if (core) {
+      core.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    }
+
+    // SVG lines will be updated in the loop below
 
     agents.forEach((agent, i) => {
       agent.angle += agent.speed;
@@ -317,19 +335,20 @@ if (cortex) {
       const x = centerX + Math.cos(agent.angle) * agent.radius;
       const y = centerY + Math.sin(agent.angle) * agent.radius;
 
-      agent.el.style.left = `${x - 6 * scale}px`;
-      agent.el.style.top = `${y - 6 * scale}px`;
-      agent.el.style.scale = scale;
+      agent.el.style.left = `${x}px`;
+      agent.el.style.top = `${y}px`;
+      agent.el.style.transform = `translate(-50%, -50%) scale(${scale})`;
 
+      const line = lines[i];
       if (agent.active) {
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', centerX);
         line.setAttribute('y1', centerY);
         line.setAttribute('x2', x);
         line.setAttribute('y2', y);
         line.setAttribute('class', 'link-line active');
         line.setAttribute('style', `stroke-width: ${2 * scale}`);
-        svg.appendChild(line);
+      } else {
+        line.setAttribute('class', 'link-line');
       }
     });
 

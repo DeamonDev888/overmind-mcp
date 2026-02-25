@@ -702,16 +702,16 @@ nav {
   transform: translate(-50%, -50%);
   width: 120px;
   height: 120px;
-  background: var(--dark-bg);
+  background: rgba(0, 0, 0, 0.5);
   border: 2px solid var(--neon-cyan);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10;
-  box-shadow:
-    0 0 30px var(--neon-cyan),
+  box-shadow: 0 0 30px rgba(0, 255, 245, 0.2),
     inset 0 0 20px var(--neon-cyan);
+  transform-origin: center center;
   animation: corePulse 4s ease-in-out infinite;
 }
 
@@ -807,7 +807,9 @@ nav {
   border-radius: 50%;
   box-shadow: 0 0 15px var(--neon-cyan);
   z-index: 5;
-  transition: all 0.5s ease;
+  transition: opacity 0.5s ease, background 0.5s ease, box-shadow 0.5s ease;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .agent-node.active {
