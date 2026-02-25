@@ -143,16 +143,32 @@ export class ClaudeRunner {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: process.cwd(),
         shell: isWin,
+        env: {
+          ...process.env,
+          ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
+        },
       });
 
       let stdout = '';
       let stderr = '';
 
       if (child.stdout) {
-        child.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+        child.stdout.on('data', (d: Buffer) => {
+          const chunk = d.toString();
+          stdout += chunk;
+          if (agentName) {
+            process.stderr.write(`[ClaudeRunner:${agentName}] ${chunk}`);
+          }
+        });
       }
       if (child.stderr) {
-        child.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+        child.stderr.on('data', (d: Buffer) => {
+          const chunk = d.toString();
+          stderr += chunk;
+          if (agentName) {
+            process.stderr.write(`[ClaudeRunner:${agentName}:ERR] ${chunk}`);
+          }
+        });
       }
 
       const timeout = setTimeout(() => {

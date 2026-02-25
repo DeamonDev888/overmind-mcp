@@ -1,7 +1,7 @@
 {
   "name": "overmind-mcp",
-  "version": "1.1.1",
-  "description": "Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini, Qwen, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite.",
+  "version": "1.2.0",
+  "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut l'isolation automatique de la mémoire (Private Memory Context) pour Claude-Code, Gemini, Qwen et plus.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

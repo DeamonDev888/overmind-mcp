@@ -573,7 +573,9 @@ nav {
   align-items: center;
   justify-content: center;
   z-index: 10;
-  box-shadow: 0 0 30px var(--neon-cyan), inset 0 0 20px var(--neon-cyan);
+  box-shadow:
+    0 0 30px var(--neon-cyan),
+    inset 0 0 20px var(--neon-cyan);
   animation: corePulse 4s ease-in-out infinite;
 }
 
@@ -585,15 +587,35 @@ nav {
 }
 
 @keyframes corePulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 30px var(--neon-cyan); }
-  50% { transform: translate(-50%, -50%) scale(1.1); box-shadow: 0 0 60px var(--neon-cyan); }
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 30px var(--neon-cyan);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+    box-shadow: 0 0 60px var(--neon-cyan);
+  }
 }
 
 @keyframes coreGlitch {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  92% { opacity: 1; transform: scale(1); }
-  93% { opacity: 0.5; transform: scale(1.1) skew(5deg); }
-  94% { opacity: 1; transform: scale(1); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  92% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  93% {
+    opacity: 0.5;
+    transform: scale(1.1) skew(5deg);
+  }
+  94% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .core-rings {
@@ -611,13 +633,33 @@ nav {
   border-radius: 50%;
 }
 
-.ring-1 { width: 160px; height: 160px; border-style: dashed; animation: rotate 10s linear infinite; }
-.ring-2 { width: 200px; height: 200px; border-width: 2px; border-color: rgba(255, 0, 110, 0.2); animation: rotate 15s linear infinite reverse; }
-.ring-3 { width: 240px; height: 240px; border-style: double; animation: rotate 20s linear infinite; }
+.ring-1 {
+  width: 160px;
+  height: 160px;
+  border-style: dashed;
+  animation: rotate 10s linear infinite;
+}
+.ring-2 {
+  width: 200px;
+  height: 200px;
+  border-width: 2px;
+  border-color: rgba(255, 0, 110, 0.2);
+  animation: rotate 15s linear infinite reverse;
+}
+.ring-3 {
+  width: 240px;
+  height: 240px;
+  border-style: double;
+  animation: rotate 20s linear infinite;
+}
 
 @keyframes rotate {
-  from { transform: translate(-50%, -50%) rotate(0deg); }
-  to { transform: translate(-50%, -50%) rotate(360deg); }
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
 }
 
 /* Agent Fleet */
@@ -686,8 +728,15 @@ nav {
 }
 
 @keyframes hologramFade {
-  0%, 100% { opacity: 0.8; transform: skewX(-5deg); }
-  50% { opacity: 0.4; transform: skewX(-2deg); }
+  0%,
+  100% {
+    opacity: 0.8;
+    transform: skewX(-5deg);
+  }
+  50% {
+    opacity: 0.4;
+    transform: skewX(-2deg);
+  }
 }
 
 /* Domination Stats */
