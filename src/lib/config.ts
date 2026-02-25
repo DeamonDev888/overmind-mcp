@@ -25,7 +25,9 @@ export const DEFAULT_CONFIG: ConfigType = {
     PERMISSIONS: '--dangerously-skip-permissions',
     PATHS: {
       SETTINGS: './.claude/settings.json',
-      MCP: './.mcp.json',
+      MCP: fs.existsSync(path.join(process.cwd(), '.mcp.local.json'))
+        ? './.mcp.local.json'
+        : './.mcp.json',
     },
   },
 };
@@ -38,16 +40,33 @@ export function getWorkspaceDir(): string {
     return path.resolve(process.env.OVERMIND_WORKSPACE);
   }
 
-  // 2. Local Project mode if .mcp.json exists in current working directory
+  // 2. Local Project mode if config exists in current working directory
   const cwd = process.cwd();
-  if (fs.existsSync(path.join(cwd, '.mcp.json'))) {
+  if (
+    fs.existsSync(path.join(cwd, '.mcp.json')) ||
+    fs.existsSync(path.join(cwd, '.mcp.local.json'))
+  ) {
     return cwd;
   }
 
-  // 3. Auto-detect from code location (Noob-proof: finds the folder where Overmind is cloned)
-  // We are in dist/lib or src/lib, so root is 2 levels up
+  // 3. Search up the tree for .mcp.json or .mcp.local.json
+  let current = cwd;
+  while (path.dirname(current) !== current) {
+    if (
+      fs.existsSync(path.join(current, '.mcp.json')) ||
+      fs.existsSync(path.join(current, '.mcp.local.json'))
+    ) {
+      return current;
+    }
+    current = path.dirname(current);
+  }
+
+  // 4. Auto-detect from code location (Noob-proof: finds the folder where Overmind is cloned)
   const codeRoot = path.resolve(__dirname, '../..');
-  if (fs.existsSync(path.join(codeRoot, '.mcp.json'))) {
+  if (
+    fs.existsSync(path.join(codeRoot, '.mcp.json')) ||
+    fs.existsSync(path.join(codeRoot, '.mcp.local.json'))
+  ) {
     return codeRoot;
   }
 

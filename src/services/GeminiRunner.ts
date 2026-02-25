@@ -72,6 +72,10 @@ export class GeminiRunner {
       const child: ChildProcess = spawn(command, argsSpawn, {
         cwd: process.cwd(),
         shell: isWin,
+        env: {
+          ...process.env,
+          ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
+        },
       });
 
       let stdout = '';
