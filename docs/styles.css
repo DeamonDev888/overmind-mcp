@@ -454,26 +454,27 @@ nav {
   max-width: 600px;
 }
 
-.hero-note {
+.system-note {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   font-size: 0.85rem;
   color: var(--text-secondary);
-  margin-bottom: 35px;
-  padding: 12px 18px;
-  background: rgba(59, 130, 246, 0.08);
+  margin: 40px auto;
+  padding: 12px 20px;
+  background: rgba(59, 130, 246, 0.05);
   border-left: 3px solid var(--neon-cyan);
   border-radius: 4px;
-  max-width: 550px;
+  max-width: 600px;
   line-height: 1.5;
+  backdrop-filter: blur(5px);
 }
 
-.hero-note i {
+.system-note i {
   color: var(--neon-cyan);
 }
 
-.hero-note strong {
+.system-note strong {
   color: var(--neon-cyan);
   font-weight: 700;
 }
