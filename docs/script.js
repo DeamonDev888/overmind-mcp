@@ -46,6 +46,17 @@ window.addEventListener('resize', () => {
   }
 });
 
+// SVG Filter Animation Logic
+const glitchFilter = document.querySelector('#cyber-glitch feTurbulence');
+if (glitchFilter) {
+  let glitchBaseFreq = 0.00001;
+  setInterval(() => {
+    // Jitter the displacement map slightly for the 'glitch' effect
+    const noise = Math.random() * 0.05;
+    glitchFilter.setAttribute('baseFrequency', `${glitchBaseFreq} ${noise}`);
+  }, 100);
+}
+
 // Main initialization
 document.addEventListener('DOMContentLoaded', () => {
   // Tab functionality
