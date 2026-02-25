@@ -94,17 +94,24 @@
 
             <!-- Content Sections -->
             <div id="runners" class="doc-section" style="margin-top: 80px;">
-              <h2 class="section-title"><i class="fas fa-bolt"></i> Runners IA</h2>
+              <h2 class="section-title"><i class="fas fa-bolt"></i> Exécution Unifiée</h2>
+              <p style="margin: 15px 0; color: var(--text-secondary);">
+                La méthode <code style="color:var(--neon-cyan)">runAgent</code> est le point d'entrée recommandé. Elle orchestre automatiquement les runners spécifiques (Claude, Gemini, etc.) et gère l'historique dans la mémoire Overmind.
+              </p>
               <div class="code-container large" style="margin-top: 20px;">
-                <div class="code-header"><span class="code-title">ClaudeRunner</span></div>
-                <pre><code class="language-typescript">import { ClaudeRunner } from 'overmind-mcp';
+                <div class="code-header"><span class="code-title">Utilisation Recommandée</span></div>
+                <pre><code class="language-typescript">import { runAgent } from 'overmind-mcp';
 
-const runner = new ClaudeRunner();
-const { result, sessionId } = await runner.runAgent({
-  prompt: 'Ma mission pour Claude...',
-  agentName: 'mon-agent', // Utilise les settings de .claude/settings_mon-agent.json
-  autoResume: true        // Reprend la dernière session automatiquement
-});</code></pre>
+const { content, isError } = await runAgent({
+  runner: 'claude',       // 'claude', 'gemini', 'trae', 'kilo', 'qwen', etc.
+  agentName: 'expert-seo', 
+  prompt: 'Analyse example.com',
+  autoResume: true        // Reprend la conversation précédente
+});
+
+if (!isError) {
+  console.log(content[0].text);
+}</code></pre>
               </div>
             </div>
 
