@@ -34,57 +34,95 @@ export const DEFAULT_CONFIG: ConfigType = {
 
 export const CONFIG = { ...DEFAULT_CONFIG };
 
-export function getWorkspaceDir(): string {
-  // 1. Environment Variable (User Override)
-  if (process.env.OVERMIND_WORKSPACE) {
-    return path.resolve(process.env.OVERMIND_WORKSPACE);
-  }
-
-  // 2. Local Project mode if config exists in current working directory
-  const cwd = process.cwd();
-  if (
-    fs.existsSync(path.join(cwd, '.mcp.json')) ||
-    fs.existsSync(path.join(cwd, '.mcp.local.json'))
-  ) {
-    return cwd;
-  }
-
-  // 3. Search up the tree for .mcp.json or .mcp.local.json
-  let current = cwd;
-  while (path.dirname(current) !== current) {
-    if (
-      fs.existsSync(path.join(current, '.mcp.json')) ||
-      fs.existsSync(path.join(current, '.mcp.local.json'))
-    ) {
-      return current;
+// Helper to manually parse .env without any noisy console.logs
+function loadEnvQuietly(envPath: string) {
+  try {
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      content.split('\n').forEach((line) => {
+        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+        if (match) {
+          const key = match[1];
+          let value = (match[2] || '').replace(/\s*#.*$/, '').trim();
+          if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+          else if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+          if (!process.env[key]) process.env[key] = value;
+        }
+      });
     }
-    current = path.dirname(current);
+  } catch (_e) {
+    // Ignore .env parsing errors
   }
-
-  // 4. Auto-detect from code location (Noob-proof: finds the folder where Overmind is cloned)
-  const codeRoot = path.resolve(__dirname, '../..');
-  if (
-    fs.existsSync(path.join(codeRoot, '.mcp.json')) ||
-    fs.existsSync(path.join(codeRoot, '.mcp.local.json'))
-  ) {
-    return codeRoot;
-  }
-
-  // 4. Global fallback in user profile
-  const homedir = os.homedir();
-  const globalDir = path.join(homedir, '.overmind-mcp');
-
-  if (!fs.existsSync(globalDir)) {
-    fs.mkdirSync(globalDir, { recursive: true });
-    // Create an empty .mcp.json so the orchestrator has a base to work from
-    fs.writeFileSync(
-      path.join(globalDir, '.mcp.json'),
-      JSON.stringify({ mcpServers: {} }, null, 2),
-    );
-  }
-
-  return globalDir;
 }
+
+let cachedWorkspaceDir: string | null = null;
+
+export function resetWorkspaceCache() {
+  cachedWorkspaceDir = null;
+}
+
+export function getWorkspaceDir(): string {
+  if (cachedWorkspaceDir && process.env.NODE_ENV !== 'test') return cachedWorkspaceDir;
+
+  let workspaceDir = '';
+  if (process.env.OVERMIND_WORKSPACE) {
+    workspaceDir = path.resolve(process.env.OVERMIND_WORKSPACE);
+  } else {
+    // 2. Local Project mode if config exists in current working directory
+    const cwd = process.cwd();
+    if (
+      fs.existsSync(path.join(cwd, '.mcp.json')) ||
+      fs.existsSync(path.join(cwd, '.mcp.local.json'))
+    ) {
+      workspaceDir = cwd;
+    } else {
+      // 3. Search up the tree
+      let current = cwd;
+      while (path.dirname(current) !== current) {
+        if (
+          fs.existsSync(path.join(current, '.mcp.json')) ||
+          fs.existsSync(path.join(current, '.mcp.local.json'))
+        ) {
+          workspaceDir = current;
+          break;
+        }
+        current = path.dirname(current);
+      }
+
+      if (!workspaceDir) {
+        // 4. Auto-detect from code location
+        const codeRoot = path.resolve(__dirname, '../..');
+        if (
+          fs.existsSync(path.join(codeRoot, '.mcp.json')) ||
+          fs.existsSync(path.join(codeRoot, '.mcp.local.json'))
+        ) {
+          workspaceDir = codeRoot;
+        } else {
+          // 4. Global fallback
+          const homedir = os.homedir();
+          workspaceDir = path.join(homedir, '.overmind-mcp');
+          if (!fs.existsSync(workspaceDir)) {
+            fs.mkdirSync(workspaceDir, { recursive: true });
+            fs.writeFileSync(
+              path.join(workspaceDir, '.mcp.json'),
+              JSON.stringify({ mcpServers: {} }, null, 2),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  // Load environment from workspace and related projects
+  loadEnvQuietly(path.join(workspaceDir, '.env'));
+  loadEnvQuietly(path.resolve(workspaceDir, '../serveur_PostGreSQL/.env'));
+
+  cachedWorkspaceDir = workspaceDir;
+  return workspaceDir;
+}
+
+// Trigger initial environment loading on module import
+getWorkspaceDir();
 
 export function resolveConfigPath(configPath: string): string {
   if (path.isAbsolute(configPath)) return configPath;
