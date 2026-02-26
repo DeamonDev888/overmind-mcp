@@ -7,8 +7,14 @@ import { AgentManager } from '../services/AgentManager.js';
 export const createAgentSchema = z.object({
   name: z
     .string()
-    .describe("Nom unique de l'agent (ex: 'sniper_analyst'). Ce nom servira d'identifiant pour sa mémoire sémantique isolée."),
-  prompt: z.string().describe("Le prompt système OBLIGATOIRE. Tu DOIS y définir le persona de l'agent, ses missions, les outils MCP qu'il est autorisé à utiliser, et lui ordonner de consulter/enrichir systématiquement sa mémoire Overmind."),
+    .describe(
+      "Nom unique de l'agent (ex: 'sniper_analyst'). Ce nom servira d'identifiant pour sa mémoire sémantique isolée.",
+    ),
+  prompt: z
+    .string()
+    .describe(
+      "Le prompt système OBLIGATOIRE. Tu DOIS y définir le persona de l'agent, ses missions, les outils MCP qu'il est autorisé à utiliser, et lui ordonner de consulter/enrichir systématiquement sa mémoire Overmind.",
+    ),
   runner: z
     .enum(['claude', 'gemini', 'kilo', 'qwen', 'openclaw', 'cline', 'opencode', 'trae'])
     .optional()
@@ -17,9 +23,7 @@ export const createAgentSchema = z.object({
   model: z
     .string()
     .optional()
-    .describe(
-      'Modèle à utiliser. Supporte tous les modèles compatibles avec le runner choisi. Pour Claude: claude-sonnet-4-5, gpt-4, deepseek-chat, etc.',
-    ),
+    .describe('Modèle à utiliser (ex: z.ai/glm-4.6, deepseek-chat, gpt-4, etc.)'),
   copyEnvFrom: z
     .string()
     .optional()
@@ -51,10 +55,12 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>): Prom
   // src/tools/create_agent.ts -> src/tools -> src -> Workflow
   const projectRoot = path.resolve(path.dirname(currentFilePath), '../../');
 
+  const defaultModel = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
+
   const result = await manager.createAgent(
     name,
     prompt,
-    model || 'claude-sonnet-4-5',
+    model || defaultModel,
     copyEnvFrom,
     projectRoot,
     runner,

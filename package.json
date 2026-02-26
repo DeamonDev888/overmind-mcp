@@ -1,6 +1,6 @@
 {
   "name": "overmind-mcp",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut l'isolation automatique de la mémoire (Private Memory Context) pour Claude-Code, Gemini, Qwen et plus.",
   "type": "module",
   "main": "dist/index.js",
@@ -70,7 +70,7 @@
     "dotenv": "^17.3.1",
     "fastmcp": "^3.33.0",
     "pg": "^8.18.0",
-    "overmind-postgres-mcp": "^1.1.0",
+    "overmind-postgres-mcp": "^1.1.4",
     "zod": "^4.2.1"
   }
 }

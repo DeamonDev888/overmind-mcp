@@ -16,7 +16,7 @@ describe('Overmind Vector Isolation Check', () => {
     const mockPool = {
       query: vi.fn().mockImplementation((sql: string) => {
         if (sql.includes('pg_trgm') || sql.includes('gin_trgm_ops')) {
-           return Promise.reject(new Error('VECTOR_ONLY_VIOLATION: pg_trgm is banned'));
+          return Promise.reject(new Error('VECTOR_ONLY_VIOLATION: pg_trgm is banned'));
         }
         return Promise.resolve({ rows: [] });
       }),
@@ -26,13 +26,13 @@ describe('Overmind Vector Isolation Check', () => {
 
     // Simulate database initialization
     const client = {
-        query: vi.fn().mockImplementation((sql: string) => {
-            if (sql.includes('pg_trgm') || sql.includes('gin_trgm_ops')) {
-                throw new Error('VECTOR_ONLY_VIOLATION: pg_trgm is banned');
-            }
-            return Promise.resolve({ rows: [] });
-        }),
-        release: vi.fn(),
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (sql.includes('pg_trgm') || sql.includes('gin_trgm_ops')) {
+          throw new Error('VECTOR_ONLY_VIOLATION: pg_trgm is banned');
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+      release: vi.fn(),
     };
     mockPool.connect = vi.fn().mockResolvedValue(client);
 
@@ -47,13 +47,15 @@ describe('Overmind Vector Isolation Check', () => {
   });
 
   it('SHOULD strictly use <=> (cosine distance) for searching', async () => {
-     const mockPool = {
+    const mockPool = {
       query: vi.fn().mockResolvedValue({ rows: [] }),
       connect: vi.fn().mockReturnThis(),
       release: vi.fn(),
     };
     (provider as any).getPoolFor = vi.fn().mockResolvedValue(mockPool);
     (provider as any).initializeDb = vi.fn().mockResolvedValue(true);
+    // Simuler le support vecteur pour que le test cible la requête SQL
+    (provider as any).dbVectorSupport.set('overmind_core', true);
 
     await provider.searchMemory({ query: 'test', limit: 5 });
 
