@@ -24,7 +24,7 @@ export class ClaudeRunner {
 
   constructor() {
     this.config = CONFIG.CLAUDE;
-    this.timeoutMs = CONFIG.TIMEOUT_MS || 30000;
+    this.timeoutMs = CONFIG.TIMEOUT_MS || 120000;
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
@@ -136,13 +136,37 @@ export class ClaudeRunner {
       };
 
       const isWin = process.platform === 'win32';
-      const command = isWin ? `claude ${argsSpawn.join(' ')}` : 'claude';
-      const spawnArgs = isWin ? [] : argsSpawn;
+      let command = 'claude';
+      let spawnArgs = argsSpawn;
+
+      if (isWin) {
+        // Try to find the absolute path to avoid shell warnings/concatenation issues
+        const claudePath = 'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\claude.ps1';
+        if (fs.existsSync(claudePath)) {
+          command = 'powershell.exe';
+          spawnArgs = [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            claudePath,
+            ...argsSpawn,
+          ];
+        } else {
+          // Fallback to shell string (still triggers warning but works)
+          command = `claude ${argsSpawn.join(' ')}`;
+          spawnArgs = [];
+        }
+      }
+
+      if (agentName) {
+        process.stderr.write(`[ClaudeRunner] 🚀 Démarrage de l'agent ${agentName}...\n`);
+      }
 
       const child: ChildProcess = spawn(command, spawnArgs, {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: process.cwd(),
-        shell: isWin,
+        shell: isWin && command !== 'powershell.exe', // disable shell if we use absolute powershell.exe
         env: {
           ...process.env,
           ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),

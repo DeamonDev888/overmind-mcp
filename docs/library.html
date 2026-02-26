@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
@@ -57,49 +57,69 @@
       </header>
 
       <main>
-        <section class="hero-sub" style="padding: 140px 0 60px;">
+        <section class="hero-sub" style="padding: 140px 0 60px">
           <div class="container">
             <h1 class="hero-title elite-title">
               <span class="glitch" data-text="Documentation">Documentation</span>
               <span class="gradient-text">Technique</span>
             </h1>
             <p class="hero-subtitle">
-              Explorez les modules fondamentaux de l'OverMind pour intégrer l'orchestration IA dans vos propres projets.
+              Explorez les modules fondamentaux de l'OverMind pour intégrer l'orchestration IA dans
+              vos propres projets.
             </p>
           </div>
         </section>
 
-        <section class="features" style="padding-top: 0;">
+        <section class="features" style="padding-top: 0">
           <div class="container">
             <div class="features-grid">
               <div class="feature-card">
                 <i class="fas fa-running card-icon"></i>
                 <h3>Runners IA</h3>
                 <p>Moteurs d'exécution pour Claude, Gemini, Qwen, Kilo, Cline et Trae.</p>
-                <a href="#runners" class="btn btn-secondary elite-btn-secondary" style="margin-top:20px; font-size: 0.8rem; padding: 8px 16px;">Voir les détails</a>
+                <a
+                  href="#runners"
+                  class="btn btn-secondary elite-btn-secondary"
+                  style="margin-top: 20px; font-size: 0.8rem; padding: 8px 16px"
+                  >Voir les détails</a
+                >
               </div>
               <div class="feature-card">
                 <i class="fas fa-users-cog card-icon"></i>
                 <h3>Gestionnaires</h3>
                 <p>Contrôle programmatique des agents, des prompts et des sessions.</p>
-                <a href="#managers" class="btn btn-secondary elite-btn-secondary" style="margin-top:20px; font-size: 0.8rem; padding: 8px 16px;">Voir les détails</a>
+                <a
+                  href="#managers"
+                  class="btn btn-secondary elite-btn-secondary"
+                  style="margin-top: 20px; font-size: 0.8rem; padding: 8px 16px"
+                  >Voir les détails</a
+                >
               </div>
               <div class="feature-card">
                 <i class="fas fa-memory card-icon"></i>
                 <h3>Memory Factory</h3>
                 <p>Système RAG haute performance compatible PostgreSQL + Vector.</p>
-                <a href="#memory" class="btn btn-secondary elite-btn-secondary" style="margin-top:20px; font-size: 0.8rem; padding: 8px 16px;">Voir les détails</a>
+                <a
+                  href="#memory"
+                  class="btn btn-secondary elite-btn-secondary"
+                  style="margin-top: 20px; font-size: 0.8rem; padding: 8px 16px"
+                  >Voir les détails</a
+                >
               </div>
             </div>
 
             <!-- Content Sections -->
-            <div id="runners" class="doc-section" style="margin-top: 80px;">
+            <div id="runners" class="doc-section" style="margin-top: 80px">
               <h2 class="section-title"><i class="fas fa-bolt"></i> Exécution Unifiée</h2>
-              <p style="margin: 15px 0; color: var(--text-secondary);">
-                La méthode <code style="color:var(--neon-cyan)">runAgent</code> est le point d'entrée recommandé. Elle orchestre automatiquement les runners spécifiques (Claude, Gemini, etc.) et gère l'historique dans la mémoire Overmind.
+              <p style="margin: 15px 0; color: var(--text-secondary)">
+                La méthode <code style="color: var(--neon-cyan)">runAgent</code> est le point
+                d'entrée recommandé. Elle orchestre automatiquement les runners spécifiques (Claude,
+                Gemini, etc.) et gère l'historique dans la mémoire Overmind.
               </p>
-              <div class="code-container large" style="margin-top: 20px;">
-                <div class="code-header"><span class="code-title">Utilisation Recommandée</span></div>
+              <div class="code-container large" style="margin-top: 20px">
+                <div class="code-header">
+                  <span class="code-title">Utilisation Recommandée</span>
+                </div>
                 <pre><code class="language-typescript">import { runAgent } from 'overmind-mcp';
 
 const { content, isError } = await runAgent({
@@ -115,10 +135,12 @@ if (!isError) {
               </div>
             </div>
 
-            <div id="managers" class="doc-section" style="margin-top: 80px;">
+            <div id="managers" class="doc-section" style="margin-top: 80px">
               <h2 class="section-title"><i class="fas fa-cogs"></i> AgentManager</h2>
-              <div class="code-container large" style="margin-top: 20px;">
-                <div class="code-header"><span class="code-title">Configuration des Agents</span></div>
+              <div class="code-container large" style="margin-top: 20px">
+                <div class="code-header">
+                  <span class="code-title">Configuration des Agents</span>
+                </div>
                 <pre><code class="language-typescript">import { AgentManager } from 'overmind-mcp';
 
 const manager = new AgentManager();
@@ -131,9 +153,9 @@ const agents = await manager.listAgents(true);</code></pre>
               </div>
             </div>
 
-            <div id="memory" class="doc-section" style="margin-top: 80px;">
+            <div id="memory" class="doc-section" style="margin-top: 80px">
               <h2 class="section-title"><i class="fas fa-microchip"></i> Système de Mémoire</h2>
-              <div class="code-container large" style="margin-top: 20px;">
+              <div class="code-container large" style="margin-top: 20px">
                 <div class="code-header"><span class="code-title">RAG & Persistance</span></div>
                 <pre><code class="language-typescript">import { getMemoryProvider } from 'overmind-mcp';
 
@@ -160,7 +182,9 @@ const results = await memory.searchMemory({
       <div class="container">
         <p class="system-note">
           <i class="fas fa-info-circle"></i>
-          La bibliothèque est conçue pour être modulaire. Vous pouvez utiliser chaque service indépendamment ou le serveur complet via <code style="color:var(--neon-cyan)">createServer()</code>.
+          La bibliothèque est conçue pour être modulaire. Vous pouvez utiliser chaque service
+          indépendamment ou le serveur complet via
+          <code style="color: var(--neon-cyan)">createServer()</code>.
         </p>
       </div>
 
@@ -175,9 +199,15 @@ const results = await memory.searchMemory({
               <p>Le futur de l'orchestration IA</p>
             </div>
             <div class="footer-social">
-              <a href="https://www.npmjs.com/package/overmind-mcp" target="_blank"><i class="fab fa-npm"></i></a>
-              <a href="https://github.com/DeamonDev888/overmind-mcp" target="_blank"><i class="fab fa-github"></i></a>
-              <a href="https://discord.gg/4AR82phtBz" target="_blank"><i class="fab fa-discord"></i></a>
+              <a href="https://www.npmjs.com/package/overmind-mcp" target="_blank"
+                ><i class="fab fa-npm"></i
+              ></a>
+              <a href="https://github.com/DeamonDev888/overmind-mcp" target="_blank"
+                ><i class="fab fa-github"></i
+              ></a>
+              <a href="https://discord.gg/4AR82phtBz" target="_blank"
+                ><i class="fab fa-discord"></i
+              ></a>
             </div>
           </div>
           <div class="footer-bottom">
@@ -188,7 +218,7 @@ const results = await memory.searchMemory({
     </div>
 
     <!-- SVG Filters -->
-    <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
+    <svg style="position: absolute; width: 0; height: 0" aria-hidden="true">
       <defs>
         <filter id="cyber-glitch">
           <feTurbulence type="fractalNoise" baseFrequency="0.00001" numOctaves="1" result="noise" />
