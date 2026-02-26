@@ -9,7 +9,7 @@
   --text-primary: #ffffff;
   --text-secondary: #94a3b8;
   --gradient-cyber: linear-gradient(135deg, var(--neon-cyan), var(--neon-blue), var(--neon-silver));
-  
+
   /* SVG Textures */
   --noise-texture: url('#noiseFilter');
   --circuit-bg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cpath d='M10 10 L90 10 L90 90 L10 90 Z' fill='none' stroke='rgba(0, 255, 245, 0.05)' stroke-width='0.5'/%3E%3Cpath d='M0 50 L10 50 M90 50 L100 50 M50 0 L50 10 M50 90 L50 100' stroke='rgba(0, 255, 245, 0.1)' stroke-width='1'/%3E%3Ccircle cx='10' cy='10' r='1' fill='rgba(0, 255, 245, 0.2)'/%3E%3Ccircle cx='90' cy='10' r='1' fill='rgba(0, 255, 245, 0.2)'/%3E%3Ccircle cx='90' cy='90' r='1' fill='rgba(0, 255, 245, 0.2)'/%3E%3Ccircle cx='10' cy='90' r='1' fill='rgba(0, 255, 245, 0.2)'/%3E%3C/svg%3E");
@@ -293,7 +293,9 @@ nav {
 }
 
 /* Professional SVG Decorations */
-.feature-card::before, .hero-terminal::before, .code-container::before {
+.feature-card::before,
+.hero-terminal::before,
+.code-container::before {
   content: '';
   position: absolute;
   top: 0;
@@ -310,7 +312,9 @@ nav {
   background-image: var(--circuit-bg);
   background-position: center;
   border: 1px solid rgba(0, 255, 245, 0.15);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 0 20px rgba(0, 255, 245, 0.05);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.3),
+    inset 0 0 20px rgba(0, 255, 245, 0.05);
   backdrop-filter: blur(10px) var(--noise-texture);
 }
 
@@ -321,7 +325,8 @@ nav {
 }
 
 /* Scanner Effect (SVG Gradient Animation) */
-.feature-card::after, .hero-terminal::after {
+.feature-card::after,
+.hero-terminal::after {
   content: '';
   position: absolute;
   top: -100%;
@@ -342,7 +347,8 @@ nav {
   opacity: 0;
 }
 
-.feature-card:hover::after, .hero-terminal:hover::after {
+.feature-card:hover::after,
+.hero-terminal:hover::after {
   opacity: 1;
   top: 100%;
   transition: 1.5s cubic-bezier(0.19, 1, 0.22, 1);
@@ -357,10 +363,12 @@ nav {
   right: 0;
   bottom: 0;
   border: 2px solid transparent;
-  background: linear-gradient(var(--dark-bg), var(--dark-bg)) padding-box,
-              var(--gradient-cyber) border-box;
-  mask: linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
+  background:
+    linear-gradient(var(--dark-bg), var(--dark-bg)) padding-box,
+    var(--gradient-cyber) border-box;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
   mask-composite: exclude;
   opacity: 0.5;
   transition: 0.3s;
@@ -372,8 +380,12 @@ nav {
 }
 
 @keyframes borderRotate {
-  0% { filter: hue-rotate(0deg); }
-  100% { filter: hue-rotate(360deg); }
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    filter: hue-rotate(360deg);
+  }
 }
 
 /* Hero Section */
@@ -601,13 +613,23 @@ nav {
 }
 
 @keyframes scanning {
-  0% { top: 0; }
-  100% { top: 100%; }
+  0% {
+    top: 0;
+  }
+  100% {
+    top: 100%;
+  }
 }
 
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-30px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .terminal-header {
@@ -625,9 +647,15 @@ nav {
   border-radius: 50%;
 }
 
-.terminal-header .dot:nth-child(1) { background: #3b82f6; }
-.terminal-header .dot:nth-child(2) { background: #60a5fa; }
-.terminal-header .dot:nth-child(3) { background: #00fff5; }
+.terminal-header .dot:nth-child(1) {
+  background: #3b82f6;
+}
+.terminal-header .dot:nth-child(2) {
+  background: #60a5fa;
+}
+.terminal-header .dot:nth-child(3) {
+  background: #00fff5;
+}
 
 .terminal-title {
   font-family: 'Fira Code', monospace;
@@ -720,7 +748,9 @@ nav {
 
 .btn-primary:hover {
   transform: translateY(-5px) scale(1.02);
-  box-shadow: 0 0 40px var(--neon-cyan), 0 0 80px rgba(0, 255, 245, 0.2);
+  box-shadow:
+    0 0 40px var(--neon-cyan),
+    0 0 80px rgba(0, 255, 245, 0.2);
   letter-spacing: 4px;
 }
 
@@ -828,7 +858,8 @@ nav {
   align-items: center;
   justify-content: center;
   z-index: 10;
-  box-shadow: 0 0 30px rgba(0, 255, 245, 0.2),
+  box-shadow:
+    0 0 30px rgba(0, 255, 245, 0.2),
     inset 0 0 20px var(--neon-cyan);
   transform-origin: center center;
   animation: corePulse 4s ease-in-out infinite;
@@ -926,7 +957,10 @@ nav {
   border-radius: 50%;
   box-shadow: 0 0 10px var(--neon-cyan);
   z-index: 5;
-  transition: opacity 0.4s ease, transform 0.4s ease, background 0.4s ease;
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease,
+    background 0.4s ease;
   transform: translate(-50%, -50%);
   pointer-events: none;
   opacity: 0.4;
@@ -950,16 +984,28 @@ nav {
 }
 
 @keyframes linkPulse {
-  0% { stroke-width: 1; opacity: 0.3; }
-  50% { stroke-width: 3; opacity: 1; filter: drop-shadow(0 0 10px var(--neon-cyan)); }
-  100% { stroke-width: 2; opacity: 0.8; }
+  0% {
+    stroke-width: 1;
+    opacity: 0.3;
+  }
+  50% {
+    stroke-width: 3;
+    opacity: 1;
+    filter: drop-shadow(0 0 10px var(--neon-cyan));
+  }
+  100% {
+    stroke-width: 2;
+    opacity: 0.8;
+  }
 }
 
 .link-line {
   stroke: var(--neon-cyan);
   stroke-width: 0.5;
   opacity: 0.1;
-  transition: stroke-width 0.3s ease, opacity 0.5s ease;
+  transition:
+    stroke-width 0.3s ease,
+    opacity 0.5s ease;
 }
 
 .link-line.active {
@@ -978,9 +1024,18 @@ nav {
 }
 
 @keyframes linkPulse {
-  0% { stroke-width: 1; opacity: 0.5; }
-  50% { stroke-width: 4; opacity: 1; }
-  100% { stroke-width: 2; opacity: 1; }
+  0% {
+    stroke-width: 1;
+    opacity: 0.5;
+  }
+  50% {
+    stroke-width: 4;
+    opacity: 1;
+  }
+  100% {
+    stroke-width: 2;
+    opacity: 1;
+  }
 }
 
 /* Hologram Data */
@@ -1584,8 +1639,18 @@ footer {
 }
 
 @keyframes rebelFlicker {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; text-shadow: 0 0 25px var(--neon-blue); }
-  52% { opacity: 0.5; }
-  54% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+    text-shadow: 0 0 25px var(--neon-blue);
+  }
+  52% {
+    opacity: 0.5;
+  }
+  54% {
+    opacity: 1;
+  }
 }

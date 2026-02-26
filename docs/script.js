@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Copy functionality
   const copyBtns = document.querySelectorAll('.copy-btn, .terminal-copy');
 
-  window.copyToClipboard = function(text) {
+  window.copyToClipboard = function (text) {
     navigator.clipboard.writeText(text).then(() => {
       console.log('Copied to clipboard:', text);
     });
@@ -139,14 +139,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
-  const statsObserver = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        animateStats();
-        statsObserver.unobserve(entry.target);
-      }
-    });
-  }, { threshold: 0.5 });
+  const statsObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          animateStats();
+          statsObserver.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.5 },
+  );
 
   const heroStats = document.querySelector('.hero-stats');
   if (heroStats) statsObserver.observe(heroStats);
@@ -186,21 +189,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (cortex && fleetContainer && linksContainer) {
     const agents = [];
-    const numAgents = 24; 
+    const numAgents = 24;
     const missions = [
       'STATUS: OPTIMIZING_NEURAL_FLOW',
       'STATUS: VECTOR_SYMMETRY_ACTIVE',
       'STATUS: MCP_HANDSHAKE_VALID',
       'STATUS: DISTRIBUTED_COGNITION',
       'STATUS: PROTOCOL_ALIGNMENT',
-      'STATUS: SYSTEM_INTEGRITY_MAX'
+      'STATUS: SYSTEM_INTEGRITY_MAX',
     ];
 
     for (let i = 0; i < numAgents; i++) {
       const node = document.createElement('div');
       node.className = 'agent-node';
       fleetContainer.appendChild(node);
-      
+
       const angle = (i / numAgents) * Math.PI * 2;
       const layer = i % 3; // 3 distinct orbital layers
       const baseRadius = 120 + layer * 50;
@@ -212,12 +215,13 @@ document.addEventListener('DOMContentLoaded', () => {
         radius: 0,
         speed: (0.002 + Math.random() * 0.004) * (layer === 1 ? -1 : 1),
         active: false,
-        lastActivation: 0
+        lastActivation: 0,
       });
     }
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;';
+    svg.style.cssText =
+      'position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;';
     linksContainer.appendChild(svg);
 
     const lines = agents.map(() => {
@@ -231,15 +235,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const p = document.createElement('div');
       p.className = 'data-particle';
       cortex.appendChild(p);
-      
+
       let progress = 0;
       const speed = 0.015 + Math.random() * 0.02;
-      
+
       function step() {
         progress += speed;
         p.style.left = `${startX + (endX - startX) * progress}px`;
         p.style.top = `${startY + (endY - startY) * progress}px`;
-        
+
         if (progress < 1) requestAnimationFrame(step);
         else p.remove();
       }
@@ -267,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         agent.el.style.left = `${ax}px`;
         agent.el.style.top = `${ay}px`;
-        
+
         const agentScale = agent.active ? scale * 1.4 : scale;
         agent.el.style.transform = `translate(-50%, -50%) scale(${agentScale})`;
         agent.el.style.opacity = agent.active ? '1' : '0.4';
@@ -277,7 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
         line.setAttribute('y1', cy);
         line.setAttribute('x2', ax);
         line.setAttribute('y2', ay);
-        
+
         if (agent.active) {
           line.setAttribute('class', 'link-line active');
         } else {
@@ -290,27 +294,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Autonomous systemic logic
     setInterval(() => {
-      const available = agents.filter(a => !a.active);
+      const available = agents.filter((a) => !a.active);
       if (available.length > 0 && Math.random() > 0.4) {
         const a = available[Math.floor(Math.random() * available.length)];
         a.active = true;
         a.el.classList.add('active');
-        
-        // Logical data transmission
-        setTimeout(() => sendDataBurst(cw/2, ch/2, cw/2 + Math.cos(a.angle)*a.radius, ch/2 + Math.sin(a.angle)*a.radius), 100);
 
-        setTimeout(() => {
-          a.active = false;
-          a.el.classList.remove('active');
-        }, 1500 + Math.random() * 2000);
+        // Logical data transmission
+        setTimeout(
+          () =>
+            sendDataBurst(
+              cw / 2,
+              ch / 2,
+              cw / 2 + Math.cos(a.angle) * a.radius,
+              ch / 2 + Math.sin(a.angle) * a.radius,
+            ),
+          100,
+        );
+
+        setTimeout(
+          () => {
+            a.active = false;
+            a.el.classList.remove('active');
+          },
+          1500 + Math.random() * 2000,
+        );
       }
 
       // Update terminal status log logic
       if (Math.random() > 0.8 && hologramData) {
         const lines = hologramData.querySelectorAll('.data-line');
-        lines[1].textContent = `ACTIVE_NODES: ${agents.filter(a => a.active).length}/${numAgents}`;
+        lines[1].textContent = `ACTIVE_NODES: ${agents.filter((a) => a.active).length}/${numAgents}`;
         if (Math.random() > 0.5) {
-            lines[0].textContent = missions[Math.floor(Math.random() * missions.length)];
+          lines[0].textContent = missions[Math.floor(Math.random() * missions.length)];
         }
       }
     }, 1000);
@@ -324,8 +340,16 @@ document.addEventListener('DOMContentLoaded', () => {
           setTimeout(() => {
             a.active = true;
             a.el.classList.add('active');
-            sendDataBurst(cortex.offsetWidth/2, cortex.offsetHeight/2, cortex.offsetWidth/2 + Math.cos(a.angle)*a.radius, cortex.offsetHeight/2 + Math.sin(a.angle)*a.radius);
-            setTimeout(() => { a.active = false; a.el.classList.remove('active'); }, 2000);
+            sendDataBurst(
+              cortex.offsetWidth / 2,
+              cortex.offsetHeight / 2,
+              cortex.offsetWidth / 2 + Math.cos(a.angle) * a.radius,
+              cortex.offsetHeight / 2 + Math.sin(a.angle) * a.radius,
+            );
+            setTimeout(() => {
+              a.active = false;
+              a.el.classList.remove('active');
+            }, 2000);
           }, idx * 30);
         });
       });
