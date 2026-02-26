@@ -28,6 +28,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
   private initializedDbs = new Set<string>();
   private maintenancePool: Pool;
   private coreDbName = 'overmind_core';
+  private dbVectorSupport = new Map<string, boolean>();
 
   constructor() {
     // We use the default pool for maintenance operations (creating other DBs)
@@ -149,6 +150,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
       } catch {
         console.warn(`[PostgresMemory] ⚠️ pgvector extension not available in ${dbName}.`);
       }
+      this.dbVectorSupport.set(dbName, hasVector);
 
       await client.query('BEGIN');
 
@@ -188,7 +190,11 @@ export class PostgresMemoryProvider implements MemoryProvider {
         'CREATE INDEX IF NOT EXISTS idx_agent_runs_session ON agent_runs(session_id)',
       );
 
-      // HNSW Index for ultra-fast vector search (4096D) - NO TEXT FALLBACK ALLOWED
+      await client.query('COMMIT');
+
+      // 4. HNSW Index for ultra-fast vector search (4096D) - OUTSIDE transaction
+      // This part is allowed to fail (e.g. dimension limits in old pgvector)
+      // without rolling back the table creation.
       if (hasVector) {
         try {
           await client.query(`
@@ -197,11 +203,12 @@ export class PostgresMemoryProvider implements MemoryProvider {
             WITH (m = 16, ef_construction = 64)
           `);
         } catch (e) {
-          console.warn(`[PostgresMemory] ⚠️ Could not create HNSW index: ${e instanceof Error ? e.message : String(e)}`);
+          console.warn(
+            `[PostgresMemory] ⚠️ Could not create HNSW index: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
       }
 
-      await client.query('COMMIT');
       this.initializedDbs.add(dbName);
       console.error(
         `[PostgresMemory] ✅ Physical vault ${dbName} initialized (Vector: ${hasVector ? 'ON' : 'OFF'}).`,
@@ -291,49 +298,122 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
       // 1. Vector Search
       if (queryEmb.length > 0) {
-        const embStr = `[${queryEmb.join(',')}]`;
-        try {
-          // Improved Query: Semantic search + Time Decay (Freshness boost)
-          // We fetch more candidates via HNSW index first, then re-rank with time decay
-          const vecRes = await pool.query(
-            `SELECT * FROM (
-              SELECT id, text, source, created_at, 
-                     (1 - (embedding <=> $1)) as semantic_score 
-              FROM knowledge_chunks 
-              WHERE embedding IS NOT NULL
-              ORDER BY embedding <=> $1 
-              LIMIT $2
-            ) AS candidates
-            ORDER BY (
-              (semantic_score * 0.85) + 
-              (1.0 / (1.0 + ln(1.0 + (extract(epoch from now()) * 1000 - created_at) / 86400000.0))) * 0.15
-            ) DESC`,
-            [embStr, Math.max(limit * 3, 50)], // Fetch more candidates for re-ranking
-          );
+        const hasVector = this.dbVectorSupport.get(dbName) || false;
+        if (hasVector) {
+          const embStr = `[${queryEmb.join(',')}]`;
+          try {
+            // Improved Query: Semantic search + Time Decay (Freshness boost)
+            // We fetch more candidates via HNSW index first, then re-rank with time decay
+            const vecRes = await pool.query(
+              `SELECT * FROM (
+                SELECT id, text, source, created_at, 
+                       (1 - (embedding <=> $1)) as semantic_score 
+                FROM knowledge_chunks 
+                WHERE embedding IS NOT NULL
+                ORDER BY embedding <=> $1 
+                LIMIT $2
+              ) AS candidates
+              ORDER BY (
+                (semantic_score * 0.85) + 
+                (1.0 / (1.0 + ln(1.0 + (extract(epoch from now()) * 1000 - created_at) / 86400000.0))) * 0.15
+              ) DESC`,
+              [embStr, Math.max(limit * 3, 50)], // Fetch more candidates for re-ranking
+            );
 
-          for (const row of vecRes.rows) {
-            if (!seen.has(row.id)) {
-              seen.add(row.id);
-              const [type, origin] = row.source.split('|');
-              merged.push({
-                id: row.id,
-                text: row.text,
-                source: row.source,
-                score: parseFloat(row.score),
-                created_at: parseInt(row.created_at, 10),
-                match_type: type === 'pattern' || type === 'decision' ? 'structural' : 'vector',
-              });
+            for (const row of vecRes.rows) {
+              if (!seen.has(row.id)) {
+                seen.add(row.id);
+                const [type] = row.source.split('|');
+                merged.push({
+                  id: row.id,
+                  text: row.text,
+                  source: row.source,
+                  score: parseFloat(row.semantic_score),
+                  created_at: parseInt(row.created_at, 10),
+                  match_type: type === 'pattern' || type === 'decision' ? 'structural' : 'vector',
+                });
+              }
             }
+          } catch (e) {
+            console.error(`[PostgresMemory] Native vector search error in ${dbName}:`, e);
+            // Fallback to JS library logic if query fails despite extension presence
+            await this.searchFallbackNative(pool, queryEmb, limit, seen, merged);
           }
-        } catch {
-          throw new Error(
-            "❌ CORTEX STRICT RULE: L'extension pgvector est REQUISE pour la recherche. Pas de fallback autorisé.",
-          );
+        } else {
+          // DATABASE WITHOUT PGVECTOR: Use native JS library implementation
+          await this.searchFallbackNative(pool, queryEmb, limit, seen, merged);
         }
       }
     }
 
     return merged.sort((a, b) => b.score - a.score).slice(0, limit);
+  }
+
+  /**
+   * Native JS Library Fallback for cosine similarity search.
+   * "Download" and run the logic in process if the DB system is absent.
+   */
+  private async searchFallbackNative(
+    pool: Pool,
+    queryEmb: number[],
+    limit: number,
+    seen: Set<string>,
+    merged: SearchResult[],
+  ): Promise<void> {
+    try {
+      // Fetch recent candidates that have string-encoded embeddings in TEXT column
+      const res = await pool.query(
+        'SELECT id, text, source, created_at, embedding FROM knowledge_chunks WHERE embedding IS NOT NULL ORDER BY created_at DESC LIMIT 250',
+      );
+
+      for (const row of res.rows) {
+        if (seen.has(row.id)) continue;
+
+        let entryEmb: number[] = [];
+        try {
+          if (Array.isArray(row.embedding)) {
+            entryEmb = row.embedding;
+          } else if (typeof row.embedding === 'string' && row.embedding.startsWith('[')) {
+            entryEmb = JSON.parse(row.embedding);
+          }
+        } catch {
+          continue;
+        }
+
+        if (entryEmb.length === 0) continue;
+
+        // Manual Cosine Similarity re-ranking (Native JS)
+        const sim = this.cosineSimilarity(queryEmb, entryEmb);
+        if (sim < 0.1) continue; // Noise floor
+
+        seen.add(row.id);
+        const [type] = row.source.split('|');
+        merged.push({
+          id: row.id,
+          text: row.text,
+          source: row.source,
+          score: sim,
+          created_at: parseInt(row.created_at, 10),
+          match_type: type === 'pattern' || type === 'decision' ? 'structural' : 'vector-native',
+        });
+      }
+    } catch (e) {
+      console.error(`[PostgresMemory] Native JS Search failed:`, e);
+    }
+  }
+
+  private cosineSimilarity(vecA: number[], vecB: number[]): number {
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    const len = Math.min(vecA.length, vecB.length);
+    for (let i = 0; i < len; i++) {
+      dotProduct += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
+    }
+    const mag = Math.sqrt(normA) * Math.sqrt(normB);
+    return mag === 0 ? 0 : dotProduct / mag;
   }
 
   async getRecentRuns(params: {

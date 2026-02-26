@@ -21,9 +21,7 @@ export const updateAgentConfigSchema = z.object({
   model: z
     .string()
     .optional()
-    .describe(
-      'Nouveau modèle à utiliser. Supporte tous les modèles compatibles avec Claude Code (Anthropic, OpenAI, DeepSeek, Glm, Minimax, etc.). Ex: claude-sonnet-4-5, gpt-4, deepseek-chat',
-    ),
+    .describe('Modèle à utiliser (ex: z.ai/glm-4.6, deepseek-chat, etc.)'),
   mcpServers: z
     .array(z.string())
     .optional()
