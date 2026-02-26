@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { getWorkspaceDir, resolveConfigPath } from '../src/lib/config.js';
+import { getWorkspaceDir, resolveConfigPath, resetWorkspaceCache } from '../src/lib/config.js';
 
 describe('Workspace Directory Resolution - 4 Level Fallback (Auto-Portable)', () => {
   const originalEnv = process.env;
@@ -58,6 +58,7 @@ describe('Workspace Directory Resolution - 4 Level Fallback (Auto-Portable)', ()
     process.env = { ...originalEnv };
     delete process.env.OVERMIND_WORKSPACE;
     testDirs.length = 0;
+    resetWorkspaceCache();
   });
 
   afterEach(() => {
