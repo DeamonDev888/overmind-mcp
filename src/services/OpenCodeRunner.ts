@@ -70,6 +70,7 @@ export class OpenCodeRunner {
       const child: ChildProcess = spawn(command, argsSpawn, {
         cwd: process.cwd(),
         shell: isWin,
+        windowsHide: true,
         env: {
           ...process.env,
           ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
