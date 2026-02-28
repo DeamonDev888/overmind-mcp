@@ -52,8 +52,10 @@ describe('PostgresMemoryProvider Native Engine', () => {
   });
 
   it('SHOULD maintain 4096 dimensions strictly even in native mode', async () => {
-    const { embedding } = await (await import('overmind-postgres-mcp/services/embeddings')).embedText('test');
+    const { embedding } = await (
+      await import('overmind-postgres-mcp/services/embeddings')
+    ).embedText('test');
     expect(embedding.length).toBe(4096);
-    console.log("✅ Validation réussie : Le moteur natif opère strictement en 4096D.");
+    console.log('✅ Validation réussie : Le moteur natif opère strictement en 4096D.');
   });
 });
