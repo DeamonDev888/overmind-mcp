@@ -171,7 +171,8 @@ export class PostgresMemoryProvider implements MemoryProvider {
       `);
 
       // 2. Knowledge Chunks Table (VECTOR ONLY ENFORCED)
-      const embeddingType = hasVector ? 'vector(4096)' : 'TEXT';
+      const dimensions = parseInt(process.env.OVERMIND_EMBEDDING_DIMENSIONS || '4096', 10);
+      const embeddingType = hasVector ? `vector(${dimensions})` : 'TEXT';
       await client.query(`
         CREATE TABLE IF NOT EXISTS knowledge_chunks (
           id TEXT PRIMARY KEY,
@@ -192,20 +193,32 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
       await client.query('COMMIT');
 
-      // 4. HNSW Index for ultra-fast vector search (4096D) - OUTSIDE transaction
-      // This part is allowed to fail (e.g. dimension limits in old pgvector)
-      // without rolling back the table creation.
+      // 4. Vector Optimizations & Indexing
       if (hasVector) {
-        try {
-          await client.query(`
-            CREATE INDEX IF NOT EXISTS idx_knowledge_embedding_hnsw 
-            ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)
-            WITH (m = 16, ef_construction = 64)
-          `);
-        } catch (e) {
-          console.warn(
-            `[PostgresMemory] ⚠️ Could not create HNSW index: ${e instanceof Error ? e.message : String(e)}`,
-          );
+        if (dimensions <= 2000) {
+          // Standard pgvector limit for HNSW is 2000 dimensions
+          try {
+            await client.query(`
+              CREATE INDEX IF NOT EXISTS idx_knowledge_embedding_hnsw 
+              ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)
+              WITH (m = 16, ef_construction = 64)
+            `);
+          } catch (e) {
+            console.warn(
+              `[PostgresMemory] ⚠️ Could not create HNSW index: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+        } else {
+          // > 2000D Optimization: Fast Exact K-NN Search
+          try {
+            console.error(
+              `[PostgresMemory] ⚡ Opting for Optimized Exact K-NN Search (High Dimensionality: ${dimensions}D).`
+            );
+            // Boost parallelization for SeqScans on heavy high-dimensional vectors
+            await client.query('ALTER TABLE knowledge_chunks SET (parallel_workers = 4)');
+          } catch (e) {
+            // Fails silently if table optimization isn't supported / granted
+          }
         }
       }
 
