@@ -39,6 +39,13 @@ loadEnvQuietly(path.resolve(__dirname, '../../../serveur_PostGreSQL/.env'));
 // Suppress experimental warnings (like node:sqlite) to avoid breaking MCP handshake
 process.removeAllListeners('warning');
 
+// 🛡️ SHIELD: Prevent any library from logging to stdout during initialization
+// This is critical for MCP servers because any non-JSON output on stdout kills the handshake (EOF).
+const originalLog = console.log;
+const originalInfo = console.info;
+console.log = (...args) => console.error(...args);
+console.info = (...args) => console.error(...args);
+
 // Setup completed - Dynamically import server components AFTER process.env is configured
 const { createServer } = await import('../server.js');
 const { updateConfig } = await import('../lib/config.js');
