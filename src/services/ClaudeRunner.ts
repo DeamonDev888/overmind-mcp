@@ -167,6 +167,7 @@ export class ClaudeRunner {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: process.cwd(),
         shell: isWin && command !== 'powershell.exe', // disable shell if we use absolute powershell.exe
+        windowsHide: true,
         env: {
           ...process.env,
           ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
