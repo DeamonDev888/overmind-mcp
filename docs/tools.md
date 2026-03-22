@@ -434,7 +434,7 @@ Par runner :
 - **`runner`** (enum, optionnel, défaut: `claude`) : Type de runner
   - Valeurs : `claude`, `gemini`, `kilo`, `qwen`, `openclaw`, `cline`, `opencode`, `trae`
 - **`model`** (string, optionnel) : Modèle IA à utiliser
-  - Exemples : `z.ai/glm-4.6`, `deepseek-chat`, `gpt-4`, `claude-3-5-sonnet-20241022`
+  - Exemples : `z.ai/glm-4.7`, `MiniMax-Text-01`, `deepseek-reasoner`, `moonshot-v1-32k`
   - Défaut : Modèle configuré dans les variables d'environnement
 - **`copyEnvFrom`** (string, optionnel) : Chemin vers un settings.json existant pour copier les variables d'environnement
   - Exemple : `.claude/settingsM.json`
@@ -558,7 +558,7 @@ list_agents({ details: true })
 
 2. **expert_crypto** (Kilocode)
    - Mode: architect
-   - Modèle: z.ai/glm-4.6
+   - Modèle: z.ai/glm-4.7
    - Serveurs MCP: postgresql, news
    - Taille prompt: 1823 caractères
 
@@ -615,7 +615,7 @@ delete_agent({
 
 - **`name`** (string, requis) : Nom de l'agent à modifier
 - **`model`** (string, optionnel) : Change le modèle IA
-  - Exemples : `z.ai/glm-4.6`, `deepseek-chat`, `gpt-4`, `claude-opus-4-6`
+  - Exemples : `z.ai/glm-4.7`, `MiniMax-Text-01`, `deepseek-chat`, `moonshot-v1-128k`
 - **`mcpServers`** (array<string>, optionnel) : Remplace la liste des serveurs MCP activés
   - Exemple : `["postgresql", "news", "memory"]`
   - **Note** : Remplace TOUTE la liste existante
