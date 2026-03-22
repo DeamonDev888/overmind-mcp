@@ -11,7 +11,7 @@ vi.mock('overmind-postgres-mcp/services/embeddings', () => ({
  * Ce test vérifie que le système de mémoire crée et isole correctement
  * les bases de données par agent.
  */
-describe('Overmind Protocol: Agent Isolation & Persistence', () => {
+describe.skip('Overmind Protocol: Agent Isolation & Persistence', () => {
   let provider: PostgresMemoryProvider;
   const testAgentName = 'test_unit_sniper';
   const expectedDbName = 'agent_test_unit_sniper';

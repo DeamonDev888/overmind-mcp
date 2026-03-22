@@ -25,8 +25,8 @@
     "rebuild": "rimraf dist && tsc",
     "clean": "rimraf dist",
     "start": "node --env-file=.env dist/bin/cli.js",
-    "dev": "node --loader ts-node/esm --env-file=.env src/bin/cli.ts",
-    "build:fix": "npm run clean && npm install && npm run build",
+    "dev": "node --watch --env-file=.env dist/bin/cli.js",
+    "build:fix": "pnpm run clean && pnpm install && pnpm run build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -47,6 +47,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/DeamonDev888/overmind-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DeamonDev888/overmind-mcp/issues"
   },
   "homepage": "https://discord.gg/4AR82phtBz",
   "engines": {

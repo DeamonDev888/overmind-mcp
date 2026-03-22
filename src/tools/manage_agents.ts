@@ -21,7 +21,7 @@ export const updateAgentConfigSchema = z.object({
   model: z
     .string()
     .optional()
-    .describe('Modèle à utiliser (ex: z.ai/glm-4.6, deepseek-chat, etc.)'),
+    .describe('Modèle à utiliser (ex: z.ai/glm-4.7, MiniMax-Text-01, deepseek-reasoner, moonshot-v1-32k)'),
   mcpServers: z
     .array(z.string())
     .optional()
