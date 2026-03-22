@@ -8,6 +8,17 @@ import { AgentManager } from '../src/services/AgentManager.js';
 import { PromptManager } from '../src/services/PromptManager.js';
 import { ClaudeRunner } from '../src/services/ClaudeRunner.js';
 
+vi.mock('../src/memory/PostgresMemoryProvider.js', () => ({
+  PostgresMemoryProvider: vi.fn().mockImplementation(() => ({
+    initializeDb: vi.fn(),
+    ensureDbExists: vi.fn(),
+    storeKnowledge: vi.fn().mockResolvedValue('k_mock'),
+    searchMemory: vi.fn().mockResolvedValue([]),
+    logRun: vi.fn(),
+    getRunHistory: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
 describe('MCP Tools Unit Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -41,7 +52,7 @@ describe('MCP Tools Unit Tests', () => {
   });
 
   it('createAgent creates an agent successfully', async () => {
-    const res = await createAgent({ name: 'test_agent', prompt: 'hello', model: 'claude-sonnet' });
+    const res = await createAgent({ name: 'test_agent', prompt: 'hello', model: 'claude-sonnet', runner: 'claude' });
     expect(res.content[0].text).toContain("Agent 'test_agent' créé avec succès");
   });
 
