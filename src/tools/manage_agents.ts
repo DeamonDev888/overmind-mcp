@@ -34,6 +34,26 @@ export const updateAgentConfigSchema = z.object({
     .describe(
       "Variables d'environnement supplémentaires à définir ou écraser (ex: { 'API_KEY': '123' })",
     ),
+  runner: z
+    .enum(['claude', 'gemini', 'kilo', 'qwen', 'openclaw', 'cline', 'opencode', 'trae'])
+    .optional()
+    .describe('Type de runner pour cet agent'),
+  mode: z
+    .enum(['code', 'architect', 'ask', 'debug', 'orchestrator', 'plan', 'act'])
+    .optional()
+    .describe('Mode spécifique pour Kilo ou Cline'),
+  cliPath: z
+    .string()
+    .optional()
+    .describe("Chemin vers l'exécutable CLI (pour runners spécifiques)"),
+  file: z
+    .enum(['prompt.md', 'settings.json', '.mcp.json', 'skill.md'])
+    .optional()
+    .describe('Fichier spécifique à réécrire ENTIÈREMENT'),
+  content: z
+    .string()
+    .optional()
+    .describe('Nouveau contenu complet du fichier (si "file" est spécifié)'),
 });
 
 // --- Tools ---
@@ -48,14 +68,14 @@ export async function listAgents(args: z.infer<typeof listAgentsSchema>): Promis
 
     if (agentsList.length === 0) {
       return {
-        content: [{ type: 'text', text: '📂 Aucun agent trouvé.' }],
+        content: [{ type: 'text' as const, text: '📂 Aucun agent trouvé.' }],
       };
     }
 
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `📋 **Liste des Agents Disponibles (${agentsList.length})** :\n\n${agentsList.join('\n\n')}`,
         },
       ],
@@ -65,7 +85,7 @@ export async function listAgents(args: z.infer<typeof listAgentsSchema>): Promis
       isError: true,
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `❌ Erreur lors du listing des agents : ${e instanceof Error ? e.message : String(e)}`,
         },
       ],
@@ -85,7 +105,7 @@ export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Prom
   if (result.deletedFiles.length === 0 && result.errors.length === 0) {
     return {
       isError: true,
-      content: [{ type: 'text', text: `⚠️ Agent '${name}' introuvable (ni prompt, ni settings).` }],
+      content: [{ type: 'text' as const, text: `⚠️ Agent '${name}' introuvable (ni prompt, ni settings).` }],
     };
   }
 
@@ -98,7 +118,7 @@ export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Prom
   }
 
   return {
-    content: [{ type: 'text', text: response }],
+    content: [{ type: 'text' as const, text: response }],
   };
 }
 
@@ -107,15 +127,24 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
   isError?: boolean;
 }> {
   const manager = new AgentManager();
-  const { name, model, mcpServers, env } = args;
+  const { name, model, mcpServers, env, runner, mode, cliPath, file, content } = args;
 
   try {
-    const changes = await manager.updateAgentConfig(name, { model, mcpServers, env });
+    const changes = await manager.updateAgentConfig(name, {
+      model,
+      mcpServers,
+      env,
+      runner,
+      mode: mode as any,
+      cliPath,
+      file,
+      content,
+    });
 
     if (changes.length === 0) {
       return {
         content: [
-          { type: 'text', text: `⚠️ Aucune modification demandée pour l'agent '${name}'.` },
+          { type: 'text' as const, text: `⚠️ Aucune modification demandée pour l'agent '${name}'.` },
         ],
       };
     }
@@ -123,18 +152,19 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `✅ Configuration de l'agent '${name}' mise à jour :\n${changes.join('\n')}`,
         },
       ],
     };
-  } catch (e) {
+  } catch (error) {
+    const e = error as any;
     if (e && typeof e === 'object' && 'code' in e && e.code === 'ENOENT') {
       return {
         isError: true,
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `❌ **Agent Introuvable**\n\nImpossible de modifier la configuration pour '${name}' car le fichier settings est introuvable.\n\n💡 **Solution:** Vérifiez le nom de l'agent avec \`list_agents\`.`,
           },
         ],
@@ -144,7 +174,7 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
       isError: true,
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `❌ Erreur lors de la mise à jour de '${name}': ${e instanceof Error ? e.message : String(e)}`,
         },
       ],
