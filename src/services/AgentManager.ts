@@ -7,6 +7,11 @@ export interface AgentConfigUpdates {
   model?: string;
   mcpServers?: string[];
   env?: Record<string, string>;
+  runner?: string;
+  mode?: string;
+  cliPath?: string;
+  file?: 'prompt.md' | 'settings.json' | '.mcp.json' | 'skill.md';
+  content?: string;
 }
 
 export class AgentManager {
@@ -55,9 +60,18 @@ export class AgentManager {
         const servers = settings.enabledMcpjsonServers || [];
 
         const availableServers = await this.getAvailableMcpServers();
-        const serverStatus = servers.map((s: string) =>
-          availableServers.includes(s) ? s : `${s} (⚠️ INCONNU)`,
-        );
+        const serverStatus = servers.map((s: string) => {
+          if (availableServers.includes(s)) return s;
+          
+          // Recherche de suggestions (typo)
+          const suggestion = availableServers.find(v => 
+            v.toLowerCase().includes(s.toLowerCase()) || s.toLowerCase().includes(v.toLowerCase())
+          );
+          
+          return suggestion 
+            ? `${s} (⚠️ Nom incorrect ? Suggestion: **${suggestion}**)` 
+            : `${s} (⚠️ Absent de mcp.json)`;
+        });
 
         info += `\n  - Modèle : ${model}`;
         info += `\n  - Serveurs MCP : ${servers.length > 0 ? serverStatus.join(', ') : 'Aucun'}`;
@@ -102,10 +116,49 @@ export class AgentManager {
   }
 
   async updateAgentConfig(name: string, updates: AgentConfigUpdates): Promise<string[]> {
-    const settingsPath = path.join(this.claudeDir, `settings_${name}.json`);
-    const content = await fs.readFile(settingsPath, 'utf-8');
-    const settings = JSON.parse(content);
     const changes: string[] = [];
+    const claudeDir = this.claudeDir;
+
+    // --- MODE RÉÉCRITURE DE FICHIER COMPLET ---
+    if (updates.file && updates.content) {
+      let filePath: string;
+      switch (updates.file) {
+        case 'prompt.md':
+          filePath = path.join(claudeDir, 'agents', `${name}.md`);
+          break;
+        case 'settings.json':
+          filePath = path.join(claudeDir, `settings_${name}.json`);
+          break;
+        case '.mcp.json':
+          filePath = path.join(claudeDir, `.mcp.${name}.json`);
+          break;
+        case 'skill.md':
+          filePath = path.join(claudeDir, 'agents', `${name}_skill.md`);
+          await fs.mkdir(path.dirname(filePath), { recursive: true });
+          break;
+        default:
+          throw new Error(`Fichier non supporté: ${updates.file}`);
+      }
+      await fs.writeFile(filePath, updates.content, 'utf-8');
+      changes.push(`✅ Fichier **${updates.file}** réécrit pour l'agent **${name}**.`);
+      
+      // Si on réécrit settings.json, on ne fait pas les updates unitaires (déjà écrasé)
+      if (updates.file === 'settings.json') return changes;
+    }
+
+    // --- MODE MISE À JOUR UNITAIRE (settings.json) ---
+    const settingsPath = path.join(claudeDir, `settings_${name}.json`);
+    let settings: any;
+    try {
+      const content = await fs.readFile(settingsPath, 'utf-8');
+      settings = JSON.parse(content);
+    } catch (_e) {
+      // Si on veut faire des updates unitaires, le settings doit exister
+      if (updates.model || updates.mcpServers || updates.env || updates.runner || updates.mode || updates.cliPath) {
+        throw new Error(`Impossible de modifier les paramètres unitaires : settings_${name}.json est introuvable.`);
+      }
+      return changes; // Rien à faire
+    }
 
     if (updates.model) {
       settings.env = settings.env || {};
@@ -138,6 +191,24 @@ export class AgentManager {
         settings.env[key] = value;
         changes.push(`- Env Var '${key}' : ${oldVal} -> ${value ? '***' : '(vide)'}`);
       }
+    }
+
+    if (updates.runner) {
+      const old = settings.runner || 'claude';
+      settings.runner = updates.runner;
+      changes.push(`- Runner : ${old} -> ${updates.runner}`);
+    }
+
+    if (updates.mode) {
+      const old = settings.mode || '(none)';
+      settings.mode = updates.mode;
+      changes.push(`- Mode : ${old} -> ${updates.mode}`);
+    }
+
+    if (updates.cliPath) {
+      const old = settings.cliPath || '(none)';
+      settings.cliPath = updates.cliPath;
+      changes.push(`- CLI Path : ${old} -> ${updates.cliPath}`);
     }
 
     if (changes.length > 0) {
@@ -252,5 +323,40 @@ Serveurs MCP activés : ${mcpServers.join(', ')}.`,
     }
 
     return { promptPath, settingsPath };
+  }
+
+  async getDetailedConfigs(name: string): Promise<Record<string, string>> {
+    const agentsDir = path.join(this.claudeDir, 'agents');
+    const promptPath = path.join(agentsDir, `${name}.md`);
+    const settingsPath = path.join(this.claudeDir, `settings_${name}.json`);
+    const mcpPath = path.join(this.claudeDir, `.mcp.${name}.json`);
+    const skillPath = path.join(this.claudeDir, `agents/${name}_skill.md`);
+    const alternativeSkillPath = path.join(this.claudeDir, `skills/${name}.md`);
+
+    const result: Record<string, string> = {};
+
+    const readFileSafe = async (filePath: string) => {
+      try {
+        return await fs.readFile(filePath, 'utf-8');
+      } catch (_e) {
+        return 'MISSING';
+      }
+    };
+
+    result['prompt.md'] = await readFileSafe(promptPath);
+    result['settings.json'] = await readFileSafe(settingsPath);
+    result['.mcp.json'] = await readFileSafe(mcpPath);
+
+    const skillContent = await readFileSafe(skillPath);
+    if (skillContent !== 'MISSING') {
+      result['skill.md'] = skillContent;
+    } else {
+      const altSkillContent = await readFileSafe(alternativeSkillPath);
+      if (altSkillContent !== 'MISSING') {
+        result['skill.md'] = altSkillContent;
+      }
+    }
+
+    return result;
   }
 }
