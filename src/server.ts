@@ -18,6 +18,7 @@ import {
   updateAgentConfig,
   updateAgentConfigSchema,
 } from './tools/manage_agents.js';
+import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -86,7 +87,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
   server.addTool({
     name: 'update_agent_config',
     description:
-      "Modifie la configuration technique d'un agent (Runner, Modèle, Serveurs MCP, Variables d'environnement)",
+      "Modifie la configuration technique d'un agent (Runner, Modèle, Serveurs MCP, Variables d'environnement) OU réécrit entièrement l'un des 4 fichiers (prompt, settings, mcp, skill)",
     parameters: updateAgentConfigSchema,
     execute: updateAgentConfig,
   });
@@ -133,6 +134,15 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     parameters: memoryRunsSchema,
     execute: memoryRunsTool,
   });
+
+  server.addTool({
+    name: 'get_agent_configs',
+    description:
+      "Affiche les 4 fichiers de configuration d'un agent (prompt.md, .mcp.json, settings.json, skill.md)",
+    parameters: getAgentConfigsSchema,
+    execute: getAgentConfigs,
+  });
+
 
   return server;
 }
