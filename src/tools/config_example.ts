@@ -47,6 +47,10 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
     "memory": {
       "command": "node",
       "args": ["chemin/Workflow/dist/bin/cli.js", "--memory-only"]
+    },
+    "x-mcp-server": {
+      "command": "node",
+      "args": ["chemin/X/dist/src/server.js"]
     }
   }
 }
@@ -92,6 +96,14 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
     "news-server": {
       "command": "node",
       "args": ["chemin/NEWS/dist/src/server.js"]
+    },
+    "memory": {
+      "command": "node",
+      "args": ["chemin/Workflow/dist/bin/cli.js", "--memory-only"]
+    },
+    "x-mcp-server": {
+      "command": "node",
+      "args": ["chemin/X/dist/src/server.js"]
     }
   }
 }
@@ -137,6 +149,14 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
     "news-server": {
       "command": "node",
       "args": ["chemin/NEWS/dist/src/server.js"]
+    },
+    "memory": {
+      "command": "node",
+      "args": ["chemin/Workflow/dist/bin/cli.js", "--memory-only"]
+    },
+    "x-mcp-server": {
+      "command": "node",
+      "args": ["chemin/X/dist/src/server.js"]
     }
   }
 }
