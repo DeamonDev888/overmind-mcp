@@ -20,7 +20,7 @@ describe('Memory Isolation (Private Context)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (MemoryFactory.getMemoryProvider as any).mockReturnValue(mockProvider);
+    (MemoryFactory.getMemoryProvider as ReturnType<typeof vi.fn>).mockReturnValue(mockProvider);
     // Reset env
     delete process.env.OVERMIND_AGENT_NAME;
   });

@@ -37,9 +37,9 @@ describe('Overmind Vector Isolation Check', () => {
     mockPool.connect = vi.fn().mockResolvedValue(client);
 
     try {
-      await (provider as any).initializeDb('test_db', mockPool);
+      await (provider as { initializeDb: (dbName: string, pool: unknown) => Promise<void> }).initializeDb('test_db', mockPool);
       console.log('✅ Unit Test: No trigram violation detected.');
-    } catch (err: any) {
+    } catch (err: Error) {
       if (err.message.includes('VECTOR_ONLY_VIOLATION')) {
         throw new Error('FATAL: Trigram index detected in a vector-only system!');
       }
@@ -52,10 +52,10 @@ describe('Overmind Vector Isolation Check', () => {
       connect: vi.fn().mockReturnThis(),
       release: vi.fn(),
     };
-    (provider as any).getPoolFor = vi.fn().mockResolvedValue(mockPool);
-    (provider as any).initializeDb = vi.fn().mockResolvedValue(true);
+    (provider as { getPoolFor: ReturnType<typeof vi.fn>; initializeDb: ReturnType<typeof vi.fn>; dbVectorSupport: Map<string, boolean> }).getPoolFor = vi.fn().mockResolvedValue(mockPool);
+    (provider as { getPoolFor: ReturnType<typeof vi.fn>; initializeDb: ReturnType<typeof vi.fn>; dbVectorSupport: Map<string, boolean> }).initializeDb = vi.fn().mockResolvedValue(true);
     // Simuler le support vecteur pour que le test cible la requête SQL
-    (provider as any).dbVectorSupport.set('overmind_core', true);
+    (provider as { getPoolFor: ReturnType<typeof vi.fn>; initializeDb: ReturnType<typeof vi.fn>; dbVectorSupport: Map<string, boolean> }).dbVectorSupport.set('overmind_core', true);
 
     await provider.searchMemory({ query: 'test', limit: 5 });
 
