@@ -41,8 +41,6 @@ process.removeAllListeners('warning');
 
 // 🛡️ SHIELD: Prevent any library from logging to stdout during initialization
 // This is critical for MCP servers because any non-JSON output on stdout kills the handshake (EOF).
-const originalLog = console.log;
-const originalInfo = console.info;
 console.log = (...args) => console.error(...args);
 console.info = (...args) => console.error(...args);
 

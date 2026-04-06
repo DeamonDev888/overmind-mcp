@@ -1,6 +1,4 @@
 import { z } from 'zod';
-import fs from 'fs/promises';
-import path from 'path';
 import { AgentManager } from '../services/AgentManager.js';
 
 export const getAgentConfigsSchema = z.object({
@@ -17,12 +15,15 @@ export async function getAgentConfigs(args: z.infer<typeof getAgentConfigsSchema
   try {
     const configs = await manager.getDetailedConfigs(name);
     
-    let response = `📄 **Configurations de l'agent '${name}'** :\n\n`;
+    let response = `🧠 **CONFIGURATION HUB — AGENT : ${name.toUpperCase()}**\n\n`;
     
     for (const [file, content] of Object.entries(configs)) {
-      response += `### 📂 ${file}\n`;
+      response += `#### 📂 ${file}\n`;
       if (content === 'MISSING') {
-        response += `*⚠️ Fichier non trouvé.*\n\n`;
+        const solution = file === '.mcp.json' ? `Utilisez 'update_agent_config' pour synchroniser les serveurs MCP.` : `Utilisez 'create_agent' pour initialiser cet agent.`;
+        response += `> [!CAUTION]\n`;
+        response += `> **Fichier non trouvé.**\n`;
+        response += `> 💡 Suggestion: ${solution}\n\n`;
       } else {
         const ext = file.endsWith('.md') ? 'markdown' : 'json';
         response += `\`\`\`${ext}\n${content}\n\`\`\`\n\n`;
