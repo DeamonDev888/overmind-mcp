@@ -141,7 +141,7 @@ export class ClaudeRunner {
 
       if (isWin) {
         // Try to find the absolute path to avoid shell warnings/concatenation issues
-        const claudePath = 'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\claude.ps1';
+        const claudePath = 'C:\\Users\\YOUR_USERNAME\\AppData\\Roaming\\npm\\claude.ps1';
         if (fs.existsSync(claudePath)) {
           command = 'powershell.exe';
           spawnArgs = [
