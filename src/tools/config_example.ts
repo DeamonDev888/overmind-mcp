@@ -14,6 +14,7 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
     case 'glm':
       text = `🚀 **EXEMPLE DE CONFIGURATION POUR GLM / Z.AI (ANTHROPIC PROXY)**
 
+### 📂 settings_[nom_agent].json
 \`\`\`json
 {
   "env": {
@@ -35,11 +36,28 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
 }
 \`\`\`
 
-💡 *Note: Cette configuration permet d'utiliser les modèles GLM via l'interface de Claude Code.*`;
+### 📂 .mcp.[nom_agent].json
+\`\`\`json
+{
+  "mcpServers": {
+    "postgresql-server": {
+      "command": "node",
+      "args": ["C:/Chemin/Vers/serveur_PostGreSQL/dist/index.js"]
+    },
+    "memory": {
+      "command": "node",
+      "args": ["C:/Chemin/Vers/Workflow/dist/bin/cli.js", "--memory-only"]
+    }
+  }
+}
+\`\`\`
+
+💡 *Note: Le fichier .mcp.[nom].json doit être placé directement dans le dossier .claude/.*`;
       break;
     case 'minimax':
       text = `🚀 **EXEMPLE DE CONFIGURATION POUR MINIMAX (VIA PROXY ANTHROPIC)**
 
+### 📂 settings_[nom_agent].json
 \`\`\`json
 {
   "env": {
@@ -63,11 +81,28 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
 }
 \`\`\`
 
-💡 *Note: Cette configuration utilise MiniMax-M2 comme modèle par défaut pour toutes les catégories (Sonnet, Opus, Haiku).*`;
+### 📂 .mcp.[nom_agent].json
+\`\`\`json
+{
+  "mcpServers": {
+    "postgresql-server": {
+      "command": "node",
+      "args": ["C:/Chemin/Vers/serveur_PostGreSQL/dist/index.js"]
+    },
+    "news-server": {
+      "command": "node",
+      "args": ["C:/Chemin/Vers/NEWS/dist/src/server.js"]
+    }
+  }
+}
+\`\`\`
+
+💡 *Note: Ce fichier permet d'isoler les serveurs MCP accessibles précisément par cet agent.*`;
       break;
     case 'openrouter':
       text = `🚀 **EXEMPLE DE CONFIGURATION POUR OPENROUTER (VIA PROXY ANTHROPIC)**
 
+### 📂 settings_[nom_agent].json
 \`\`\`json
 {
   "env": {
@@ -91,7 +126,23 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
 }
 \`\`\`
 
-💡 *Note: OpenRouter nécessite le préfixe du fournisseur (ex: anthropic/...) et supporte CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC.*`;
+### 📂 .mcp.[nom_agent].json
+\`\`\`json
+{
+  "mcpServers": {
+    "postgresql-server": {
+      "command": "node",
+      "args": ["C:/Chemin/Vers/serveur_PostGreSQL/dist/index.js"]
+    },
+    "news-server": {
+      "command": "node",
+      "args": ["C:/Chemin/Vers/NEWS/dist/src/server.js"]
+    }
+  }
+}
+\`\`\`
+
+*Note: OpenRouter nécessite le préfixe du fournisseur (ex: anthropic/...).*`;
       break;
   }
 
