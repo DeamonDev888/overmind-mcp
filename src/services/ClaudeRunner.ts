@@ -148,6 +148,8 @@ export class ClaudeRunner {
             '-NoProfile',
             '-ExecutionPolicy',
             'Bypass',
+            '-WindowStyle',
+            'Hidden',
             '-File',
             claudePath,
             ...argsSpawn,
@@ -206,8 +208,26 @@ export class ClaudeRunner {
         clearTimeout(timeout);
         cleanupTmpFiles();
 
+        const detectError = (text: string) => {
+          const lower = text.toLowerCase();
+          if (lower.includes('api key') || lower.includes('auth') || lower.includes('401')) {
+            return '🔑 Erreur Auth/API Key (Clé invalide ou manquante)';
+          }
+          if (lower.includes('quota') || lower.includes('exceeded') || lower.includes('429')) {
+            return '📊 Quota dépassé (API Key épuisée)';
+          }
+          if (lower.includes('rate limit')) {
+            return '⏳ Rate limit atteint';
+          }
+          if (lower.includes('model') && lower.includes('404')) {
+            return '🤖 Modèle introuvable';
+          }
+          return null;
+        };
+
         if (code !== 0 && !stdout) {
-          return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr });
+          const specificError = detectError(stderr);
+          return resolve({ result: '', error: specificError || `EXIT_CODE_${code}`, rawOutput: stderr });
         }
 
         try {
@@ -230,9 +250,10 @@ export class ClaudeRunner {
             rawOutput: stdout,
           });
         } catch (_error) {
+          const specificError = detectError(stdout) || detectError(stderr);
           resolve({
             result: '',
-            error: 'JSON_PARSE_ERROR',
+            error: specificError || 'JSON_PARSE_ERROR',
             rawOutput: stdout,
           });
         }

@@ -19,6 +19,7 @@ import {
   updateAgentConfigSchema,
 } from './tools/manage_agents.js';
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
+import { configExample, configExampleSchema } from './tools/config_example.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -143,6 +144,13 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: getAgentConfigs,
   });
 
+
+  server.addTool({
+    name: 'config_example',
+    description: "Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).",
+    parameters: configExampleSchema,
+    execute: configExample,
+  });
 
   return server;
 }

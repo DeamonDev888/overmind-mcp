@@ -148,7 +148,11 @@ export class AgentManager {
 
     // --- MODE MISE À JOUR UNITAIRE (settings.json) ---
     const settingsPath = path.join(claudeDir, `settings_${name}.json`);
-    let settings: any;
+    let settings: {
+      env?: Record<string, string>;
+      enabledMcpjsonServers?: string[];
+      [key: string]: unknown;
+    };
     try {
       const content = await fs.readFile(settingsPath, 'utf-8');
       settings = JSON.parse(content);
@@ -182,6 +186,26 @@ export class AgentManager {
       changes.push(
         `- Serveurs MCP : [${oldServers.join(', ')}] -> [${updates.mcpServers.join(', ')}]`,
       );
+
+      // 📂 UPDATE .mcp.<name>.json
+      try {
+        const globalMcpPath = resolveConfigPath(CONFIG.CLAUDE.PATHS.MCP);
+        const globalMcpContent = await fs.readFile(globalMcpPath, 'utf-8');
+        const globalMcp = JSON.parse(globalMcpContent);
+        
+        const agentMcpServers: Record<string, Record<string, unknown>> = {};
+        updates.mcpServers.forEach(serverName => {
+          if (globalMcp.mcpServers && globalMcp.mcpServers[serverName]) {
+            agentMcpServers[serverName] = globalMcp.mcpServers[serverName];
+          }
+        });
+
+        const agentMcpPath = path.join(this.claudeDir, `.mcp.${name}.json`);
+        await fs.writeFile(agentMcpPath, JSON.stringify({ mcpServers: agentMcpServers }, null, 2), 'utf-8');
+        changes.push(`✅ Fichier .mcp.${name}.json mis à jour avec les nouveaux serveurs.`);
+      } catch (e) {
+        changes.push(`⚠️ Échec de la mise à jour de .mcp.${name}.json: ${(e as Error).message}`);
+      }
     }
 
     if (updates.env) {
@@ -261,12 +285,22 @@ Tu es jugé sur ta capacité à transmettre ton savoir. FOUILLIE ta mémoire et 
     const promptPath = path.join(agentsDir, `${name}.md`);
     await fs.writeFile(promptPath, finalPrompt, 'utf-8');
 
-    let envVars: Record<string, string> = { ANTHROPIC_MODEL: model };
+    // Default mandatory environment variables according to user request
+    let envVars = {
+      ANTHROPIC_MODEL: model,
+      ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN || 'VOTRE_TOKEN_Z_AI',
+      ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL || 'https://api.z.ai/api/anthropic',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || 'glm-4.6',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: process.env.ANTHROPIC_DEFAULT_OPUS_MODEL || 'glm-4.7',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: process.env.ANTHROPIC_DEFAULT_SONNET_MODEL || 'glm-4.7',
+      API_TIMEOUT_MS: process.env.API_TIMEOUT_MS || '3000000',
+    };
+
     const availableServers = await this.getAvailableMcpServers();
     let mcpServers =
       availableServers.length > 0
         ? availableServers
-        : ['postgresql', 'news', 'discord-server', 'workflow'];
+        : ['postgresql-server', 'news-server', 'discord-server', 'overmind', 'memory', 'news-btc-server'];
 
     if (copyEnvFrom && projectRoot) {
       try {
@@ -282,29 +316,43 @@ Tu es jugé sur ta capacité à transmettre ton savoir. FOUILLIE ta mémoire et 
       }
     }
 
-    envVars.ANTHROPIC_MODEL = model; // Force model
+    envVars.ANTHROPIC_MODEL = model; // Ensure model is correctly set
 
     const settings: Record<string, unknown> = {
       env: envVars,
       enableAllProjectMcpServers: false,
       enabledMcpjsonServers: mcpServers,
       agent: name,
+      runner: runner || 'claude',
     };
 
-    // Ajouter les métadonnées du runner si spécifié
-    if (runner) {
-      settings.runner = runner;
-    }
-    if (mode) {
-      settings.mode = mode;
-    }
-    if (cliPath) {
-      settings.cliPath = cliPath;
-    }
+    // Add runner specific metadata
+    if (mode) settings.mode = mode;
+    if (cliPath) settings.cliPath = cliPath;
 
     const settingsFileName = `settings_${name}.json`;
     const settingsPath = path.join(this.claudeDir, settingsFileName);
     await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+
+    // 📂 ENSURE .mcp.<agent>.json CREATION
+    try {
+      const globalMcpPath = resolveConfigPath(CONFIG.CLAUDE.PATHS.MCP);
+      const globalMcpContent = await fs.readFile(globalMcpPath, 'utf-8');
+      const globalMcp = JSON.parse(globalMcpContent);
+      
+      const agentMcpServers: Record<string, Record<string, unknown>> = {};
+      mcpServers.forEach(serverName => {
+        if (globalMcp.mcpServers && globalMcp.mcpServers[serverName]) {
+          agentMcpServers[serverName] = globalMcp.mcpServers[serverName];
+        }
+      });
+
+      const agentMcpPath = path.join(this.claudeDir, `.mcp.${name}.json`);
+      await fs.writeFile(agentMcpPath, JSON.stringify({ mcpServers: agentMcpServers }, null, 2), 'utf-8');
+      console.error(`[AgentManager] ✅ .mcp.${name}.json created with ${Object.keys(agentMcpServers).length} servers.`);
+    } catch (e) {
+      console.error(`[AgentManager] ⚠️ Failed to create .mcp.${name}.json:`, (e as Error).message);
+    }
 
     // Mémoriser la création de l'agent dans Overmind
     try {
