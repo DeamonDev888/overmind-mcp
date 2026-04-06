@@ -42,11 +42,11 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
   "mcpServers": {
     "postgresql-server": {
       "command": "node",
-      "args": ["C:/Chemin/Vers/serveur_PostGreSQL/dist/index.js"]
+      "args": ["chemin/serveur_PostGreSQL/dist/index.js"]
     },
     "memory": {
       "command": "node",
-      "args": ["C:/Chemin/Vers/Workflow/dist/bin/cli.js", "--memory-only"]
+      "args": ["chemin/Workflow/dist/bin/cli.js", "--memory-only"]
     }
   }
 }
@@ -87,11 +87,11 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
   "mcpServers": {
     "postgresql-server": {
       "command": "node",
-      "args": ["C:/Chemin/Vers/serveur_PostGreSQL/dist/index.js"]
+      "args": ["chemin/serveur_PostGreSQL/dist/index.js"]
     },
     "news-server": {
       "command": "node",
-      "args": ["C:/Chemin/Vers/NEWS/dist/src/server.js"]
+      "args": ["chemin/NEWS/dist/src/server.js"]
     }
   }
 }
@@ -132,11 +132,11 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
   "mcpServers": {
     "postgresql-server": {
       "command": "node",
-      "args": ["C:/Chemin/Vers/serveur_PostGreSQL/dist/index.js"]
+      "args": ["chemin/serveur_PostGreSQL/dist/index.js"]
     },
     "news-server": {
       "command": "node",
-      "args": ["C:/Chemin/Vers/NEWS/dist/src/server.js"]
+      "args": ["chemin/NEWS/dist/src/server.js"]
     }
   }
 }
