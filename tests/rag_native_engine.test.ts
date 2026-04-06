@@ -35,10 +35,10 @@ describe('PostgresMemoryProvider Native Engine', () => {
       connect: vi.fn(),
     };
 
-    (provider as any).getPoolFor = vi.fn().mockResolvedValue(mockPool);
-    (provider as any).initializeDb = vi.fn().mockResolvedValue(true);
+    (provider as { getPoolFor: ReturnType<typeof vi.fn>; initializeDb: ReturnType<typeof vi.fn>; dbVectorSupport: Map<string, boolean> }).getPoolFor = vi.fn().mockResolvedValue(mockPool);
+    (provider as { getPoolFor: ReturnType<typeof vi.fn>; initializeDb: ReturnType<typeof vi.fn>; dbVectorSupport: Map<string, boolean> }).initializeDb = vi.fn().mockResolvedValue(true);
     // Force hasVector = false to trigger native fallback
-    (provider as any).dbVectorSupport.set('overmind_core', false);
+    (provider as { getPoolFor: ReturnType<typeof vi.fn>; initializeDb: ReturnType<typeof vi.fn>; dbVectorSupport: Map<string, boolean> }).dbVectorSupport.set('overmind_core', false);
 
     const results = await provider.searchMemory({
       query,

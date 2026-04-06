@@ -135,7 +135,7 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
       mcpServers,
       env,
       runner,
-      mode: mode as any,
+      mode: mode as 'code' | 'architect' | 'ask' | 'debug' | 'orchestrator' | 'plan' | 'act' | undefined,
       cliPath,
       file,
       content,
@@ -158,7 +158,7 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
       ],
     };
   } catch (error) {
-    const e = error as any;
+    const e = error as { code?: string; message?: string };
     if (e && typeof e === 'object' && 'code' in e && e.code === 'ENOENT') {
       return {
         isError: true,
