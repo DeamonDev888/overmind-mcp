@@ -21,13 +21,11 @@ const __dirname = path.dirname(__filename);
 export const DEFAULT_CONFIG: ConfigType = {
   TIMEOUT_MS: 300000, // 5 minutes
   CLAUDE: {
-    CORE: '-p --output-format json',
+    CORE: '--output-format json',
     PERMISSIONS: '--dangerously-skip-permissions',
     PATHS: {
       SETTINGS: './.claude/settings.json',
-      MCP: fs.existsSync(path.join(process.cwd(), '.mcp.local.json'))
-        ? './.mcp.local.json'
-        : './.mcp.json',
+      MCP: '.mcp.json', // Will be resolved dynamically
     },
   },
 };
@@ -128,7 +126,15 @@ export function resolveConfigPath(configPath: string): string {
   if (path.isAbsolute(configPath)) return configPath;
 
   const workspaceDir = getWorkspaceDir();
-  return path.resolve(workspaceDir, configPath);
+  const fullPath = path.resolve(workspaceDir, configPath);
+
+  // Special handling for MCP config to support .local variant
+  if (configPath === '.mcp.json' && !fs.existsSync(fullPath)) {
+    const localPath = path.resolve(workspaceDir, '.mcp.local.json');
+    if (fs.existsSync(localPath)) return localPath;
+  }
+
+  return fullPath;
 }
 
 export function updateConfig(newSettingsPath?: string, newMcpPath?: string) {

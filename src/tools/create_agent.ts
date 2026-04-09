@@ -23,7 +23,9 @@ export const createAgentSchema = z.object({
   model: z
     .string()
     .optional()
-    .describe('Modèle à utiliser (ex: z.ai/glm-4.7, MiniMax-Text-01, deepseek-reasoner, moonshot-v1-32k)'),
+    .describe(
+      "Surnom original de l'agent ou Modèle (ex: 'The Chaos Prophet', 'shadow_sniper', 'deepseek-reasoner'). Ce champ sert d'identifiant unique dans vos logs et Dashboard.",
+    ),
   copyEnvFrom: z
     .string()
     .optional()
@@ -98,7 +100,7 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>): Prom
     content: [
       {
         type: 'text',
-        text: `✅ Agent '${name}' créé avec succès pour ${runnerName} !\n\n📂 Fichiers créés :\n- Prompt : ${result.promptPath}\n- Config : ${result.settingsPath}\n\n🚀 Pour lancer cet agent avec le runner ${runner} :\n\`\`\`bash\n# Via l'outil MCP run_agent:\nrun_agent(runner: "${runner}", agentName: "${name}", prompt: "votre prompt")\n\`\`\`\n\n💡 **Runners disponibles:**\n- claude: Claude Code (défaut)\n- gemini: Gemini\n- kilo: Kilocode${mode ? ` (mode: ${mode})` : ''}\n- qwen: Qwen Code\n- openclaw: OpenClaw\n- cline: Cline${mode ? ` (mode: ${mode})` : ''}\n- opencode: OpenCode\n- trae: Trae`,
+        text: `✅ Agent '${name}' créé avec succès pour ${runnerName} !\n\n📂 Fichiers créés :\n- Prompt : ${result.promptPath}\n- Config : ${result.settingsPath}\n\n🚀 Pour lancer cet agent avec le runner ${runner} :\n\`\`\`bash\n# Via l'outil MCP run_agent:\nrun_agent(runner: "${runner}", agentName: "${name}", prompt: "votre prompt")\n\`\`\`\n\n🔧 **Configuration requise :**\n1. Utilise \`config_example\` pour obtenir les exemples de configuration settings.json selon votre fournisseur (GLM/Z.AI, MiniMax, OpenRouter).\n2. Vérifie la config avec \`get_agent_configs(name: "${name}")\` pour voir les 4 fichiers (prompt.md, .mcp.json, settings.json, skill.md).\n3. ⚠️ **IMPORTANT** : Modifiez impérativement les variables d'environnement dans le fichier settings.json. Notez que le champ **Modèle** (ANTHROPIC_MODEL) sert désormais à définir le **Surnom original** de votre agent pour une immersion totale dans le Nexus.\n\n💡 **Runners disponibles:**\n- claude: Claude Code (défaut)\n- gemini: Gemini\n- kilo: Kilocode${mode ? ` (mode: ${mode})` : ''}\n- qwen: Qwen Code\n- openclaw: OpenClaw\n- cline: Cline${mode ? ` (mode: ${mode})` : ''}\n- opencode: OpenCode\n- trae: Trae`,
       },
     ],
   };

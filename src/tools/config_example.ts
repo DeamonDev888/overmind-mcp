@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 export const configExampleSchema = z.object({
-  provider: z.enum(['glm', 'minimax', 'openrouter']).describe("Le fournisseur pour lequel vous voulez un exemple de configuration."),
+  provider: z
+    .enum(['glm', 'minimax', 'openrouter'])
+    .describe('Le fournisseur pour lequel vous voulez un exemple de configuration.'),
 });
 
 export async function configExample(args: z.infer<typeof configExampleSchema>): Promise<{
@@ -18,7 +20,7 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
 \`\`\`json
 {
   "env": {
-    "ANTHROPIC_MODEL": "claude-3-5-sonnet-20241022",
+    "ANTHROPIC_MODEL": "Nom_Ou_Surnom_Agent", // L'identifiant / Surnom original de l'agent
     "ANTHROPIC_AUTH_TOKEN": "VOTRE_TOKEN_Z_AI",
     "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.6",
@@ -69,7 +71,7 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
     "ANTHROPIC_AUTH_TOKEN": "VOTRE_TOKEN_MINIMAX",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
-    "ANTHROPIC_MODEL": "Agent_Name",
+    "ANTHROPIC_MODEL": "The_Chaos_Prophet", // Exemple de surnom original
     "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-M2",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M2",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M2",
@@ -122,7 +124,7 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
     "ANTHROPIC_AUTH_TOKEN": "sk-or-v1-VOTRE_KEY",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
-    "ANTHROPIC_MODEL": "anthropic/claude-3.5-sonnet",
+    "ANTHROPIC_MODEL": "Satoshi's_Ear", // Exemple de surnom original
     "ANTHROPIC_SMALL_FAST_MODEL": "anthropic/claude-3-haiku",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "anthropic/claude-3-5-sonnet",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "anthropic/claude-3-opus",

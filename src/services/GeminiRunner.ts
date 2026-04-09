@@ -31,6 +31,7 @@ export class GeminiRunner {
     const { prompt, agentName, autoResume } = options;
     let { sessionId } = options;
     const { PATHS } = this.config;
+    const agentCustomEnv: Record<string, string> = {};
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
@@ -51,8 +52,11 @@ export class GeminiRunner {
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
 
-          if (settings.env && settings.env.AGENT_TIMEOUT_MS) {
-            customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
+          if (settings.env) {
+            Object.assign(agentCustomEnv, settings.env);
+            if (settings.env.AGENT_TIMEOUT_MS) {
+              customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
+            }
           }
         }
       } catch (_e) {
@@ -75,6 +79,7 @@ export class GeminiRunner {
         windowsHide: true,
         env: {
           ...process.env,
+          ...agentCustomEnv,
           ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
         },
       });

@@ -144,10 +144,10 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: getAgentConfigs,
   });
 
-
   server.addTool({
     name: 'config_example',
-    description: "Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).",
+    description:
+      'Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).',
     parameters: configExampleSchema,
     execute: configExample,
   });

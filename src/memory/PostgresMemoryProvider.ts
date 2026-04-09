@@ -147,7 +147,9 @@ export class PostgresMemoryProvider implements MemoryProvider {
         await client.query('CREATE EXTENSION IF NOT EXISTS vector');
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`[PostgresMemory] CRITICAL: pgvector extension is REQUIRED but could not be enabled in ${dbName}. Error: ${msg}`);
+        throw new Error(
+          `[PostgresMemory] CRITICAL: pgvector extension is REQUIRED but could not be enabled in ${dbName}. Error: ${msg}`,
+        );
       }
       this.dbVectorSupport.set(dbName, true);
 
@@ -211,7 +213,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
           // > 2000D Optimization: Fast Exact K-NN Search
           try {
             console.error(
-              `[PostgresMemory] ⚡ Opting for Optimized Exact K-NN Search (High Dimensionality: ${dimensions}D).`
+              `[PostgresMemory] ⚡ Opting for Optimized Exact K-NN Search (High Dimensionality: ${dimensions}D).`,
             );
             // Boost parallelization for SeqScans on heavy high-dimensional vectors
             await client.query('ALTER TABLE knowledge_chunks SET (parallel_workers = 4)');
@@ -345,7 +347,10 @@ export class PostgresMemoryProvider implements MemoryProvider {
             }
           }
         } catch (e) {
-          console.error(`[PostgresMemory] CRITICAL: Native vector search error in ${dbName} (Fail Loudly):`, e);
+          console.error(
+            `[PostgresMemory] CRITICAL: Native vector search error in ${dbName} (Fail Loudly):`,
+            e,
+          );
           throw e; // Fail loudly instead of fallback
         }
       }
@@ -353,8 +358,6 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
     return merged.sort((a, b) => b.score - a.score).slice(0, limit);
   }
-
-
 
   async getRecentRuns(params: {
     runner?: string;

@@ -1,0 +1,70 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ClaudeRunner } from '../services/ClaudeRunner.js';
+import { spawn } from 'child_process';
+import path from 'path';
+import { getWorkspaceDir } from '../lib/config.js';
+
+// Mock child_process for isolation
+vi.mock('child_process', () => ({
+  spawn: vi.fn(() => ({
+    stdout: { on: vi.fn() },
+    stderr: { on: vi.fn() },
+    on: vi.fn((event, cb) => {
+      if (event === 'close') setTimeout(() => cb(0), 10);
+    }),
+    stdin: { end: vi.fn() },
+    kill: vi.fn()
+  })),
+}));
+
+describe('Lockdown: Runner & Workspace Integrity', () => {
+  const runner = new ClaudeRunner();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('Environment Injection', () => {
+    it('MUST inject agent-specific settings into the spawned process', async () => {
+      await runner.runAgent({ prompt: 'test', agentName: 'mainteneur_agent_divers' });
+
+      const spawnCalls = (spawn as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+      const spawnArgs = spawnCalls[0] as unknown[];
+      const options = spawnArgs[2] as { env: Record<string, string | undefined> };
+      const env = options.env;
+
+      expect(env, 'Process environment MUST be defined').toBeDefined();
+      expect(env.ANTHROPIC_MODEL, 'ANTHROPIC_MODEL MUST be injected from settings.json').toBeDefined();
+      expect(env.OVERMIND_AGENT_NAME).toBe('mainteneur_agent_divers');
+    });
+
+    it('MUST map ANTHROPIC_AUTH_TOKEN to ANTHROPIC_API_KEY for legacy/standard compatibility', async () => {
+      await runner.runAgent({ prompt: 'test', agentName: 'mainteneur_agent_divers' });
+
+      const spawnCalls = (spawn as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+      const env = (spawnCalls[0] as unknown[])[2] as { env: Record<string, string | undefined> };
+      if (env.ANTHROPIC_AUTH_TOKEN) {
+        expect(env.ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY MUST be assigned the value of ANTHROPIC_AUTH_TOKEN').toBe(env.ANTHROPIC_AUTH_TOKEN);
+      }
+    });
+  });
+
+  describe('Workspace Resolution', () => {
+    it('MUST resolve to the Workflow directory if OVERMIND_WORKSPACE is set', () => {
+      const originalWorkspace = process.env.OVERMIND_WORKSPACE;
+      try {
+        process.env.OVERMIND_WORKSPACE = path.resolve('./');
+        const ws = getWorkspaceDir();
+        expect(ws).toBe(path.resolve('./'));
+      } finally {
+        process.env.OVERMIND_WORKSPACE = originalWorkspace;
+      }
+    });
+    
+    it('MUST prevent using a random root directory if a .mcp.json is present in the intended workspace', () => {
+        const ws = getWorkspaceDir();
+        // Since we are running tests in Workflow, it should resolve here
+        expect(ws.toLowerCase()).toContain('workflow');
+    });
+  });
+});

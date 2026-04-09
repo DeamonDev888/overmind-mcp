@@ -21,7 +21,9 @@ export const updateAgentConfigSchema = z.object({
   model: z
     .string()
     .optional()
-    .describe('Modèle à utiliser (ex: z.ai/glm-4.7, MiniMax-Text-01, deepseek-reasoner, moonshot-v1-32k)'),
+    .describe(
+      'Modèle à utiliser (ex: z.ai/glm-4.7, MiniMax-Text-01, deepseek-reasoner, moonshot-v1-32k)',
+    ),
   mcpServers: z
     .array(z.string())
     .optional()
@@ -105,7 +107,9 @@ export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Prom
   if (result.deletedFiles.length === 0 && result.errors.length === 0) {
     return {
       isError: true,
-      content: [{ type: 'text' as const, text: `⚠️ Agent '${name}' introuvable (ni prompt, ni settings).` }],
+      content: [
+        { type: 'text' as const, text: `⚠️ Agent '${name}' introuvable (ni prompt, ni settings).` },
+      ],
     };
   }
 
@@ -135,7 +139,15 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
       mcpServers,
       env,
       runner,
-      mode: mode as 'code' | 'architect' | 'ask' | 'debug' | 'orchestrator' | 'plan' | 'act' | undefined,
+      mode: mode as
+        | 'code'
+        | 'architect'
+        | 'ask'
+        | 'debug'
+        | 'orchestrator'
+        | 'plan'
+        | 'act'
+        | undefined,
       cliPath,
       file,
       content,
@@ -144,7 +156,10 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
     if (changes.length === 0) {
       return {
         content: [
-          { type: 'text' as const, text: `⚠️ Aucune modification demandée pour l'agent '${name}'.` },
+          {
+            type: 'text' as const,
+            text: `⚠️ Aucune modification demandée pour l'agent '${name}'.`,
+          },
         ],
       };
     }
