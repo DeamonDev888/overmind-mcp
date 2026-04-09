@@ -24,7 +24,7 @@ export const createAgentSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Surnom original de l'agent ou Modèle (ex: 'The Chaos Prophet', 'shadow_sniper', 'deepseek-reasoner'). Ce champ sert d'identifiant unique dans vos logs et Dashboard.",
+      "Surnom original ou Modèle technique (ex: 'The Chaos Prophet', 'claude-3-5-sonnet-20241022'). Le protocole 'Custom-Nickname' d'Overmind permet d'assigner n'importe quel nom ici pour personnaliser votre Cortex. Le runner se chargera automatiquement de mapper ce surnom vers un modèle valide pour l'API.",
     ),
   copyEnvFrom: z
     .string()

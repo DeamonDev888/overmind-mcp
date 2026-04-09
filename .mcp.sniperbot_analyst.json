@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "discord-server": {
+      "command": "node",
+      "args": [
+        "C:/Users/Deamon/Desktop/Backup/Serveur MCP/serveur_discord/dist/index.js"
+      ]
+    },
+    "memory": {
+      "command": "node",
+      "args": [
+        "C:/Users/Deamon/Desktop/Backup/Serveur MCP/Workflow/dist/bin/cli.js",
+        "--memory-only"
+      ]
+    },
+    "x-mcp-server": {
+      "command": "node",
+      "args": [
+        "C:/Users/Deamon/Desktop/Backup/Serveur MCP/X/dist/src/server.js"
+      ]
+    }
+  }
+}

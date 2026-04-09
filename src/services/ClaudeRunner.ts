@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
@@ -81,6 +82,26 @@ export class ClaudeRunner {
             // Mémoriser l'env configuré pour l'injection
             Object.assign(agentCustomEnv, settings.env);
 
+            // --- SMART NICKNAME FALLBACK ---
+            const currentModel = settings.env.ANTHROPIC_MODEL;
+            const isTechnicalModelId = currentModel && (
+              currentModel.includes('claude') || 
+              currentModel.includes('gpt') || 
+              currentModel.includes('glm') || 
+              currentModel.includes('minimax') ||
+              currentModel.includes('deepseek') ||
+              currentModel.includes('moonshot')
+            );
+
+            if (currentModel && !isTechnicalModelId) {
+              // Si le modèle est un surnom, on l'utilise pour l'affichage mais on remet un vrai ID de modèle pour l'API
+              agentCustomEnv.AGENT_NICKNAME = currentModel;
+              // On utilise le modèle Sonnet par défaut ou la valeur configurée si elle semble valide
+              agentCustomEnv.ANTHROPIC_MODEL = (settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL && settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL.includes('claude')) 
+                ? settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL 
+                : 'claude-3-5-sonnet-20241022';
+            }
+
             if (settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS) {
               const timeoutValue = settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS;
               customTimeoutMs = parseInt(timeoutValue, 10) || customTimeoutMs;
@@ -121,25 +142,56 @@ export class ClaudeRunner {
       mcpPath = relativeMcp.startsWith('./') ? relativeMcp : `./${relativeMcp}`;
     }
 
+    let tmpSettingsPathToDelete: string | null = null;
+    let finalSettingsPath = settingsPath;
+
+    if (agentCustomEnv.AGENT_NICKNAME) {
+      try {
+        // On crée un fichier settings temporaire pour substituer le surnom par un vrai modèle
+        // car le CLI Claude ne valide pas les surnoms dynamiques en interne
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        const tempSettings = JSON.parse(JSON.stringify(settings));
+        tempSettings.env.ANTHROPIC_MODEL = agentCustomEnv.ANTHROPIC_MODEL;
+
+        const tmpSettingsPath = path.join(os.tmpdir(), `settings-${agentName || 'agent'}-${Date.now()}.json`);
+        fs.writeFileSync(tmpSettingsPath, JSON.stringify(tempSettings, null, 2));
+        finalSettingsPath = tmpSettingsPath;
+        tmpSettingsPathToDelete = tmpSettingsPath;
+      } catch (e) {
+        console.error(`[ClaudeRunner] ⚠️ Erreur lors de la création du settings temporaire: ${e}`);
+      }
+    }
+
     const argsSpawn: string[] = [];
     if (CORE) argsSpawn.push(...CORE.split(' ').filter(Boolean));
     if (PERMISSIONS) argsSpawn.push(...PERMISSIONS.split(' ').filter(Boolean));
     // DÉCISION IMPORTANTE: On n'ajoute pas de guillemets manuels ici, spawn s'en occupe
-    argsSpawn.push('--settings', settingsPath);
+    argsSpawn.push('--settings', finalSettingsPath);
     argsSpawn.push('--mcp-config', mcpPath);
 
     if (sessionId) {
       argsSpawn.push('--resume', sessionId);
     }
 
+    // --- MODEL & NICKNAME FLAGS ---
+    const modelToUse = agentCustomEnv.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
+    console.error(`[ClaudeRunner] 🛠️  Model override: ${modelToUse}`);
+    argsSpawn.push('--model', modelToUse);
+    
+    if (agentCustomEnv.AGENT_NICKNAME) {
+      console.error(`[ClaudeRunner] 👤 Nickname: ${agentCustomEnv.AGENT_NICKNAME}`);
+      argsSpawn.push('--name', agentCustomEnv.AGENT_NICKNAME);
+    } else if (agentName) {
+      argsSpawn.push('--name', agentName);
+    }
+
     return new Promise((resolve) => {
       const cleanupTmpFiles = () => {
         if (tmpMcpPathToDelete && fs.existsSync(tmpMcpPathToDelete)) {
-          try {
-            fs.unlinkSync(tmpMcpPathToDelete);
-          } catch (_e) {
-            // Ignore unlink errors
-          }
+          try { fs.unlinkSync(tmpMcpPathToDelete); } catch (e) {}
+        }
+        if (tmpSettingsPathToDelete && fs.existsSync(tmpSettingsPathToDelete)) {
+          try { fs.unlinkSync(tmpSettingsPathToDelete); } catch (e) {}
         }
       };
 
@@ -189,9 +241,10 @@ export class ClaudeRunner {
       }
 
       if (agentName) {
-        process.stderr.write(`[ClaudeRunner] 🚀 Démarrage de l'agent ${agentName}...\n`);
+        const id = agentCustomEnv.AGENT_NICKNAME || agentName;
+        console.error(`[ClaudeRunner] 🚀 Démarrage de l'agent ${id}...`);
         // Debug: Log the prompt size
-        process.stderr.write(`[ClaudeRunner] 📏 Prompt Size: ${finalPrompt.length} chars\n`);
+        console.error(`[ClaudeRunner] 📏 Prompt Size: ${finalPrompt.length} chars`);
       }
 
       const child: ChildProcess = spawn(command, spawnArgs, {
@@ -218,7 +271,8 @@ export class ClaudeRunner {
           const chunk = d.toString();
           stdout += chunk;
           if (agentName) {
-            process.stderr.write(`[ClaudeRunner:${agentName}] ${chunk}`);
+            const id = agentCustomEnv.AGENT_NICKNAME || agentName;
+            process.stderr.write(`[ClaudeRunner:${id}] ${chunk}`);
           }
         });
       }
@@ -227,7 +281,8 @@ export class ClaudeRunner {
           const chunk = d.toString();
           stderr += chunk;
           if (agentName) {
-            process.stderr.write(`[ClaudeRunner:${agentName}:ERR] ${chunk}`);
+            const id = agentCustomEnv.AGENT_NICKNAME || agentName;
+            process.stderr.write(`[ClaudeRunner:${id}:ERR] ${chunk}`);
           }
         });
       }
