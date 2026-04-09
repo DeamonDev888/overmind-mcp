@@ -28,7 +28,7 @@ export const runAgentSchema = z.object({
     .optional()
     .default(false)
     .describe(
-      'Si true (et agentName fourni), reprend automatiquement la dernière conversation de cet agent',
+      'CORE: --output-format json, si true (et agentName fourni), reprend automatiquement la dernière conversation de cet agent',
     ),
   // Options spécifiques à certains runners
   mode: z
@@ -142,7 +142,7 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
   const durationMs = Date.now() - start;
 
   // Auto-instrument: enregistrer chaque run dans la mémoire OverMind
-  try {
+  Promise.resolve(
     storeRun({
       runner,
       agentName,
@@ -152,10 +152,10 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
       durationMs,
       success: !result.error,
       sessionId: result.sessionId,
-    });
-  } catch {
+    }),
+  ).catch(() => {
     /* silent — la mémoire ne doit jamais bloquer le runner */
-  }
+  });
 
   // Gestion des erreurs spécifiques
   if (result.error === 'INVALID_AGENT') {
@@ -188,7 +188,7 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
       content: [
         {
           type: 'text',
-          text: `❌ Erreur lors de l'exécution du runner ${runner}: ${result.error}`,
+          text: `❌ Erreur lors de l'exécution du runner ${runner}: ${result.error}${result.rawOutput ? `\n\n🔍 **Détails:**\n\`\`\`text\n${result.rawOutput}\n\`\`\`` : ''}`,
         },
       ],
       isError: true,

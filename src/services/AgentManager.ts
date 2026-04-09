@@ -62,14 +62,16 @@ export class AgentManager {
         const availableServers = await this.getAvailableMcpServers();
         const serverStatus = servers.map((s: string) => {
           if (availableServers.includes(s)) return s;
-          
+
           // Recherche de suggestions (typo)
-          const suggestion = availableServers.find(v => 
-            v.toLowerCase().includes(s.toLowerCase()) || s.toLowerCase().includes(v.toLowerCase())
+          const suggestion = availableServers.find(
+            (v) =>
+              v.toLowerCase().includes(s.toLowerCase()) ||
+              s.toLowerCase().includes(v.toLowerCase()),
           );
-          
-          return suggestion 
-            ? `${s} (⚠️ Nom incorrect ? Suggestion: **${suggestion}**)` 
+
+          return suggestion
+            ? `${s} (⚠️ Nom incorrect ? Suggestion: **${suggestion}**)`
             : `${s} (⚠️ Absent de mcp.json)`;
         });
 
@@ -141,7 +143,7 @@ export class AgentManager {
       }
       await fs.writeFile(filePath, updates.content, 'utf-8');
       changes.push(`✅ Fichier **${updates.file}** réécrit pour l'agent **${name}**.`);
-      
+
       // Si on réécrit settings.json, on ne fait pas les updates unitaires (déjà écrasé)
       if (updates.file === 'settings.json') return changes;
     }
@@ -158,8 +160,17 @@ export class AgentManager {
       settings = JSON.parse(content);
     } catch (_e) {
       // Si on veut faire des updates unitaires, le settings doit exister
-      if (updates.model || updates.mcpServers || updates.env || updates.runner || updates.mode || updates.cliPath) {
-        throw new Error(`Impossible de modifier les paramètres unitaires : settings_${name}.json est introuvable.`);
+      if (
+        updates.model ||
+        updates.mcpServers ||
+        updates.env ||
+        updates.runner ||
+        updates.mode ||
+        updates.cliPath
+      ) {
+        throw new Error(
+          `Impossible de modifier les paramètres unitaires : settings_${name}.json est introuvable.`,
+        );
       }
       return changes; // Rien à faire
     }
@@ -192,16 +203,20 @@ export class AgentManager {
         const globalMcpPath = resolveConfigPath(CONFIG.CLAUDE.PATHS.MCP);
         const globalMcpContent = await fs.readFile(globalMcpPath, 'utf-8');
         const globalMcp = JSON.parse(globalMcpContent);
-        
+
         const agentMcpServers: Record<string, Record<string, unknown>> = {};
-        updates.mcpServers.forEach(serverName => {
+        updates.mcpServers.forEach((serverName) => {
           if (globalMcp.mcpServers && globalMcp.mcpServers[serverName]) {
             agentMcpServers[serverName] = globalMcp.mcpServers[serverName];
           }
         });
 
         const agentMcpPath = path.join(this.claudeDir, `.mcp.${name}.json`);
-        await fs.writeFile(agentMcpPath, JSON.stringify({ mcpServers: agentMcpServers }, null, 2), 'utf-8');
+        await fs.writeFile(
+          agentMcpPath,
+          JSON.stringify({ mcpServers: agentMcpServers }, null, 2),
+          'utf-8',
+        );
         changes.push(`✅ Fichier .mcp.${name}.json mis à jour avec les nouveaux serveurs.`);
       } catch (e) {
         changes.push(`⚠️ Échec de la mise à jour de .mcp.${name}.json: ${(e as Error).message}`);
@@ -294,13 +309,21 @@ Tu es jugé sur ta capacité à transmettre ton savoir. FOUILLIE ta mémoire et 
       ANTHROPIC_DEFAULT_OPUS_MODEL: process.env.ANTHROPIC_DEFAULT_OPUS_MODEL || 'glm-4.7',
       ANTHROPIC_DEFAULT_SONNET_MODEL: process.env.ANTHROPIC_DEFAULT_SONNET_MODEL || 'glm-4.7',
       API_TIMEOUT_MS: process.env.API_TIMEOUT_MS || '3000000',
+      agent: name,
     };
 
     const availableServers = await this.getAvailableMcpServers();
     let mcpServers =
       availableServers.length > 0
         ? availableServers
-        : ['postgresql-server', 'news-server', 'discord-server', 'overmind', 'memory', 'news-btc-server'];
+        : [
+            'postgresql-server',
+            'news-server',
+            'discord-server',
+            'overmind',
+            'memory',
+            'news-btc-server',
+          ];
 
     if (copyEnvFrom && projectRoot) {
       try {
@@ -339,17 +362,23 @@ Tu es jugé sur ta capacité à transmettre ton savoir. FOUILLIE ta mémoire et 
       const globalMcpPath = resolveConfigPath(CONFIG.CLAUDE.PATHS.MCP);
       const globalMcpContent = await fs.readFile(globalMcpPath, 'utf-8');
       const globalMcp = JSON.parse(globalMcpContent);
-      
+
       const agentMcpServers: Record<string, Record<string, unknown>> = {};
-      mcpServers.forEach(serverName => {
+      mcpServers.forEach((serverName) => {
         if (globalMcp.mcpServers && globalMcp.mcpServers[serverName]) {
           agentMcpServers[serverName] = globalMcp.mcpServers[serverName];
         }
       });
 
       const agentMcpPath = path.join(this.claudeDir, `.mcp.${name}.json`);
-      await fs.writeFile(agentMcpPath, JSON.stringify({ mcpServers: agentMcpServers }, null, 2), 'utf-8');
-      console.error(`[AgentManager] ✅ .mcp.${name}.json created with ${Object.keys(agentMcpServers).length} servers.`);
+      await fs.writeFile(
+        agentMcpPath,
+        JSON.stringify({ mcpServers: agentMcpServers }, null, 2),
+        'utf-8',
+      );
+      console.error(
+        `[AgentManager] ✅ .mcp.${name}.json created with ${Object.keys(agentMcpServers).length} servers.`,
+      );
     } catch (e) {
       console.error(`[AgentManager] ⚠️ Failed to create .mcp.${name}.json:`, (e as Error).message);
     }

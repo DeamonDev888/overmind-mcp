@@ -31,6 +31,7 @@ export class ClaudeRunner {
     const { prompt, agentName, autoResume } = options;
     let { sessionId } = options;
     const { CORE, PERMISSIONS, PATHS } = this.config;
+    const agentCustomEnv: Record<string, string> = {};
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
@@ -76,8 +77,14 @@ export class ClaudeRunner {
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
 
-          if (settings.env && settings.env.AGENT_TIMEOUT_MS) {
-            customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
+          if (settings.env) {
+            // Mémoriser l'env configuré pour l'injection
+            Object.assign(agentCustomEnv, settings.env);
+
+            if (settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS) {
+              const timeoutValue = settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS;
+              customTimeoutMs = parseInt(timeoutValue, 10) || customTimeoutMs;
+            }
           }
 
           if (
@@ -117,8 +124,9 @@ export class ClaudeRunner {
     const argsSpawn: string[] = [];
     if (CORE) argsSpawn.push(...CORE.split(' ').filter(Boolean));
     if (PERMISSIONS) argsSpawn.push(...PERMISSIONS.split(' ').filter(Boolean));
-    argsSpawn.push('--settings', `"${settingsPath}"`);
-    argsSpawn.push('--mcp-config', `"${mcpPath}"`);
+    // DÉCISION IMPORTANTE: On n'ajoute pas de guillemets manuels ici, spawn s'en occupe
+    argsSpawn.push('--settings', settingsPath);
+    argsSpawn.push('--mcp-config', mcpPath);
 
     if (sessionId) {
       argsSpawn.push('--resume', sessionId);
@@ -137,41 +145,67 @@ export class ClaudeRunner {
 
       const isWin = process.platform === 'win32';
       let command = 'claude';
-      let spawnArgs = argsSpawn;
+      let spawnArgs: string[] = [];
+
+      // Prepend persona if defined
+      let finalPrompt = prompt;
+      if (agentName) {
+        let agentPromptPath = resolveConfigPath(
+          path.join(path.dirname(PATHS.SETTINGS), 'agents', `${agentName}.md`),
+        );
+        if (!fs.existsSync(agentPromptPath)) {
+          // Fallback: Check agents/ folder at the root level of settingsDir
+          agentPromptPath = resolveConfigPath(
+            path.join(path.dirname(path.dirname(PATHS.SETTINGS)), 'agents', `${agentName}.md`),
+          );
+        }
+
+        if (fs.existsSync(agentPromptPath)) {
+          const systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
+          finalPrompt = `${systemPrompt}\n\n[USER QUERY]:\n${prompt}`;
+        }
+      }
 
       if (isWin) {
-        // Try to find the absolute path to avoid shell warnings/concatenation issues
-        const claudePath = 'C:\\Users\\YOUR_USERNAME\\AppData\\Roaming\\npm\\claude.ps1';
+        const claudePath = 'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\claude.ps1';
         if (fs.existsSync(claudePath)) {
           command = 'powershell.exe';
           spawnArgs = [
             '-NoProfile',
             '-ExecutionPolicy',
             'Bypass',
-            '-WindowStyle',
-            'Hidden',
             '-File',
             claudePath,
             ...argsSpawn,
+            '-p',
+            finalPrompt,
           ];
         } else {
-          // Fallback to shell string (still triggers warning but works)
-          command = `claude ${argsSpawn.join(' ')}`;
-          spawnArgs = [];
+          command = 'cmd.exe';
+          spawnArgs = ['/c', 'claude', ...argsSpawn, '-p', finalPrompt];
         }
+      } else {
+        spawnArgs = [...argsSpawn, '-p', finalPrompt];
       }
 
       if (agentName) {
         process.stderr.write(`[ClaudeRunner] 🚀 Démarrage de l'agent ${agentName}...\n`);
+        // Debug: Log the prompt size
+        process.stderr.write(`[ClaudeRunner] 📏 Prompt Size: ${finalPrompt.length} chars\n`);
       }
 
       const child: ChildProcess = spawn(command, spawnArgs, {
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe'],
         cwd: process.cwd(),
-        shell: isWin && command !== 'powershell.exe', // disable shell if we use absolute powershell.exe
+        // shell: false explicitly (handled by command selection)
         windowsHide: true,
         env: {
           ...process.env,
+          ...agentCustomEnv,
+          // Compatibilité Anthropic/Z.ai pour Claude Code standard
+          ...(agentCustomEnv.ANTHROPIC_AUTH_TOKEN && !agentCustomEnv.ANTHROPIC_API_KEY
+            ? { ANTHROPIC_API_KEY: agentCustomEnv.ANTHROPIC_AUTH_TOKEN }
+            : {}),
           ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
         },
       });
@@ -227,7 +261,11 @@ export class ClaudeRunner {
 
         if (code !== 0 && !stdout) {
           const specificError = detectError(stderr);
-          return resolve({ result: '', error: specificError || `EXIT_CODE_${code}`, rawOutput: stderr });
+          return resolve({
+            result: '',
+            error: specificError || `EXIT_CODE_${code}`,
+            rawOutput: stderr,
+          });
         }
 
         try {
@@ -263,11 +301,6 @@ export class ClaudeRunner {
         cleanupTmpFiles();
         resolve({ result: '', error: err.message, rawOutput: '' });
       });
-
-      if (child.stdin) {
-        child.stdin.write(prompt);
-        child.stdin.end();
-      }
     });
   }
 }

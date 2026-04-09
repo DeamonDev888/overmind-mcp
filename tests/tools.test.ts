@@ -52,7 +52,12 @@ describe('MCP Tools Unit Tests', () => {
   });
 
   it('createAgent creates an agent successfully', async () => {
-    const res = await createAgent({ name: 'test_agent', prompt: 'hello', model: 'claude-sonnet', runner: 'claude' });
+    const res = await createAgent({
+      name: 'test_agent',
+      prompt: 'hello',
+      model: 'claude-sonnet',
+      runner: 'claude',
+    });
     expect(res.content[0].text).toContain("Agent 'test_agent' créé avec succès");
   });
 
