@@ -20,6 +20,7 @@ import {
 } from './tools/manage_agents.js';
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
+import { shellExecute, shellExecuteSchema } from './tools/shell_execute.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -150,6 +151,13 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
       'Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).',
     parameters: configExampleSchema,
     execute: configExample,
+  });
+
+  server.addTool({
+    name: 'shell_execute',
+    description: 'Exécute une commande shell sur le système (git, npm, ls, etc.)',
+    parameters: shellExecuteSchema,
+    execute: shellExecute,
   });
 
   return server;
