@@ -17,9 +17,10 @@ export async function shellExecute({ command, cwd }: { command: string; cwd?: st
     });
     
     return `SUCCESS:\nSTDOUT:\n${stdout}\n\nSTDERR:\n${stderr}`;
-  } catch (error: any) {
-    const out = error.stdout?.trim() || '';
-    const err = error.stderr?.trim() || error.message;
-    return `FAILURE (Exit Code: ${error.code}):\nSTDOUT:\n${out}\n\nSTDERR:\n${err}`;
+  } catch (error) {
+    const err = error as Error & { code?: number; stdout?: string; stderr?: string };
+    const out = err.stdout?.trim() || '';
+    const errMsg = err.stderr?.trim() || err.message;
+    return `FAILURE (Exit Code: ${err.code}):\nSTDOUT:\n${out}\n\nSTDERR:\n${errMsg}`;
   }
 }
