@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ClaudeRunner } from '../services/ClaudeRunner.js';
 import { spawn } from 'child_process';
 import path from 'path';
-import { getWorkspaceDir } from '../lib/config.js';
+import { getWorkspaceDir, resetWorkspaceCache } from '../lib/config.js';
 
 // Mock child_process for isolation
 vi.mock('child_process', () => ({
@@ -52,19 +52,32 @@ describe('Lockdown: Runner & Workspace Integrity', () => {
   describe('Workspace Resolution', () => {
     it('MUST resolve to the Workflow directory if OVERMIND_WORKSPACE is set', () => {
       const originalWorkspace = process.env.OVERMIND_WORKSPACE;
+      resetWorkspaceCache();
       try {
         process.env.OVERMIND_WORKSPACE = path.resolve('./');
         const ws = getWorkspaceDir();
         expect(ws).toBe(path.resolve('./'));
       } finally {
         process.env.OVERMIND_WORKSPACE = originalWorkspace;
+        resetWorkspaceCache();
       }
     });
     
     it('MUST prevent using a random root directory if a .mcp.json is present in the intended workspace', () => {
-        const ws = getWorkspaceDir();
-        // Since we are running tests in Workflow, it should resolve here
-        expect(ws.toLowerCase()).toContain('workflow');
+        resetWorkspaceCache();
+        const originalWorkspace = process.env.OVERMIND_WORKSPACE;
+        const workflowDir = path.resolve(__dirname, '../..'); // Go up from __tests__ to src, then to root
+
+        try {
+          // Explicitly set OVERMIND_WORKSPACE to Workflow directory
+          process.env.OVERMIND_WORKSPACE = workflowDir;
+          const ws = getWorkspaceDir();
+          // Since we are running tests in Workflow, it should resolve here
+          expect(ws.toLowerCase()).toContain('workflow');
+        } finally {
+          process.env.OVERMIND_WORKSPACE = originalWorkspace;
+          resetWorkspaceCache();
+        }
     });
   });
 });
