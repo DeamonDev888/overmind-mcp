@@ -281,16 +281,19 @@ describe('Workspace Directory Resolution - 4 Level Fallback (Auto-Portable)', ()
       fs.writeFileSync(path.join(localPath, '.mcp.json'), JSON.stringify({ level: 2 }));
 
       // Test 1: ENV var wins (Level 1)
+      resetWorkspaceCache();
       process.env.OVERMIND_WORKSPACE = envPath;
       process.chdir(localPath);
       expect(getWorkspaceDir()).toBe(path.resolve(envPath));
 
       // Test 2: Local .mcp.json wins (Level 2)
+      resetWorkspaceCache();
       delete process.env.OVERMIND_WORKSPACE;
       process.chdir(localPath);
       expect(getWorkspaceDir()).toBe(localPath);
 
       // Test 3: Code root detection or global fallback (Levels 3 or 4)
+      resetWorkspaceCache();
       process.chdir(emptyPath);
       const result = getWorkspaceDir();
       // Will be either code root (if .mcp.json exists) or global

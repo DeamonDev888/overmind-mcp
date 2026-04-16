@@ -10,6 +10,8 @@ export interface RunAgentOptions {
   sessionId?: string;
   autoResume?: boolean;
   mode?: 'plan' | 'act';
+  cwd?: string;
+  configPath?: string;
 }
 
 export interface RunAgentResult {
@@ -48,6 +50,7 @@ export class ClineRunner {
       try {
         const agentSettingsPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
+          options.configPath
         );
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
@@ -72,7 +75,7 @@ export class ClineRunner {
       const command = isWin ? 'cline.cmd' : 'cline';
 
       const child: ChildProcess = spawn(command, argsSpawn, {
-        cwd: process.cwd(),
+        cwd: options.cwd || process.cwd(),
         shell: isWin,
         windowsHide: true,
         env: {

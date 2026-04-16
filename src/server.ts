@@ -20,6 +20,7 @@ import {
 } from './tools/manage_agents.js';
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
+import { shellExecute, shellExecuteSchema } from './tools/shell_execute.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -42,9 +43,16 @@ export function createServer(name: string = 'OverMind-MCP') {
 - opencode: OpenCode (opencode run)
 - trae: Trae (trae solo --headless)
 
+**Parameters:**
+- runner: Type de runner (claude, gemini, etc.)
+- prompt: Instruction à envoyer à l'agent
+- agentName: Nom de l'agent (optionnel)
+- path: Répertoire de travail (CWD). Par défaut: dossier Overmind.
+- config: Répertoire racine de l'Overmind. Par défaut: dossier Overmind.
+
 **Exemples:**
 run_agent(runner: "claude", agentName: "expert_python", prompt: "Analyse ce code")
-run_agent(runner: "kilo", agentName: "architect", mode: "architect", prompt: "Conçois une API REST")
+run_agent(runner: "kilo", agentName: "architect", mode: "architect", prompt: "Conçois une API REST", path: "./my-project")
 run_agent(runner: "cline", agentName: "planner", mode: "plan", prompt: "Planifie l'implémentation")`,
     parameters: runAgentSchema,
     execute: runAgent,
@@ -150,6 +158,13 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
       'Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).',
     parameters: configExampleSchema,
     execute: configExample,
+  });
+
+  server.addTool({
+    name: 'shell_execute',
+    description: 'Exécute une commande shell sur le système (git, npm, ls, etc.)',
+    parameters: shellExecuteSchema,
+    execute: shellExecute,
   });
 
   return server;

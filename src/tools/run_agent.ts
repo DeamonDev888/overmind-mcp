@@ -8,6 +8,7 @@ import { ClineRunner } from '../services/ClineRunner.js';
 import { OpenCodeRunner } from '../services/OpenCodeRunner.js';
 import { TraeRunner } from '../services/TraeRunner.js';
 import { storeRun } from '../memory/MemoryFactory.js';
+import { getWorkspaceDir } from '../lib/config.js';
 
 // Schéma unifié pour tous les runners
 export const runAgentSchema = z.object({
@@ -37,13 +38,25 @@ export const runAgentSchema = z.object({
     .describe(
       'Mode spécifique pour Kilo (code, architect, ask, debug, orchestrator) ou Cline (plan, act)',
     ),
+  path: z
+    .string()
+    .optional()
+    .describe("Le répertoire de travail (CWD) où l'agent sera lancé (par défaut: dossier Overmind)"),
+  config: z
+    .string()
+    .optional()
+    .describe("Le répertoire racine de l'Overmind (contenant .claude/, .mcp.json, etc.) (par défaut: dossier Overmind)"),
 });
 
 export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
-  const { runner, prompt, agentName, autoResume, sessionId, mode } = args;
+  const { runner, prompt, agentName, autoResume, sessionId, mode, path: argPath, config: argConfig } = args;
+
+  const finalPath = argPath || getWorkspaceDir();
+  const finalConfig = argConfig || getWorkspaceDir();
+
   const start = Date.now();
 
   // Sélection du runner approprié
@@ -58,13 +71,27 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
     switch (runner) {
       case 'claude': {
         const claudeRunner = new ClaudeRunner();
-        result = await claudeRunner.runAgent({ prompt, agentName, autoResume, sessionId });
+        result = await claudeRunner.runAgent({
+          prompt,
+          agentName,
+          autoResume,
+          sessionId,
+          cwd: finalPath,
+          configPath: finalConfig,
+        });
         break;
       }
 
       case 'gemini': {
         const geminiRunner = new GeminiRunner();
-        result = await geminiRunner.runAgent({ prompt, agentName, autoResume, sessionId });
+        result = await geminiRunner.runAgent({
+          prompt,
+          agentName,
+          autoResume,
+          sessionId,
+          cwd: finalPath,
+          configPath: finalConfig,
+        });
         break;
       }
 
@@ -76,19 +103,35 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           autoResume,
           sessionId,
           mode: mode as 'code' | 'architect' | 'ask' | 'debug' | 'orchestrator' | undefined,
+          cwd: finalPath,
+          configPath: finalConfig,
         });
         break;
       }
 
       case 'qwen': {
         const qwenRunner = new QwenRunner();
-        result = await qwenRunner.runAgent({ prompt, agentName, autoResume, sessionId });
+        result = await qwenRunner.runAgent({
+          prompt,
+          agentName,
+          autoResume,
+          sessionId,
+          cwd: finalPath,
+          configPath: finalConfig,
+        });
         break;
       }
 
       case 'openclaw': {
         const openClawRunner = new OpenClawRunner();
-        result = await openClawRunner.runAgent({ prompt, agentName, autoResume, sessionId });
+        result = await openClawRunner.runAgent({
+          prompt,
+          agentName,
+          autoResume,
+          sessionId,
+          cwd: finalPath,
+          configPath: finalConfig,
+        });
         break;
       }
 
@@ -100,19 +143,35 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           autoResume,
           sessionId,
           mode: mode as 'plan' | 'act' | undefined,
+          cwd: finalPath,
+          configPath: finalConfig,
         });
         break;
       }
 
       case 'opencode': {
         const openCodeRunner = new OpenCodeRunner();
-        result = await openCodeRunner.runAgent({ prompt, agentName, autoResume, sessionId });
+        result = await openCodeRunner.runAgent({
+          prompt,
+          agentName,
+          autoResume,
+          sessionId,
+          cwd: finalPath,
+          configPath: finalConfig,
+        });
         break;
       }
 
       case 'trae': {
         const traeRunner = new TraeRunner();
-        result = await traeRunner.runAgent({ prompt, agentName, autoResume, sessionId });
+        result = await traeRunner.runAgent({
+          prompt,
+          agentName,
+          autoResume,
+          sessionId,
+          cwd: finalPath,
+          configPath: finalConfig,
+        });
         break;
       }
 
