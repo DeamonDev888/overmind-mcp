@@ -43,9 +43,16 @@ export function createServer(name: string = 'OverMind-MCP') {
 - opencode: OpenCode (opencode run)
 - trae: Trae (trae solo --headless)
 
+**Parameters:**
+- runner: Type de runner (claude, gemini, etc.)
+- prompt: Instruction à envoyer à l'agent
+- agentName: Nom de l'agent (optionnel)
+- path: Répertoire de travail (CWD). Par défaut: dossier Overmind.
+- config: Répertoire racine de l'Overmind. Par défaut: dossier Overmind.
+
 **Exemples:**
 run_agent(runner: "claude", agentName: "expert_python", prompt: "Analyse ce code")
-run_agent(runner: "kilo", agentName: "architect", mode: "architect", prompt: "Conçois une API REST")
+run_agent(runner: "kilo", agentName: "architect", mode: "architect", prompt: "Conçois une API REST", path: "./my-project")
 run_agent(runner: "cline", agentName: "planner", mode: "plan", prompt: "Planifie l'implémentation")`,
     parameters: runAgentSchema,
     execute: runAgent,
