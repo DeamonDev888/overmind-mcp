@@ -10,6 +10,8 @@ export interface RunAgentOptions {
   agentName?: string;
   sessionId?: string;
   autoResume?: boolean;
+  cwd?: string;
+  configPath?: string;
 }
 
 export interface RunAgentResult {
@@ -42,12 +44,13 @@ export class ClaudeRunner {
       }
     }
 
-    let settingsPath = resolveConfigPath(PATHS.SETTINGS);
+    let settingsPath = resolveConfigPath(PATHS.SETTINGS, options.configPath);
 
     if (agentName) {
       const settingsDir = path.dirname(PATHS.SETTINGS);
       const specificSettingsPath = resolveConfigPath(
         path.join(settingsDir, `settings_${agentName}.json`),
+        options.configPath
       );
 
       if (!fs.existsSync(specificSettingsPath)) {
@@ -80,7 +83,7 @@ export class ClaudeRunner {
       settingsPath = relativeSettings.startsWith('./') ? relativeSettings : `./${relativeSettings}`;
     }
 
-    let mcpPath = resolveConfigPath(PATHS.MCP);
+    let mcpPath = resolveConfigPath(PATHS.MCP, options.configPath);
     let tmpMcpPathToDelete: string | null = null;
     let customTimeoutMs = this.timeoutMs;
 
@@ -100,6 +103,7 @@ export class ClaudeRunner {
       try {
         const agentSettingsPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
+          options.configPath
         );
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
@@ -257,11 +261,13 @@ export class ClaudeRunner {
       if (agentName) {
         let agentPromptPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), 'agents', `${agentName}.md`),
+          options.configPath
         );
         if (!fs.existsSync(agentPromptPath)) {
           // Fallback: Check agents/ folder at the root level of settingsDir
           agentPromptPath = resolveConfigPath(
             path.join(path.dirname(path.dirname(PATHS.SETTINGS)), 'agents', `${agentName}.md`),
+            options.configPath
           );
         }
 
@@ -295,7 +301,7 @@ export class ClaudeRunner {
 
       const child: ChildProcess = spawn(command, spawnArgs, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        cwd: process.cwd(),
+        cwd: options.cwd || process.cwd(),
         windowsHide: true,
         env: {
           ...process.env,

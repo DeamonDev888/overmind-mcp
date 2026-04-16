@@ -12,7 +12,10 @@ vi.mock('child_process', () => ({
     on: vi.fn((event, cb) => {
       if (event === 'close') setTimeout(() => cb(0), 10);
     }),
-    stdin: { end: vi.fn() },
+    stdin: { 
+      write: vi.fn(),
+      end: vi.fn() 
+    },
     kill: vi.fn()
   })),
 }));
