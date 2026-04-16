@@ -10,6 +10,8 @@ export interface RunAgentOptions {
   sessionId?: string;
   autoResume?: boolean;
   mode?: 'code' | 'architect' | 'ask' | 'debug' | 'orchestrator';
+  cwd?: string;
+  configPath?: string;
 }
 
 export interface RunAgentResult {
@@ -49,6 +51,7 @@ export class KiloRunner {
       try {
         const agentSettingsPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
+          options.configPath
         );
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
@@ -76,7 +79,7 @@ export class KiloRunner {
       const command = isWin ? 'kilocode.cmd' : 'kilocode';
 
       const child: ChildProcess = spawn(command, argsSpawn, {
-        cwd: process.cwd(),
+        cwd: options.cwd || process.cwd(),
         shell: isWin,
         windowsHide: true,
         env: {
