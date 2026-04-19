@@ -43,6 +43,7 @@ process.removeAllListeners('warning');
 // This is critical for MCP servers because any non-JSON output on stdout kills the handshake (EOF).
 console.log = (...args) => console.error(...args);
 console.info = (...args) => console.error(...args);
+console.warn = (...args) => console.error(...args);
 
 // Setup completed - Dynamically import server components AFTER process.env is configured
 const { createServer } = await import('../server.js');

@@ -17,6 +17,7 @@ Thumbs.db
 
 # Claude Code internal
 .claude/
+.gemini/
 
 # Local config (contains absolute paths)
 .mcp.json

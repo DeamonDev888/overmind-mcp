@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
@@ -26,7 +27,7 @@ export class GeminiRunner {
 
   constructor() {
     this.config = CONFIG.CLAUDE;
-    this.timeoutMs = CONFIG.TIMEOUT_MS || 60000;
+    this.timeoutMs = CONFIG.TIMEOUT_MS || 300000; // 5 min default for tools
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
@@ -64,7 +65,6 @@ export class GeminiRunner {
             options.configPath
           );
         }
-
         if (fs.existsSync(agentPromptPath)) {
           const systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
           finalPrompt = `${systemPrompt}\n\n[USER QUERY]:\n${prompt}`;
