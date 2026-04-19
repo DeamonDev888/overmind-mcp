@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { KiloRunner } from '../services/KiloRunner.js';
 import { storeRun } from '../memory/MemoryFactory.js';
+import { getWorkspaceDir } from '../lib/config.js';
 
 export const runKiloSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent Kilocode"),
@@ -23,6 +24,14 @@ export const runKiloSchema = z.object({
     .describe(
       'Si true (et agentName fourni), reprend automatiquement la dernière conversation de cet agent',
     ),
+  path: z
+    .string()
+    .optional()
+    .describe("Le répertoire de travail (CWD) où l'agent sera lancé"),
+  config: z
+    .string()
+    .optional()
+    .describe("Le répertoire racine de l'Overmind (contenant .claude/, .mcp.json, etc.)"),
 });
 
 export async function runKiloAgent(args: z.infer<typeof runKiloSchema>): Promise<{
@@ -30,13 +39,38 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>): Promise
   isError?: boolean;
 }> {
   const runner = new KiloRunner();
-  const { prompt, agentName, autoResume, sessionId, mode } = args;
+  
+  // 1. Vérification de l'installation et de la version (v7.2.14 requis)
+  const verification = await runner.verifyInstallation();
+  if (!verification.ok) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: verification.message || 'Kilo non configuré.'
+        }
+      ],
+      isError: true,
+    };
+  }
+
+  const { prompt, agentName, autoResume, sessionId, mode, path: argPath, config: argConfig } = args;
+  const finalPath = argPath || getWorkspaceDir();
+  const finalConfig = argConfig || getWorkspaceDir();
 
   const start = Date.now();
-  const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId, mode });
+  const result = await runner.runAgent({ 
+    prompt, 
+    agentName, 
+    autoResume, 
+    sessionId, 
+    mode, 
+    cwd: finalPath,
+    configPath: finalConfig 
+  });
   const durationMs = Date.now() - start;
 
-  // Auto-instrumentation
+  // Auto-instrumentation via Overmind Memory
   storeRun({
     runner: 'kilo',
     agentName,
@@ -62,7 +96,10 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>): Promise
 
   if (result.error) {
     return {
-      content: [{ type: 'text', text: `❌ Erreur lors de l'exécution Kilocode: ${result.error}` }],
+      content: [{ 
+        type: 'text', 
+        text: `❌ Erreur lors de l'exécution Kilocode: ${result.error}${result.rawOutput ? `\n\n🔍 **Détails:**\n\`\`\`text\n${result.rawOutput}\n\`\`\`` : ''}` 
+      }],
       isError: true,
     };
   }
@@ -70,7 +107,9 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>): Promise
   return {
     content: [
       { type: 'text', text: result.result },
-      { type: 'text', text: `RAW: ${result.rawOutput}` },
+      { type: 'text', text: `RUNNER: kilo` },
+      { type: 'text', text: `SESSION_ID: ${result.sessionId || 'N/A'}` },
     ],
   };
 }
+

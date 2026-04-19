@@ -97,6 +97,13 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
 
       case 'kilo': {
         const kiloRunner = new KiloRunner();
+        const verification = await kiloRunner.verifyInstallation();
+        if (!verification.ok) {
+          return {
+            content: [{ type: 'text', text: verification.message || 'Kilo non configuré.' }],
+            isError: true
+          };
+        }
         result = await kiloRunner.runAgent({
           prompt,
           agentName,
