@@ -272,6 +272,7 @@ describe('Workspace Directory Resolution - 4 Level Fallback (Auto-Portable)', ()
 
   describe('Priority Order Validation (4 Levels)', () => {
     it('should respect exact priority: ENV > CWD .mcp.json > Code Root > Global', () => {
+      resetWorkspaceCache();
       // Setup: Create all four levels
       const envPath = createTempDir('level1-env');
       const localPath = createTempDir('level2-local');
@@ -287,11 +288,13 @@ describe('Workspace Directory Resolution - 4 Level Fallback (Auto-Portable)', ()
 
       // Test 2: Local .mcp.json wins (Level 2)
       delete process.env.OVERMIND_WORKSPACE;
+      resetWorkspaceCache();
       process.chdir(localPath);
       expect(getWorkspaceDir()).toBe(localPath);
 
       // Test 3: Code root detection or global fallback (Levels 3 or 4)
       process.chdir(emptyPath);
+      resetWorkspaceCache();
       const result = getWorkspaceDir();
       // Will be either code root (if .mcp.json exists) or global
       expect(result).toBeTruthy();

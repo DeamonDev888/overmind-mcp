@@ -10,6 +10,7 @@ export interface RunAgentOptions {
   sessionId?: string;
   autoResume?: boolean;
   mode?: 'code' | 'architect' | 'ask' | 'debug' | 'orchestrator';
+  model?: string;
 }
 
 export interface RunAgentResult {
@@ -19,19 +20,27 @@ export interface RunAgentResult {
   rawOutput?: string;
 }
 
+const MODEL_MAPPING: Record<string, string> = {
+  'step 3.5 flash': 'stepfun/step-3.5-flash:free',
+  'grok code fast 1 optimised': 'x-ai/grok-code-fast-1:optimized:free',
+  'elephant': 'openrouter/elephant-alpha',
+  'free': 'kilo-auto/free',
+};
+
 export class KiloRunner {
-  private config: typeof CONFIG.CLAUDE;
+  private config: typeof CONFIG.KILO;
   private timeoutMs: number;
 
   constructor() {
-    this.config = CONFIG.CLAUDE;
+    this.config = CONFIG.KILO;
     this.timeoutMs = CONFIG.TIMEOUT_MS || 30000;
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
     const { prompt, agentName, autoResume, mode } = options;
     let { sessionId } = options;
-    const { PATHS } = this.config;
+    const { model } = options;
+    const { PATHS, DEFAULT_MODEL } = this.config;
     const agentCustomEnv: Record<string, string> = {};
 
     // --- Auto Resume ---
@@ -43,6 +52,7 @@ export class KiloRunner {
     }
 
     let customTimeoutMs = this.timeoutMs;
+    let selectedModel = model || DEFAULT_MODEL;
 
     // --- Isolation ---
     if (agentName) {
@@ -57,6 +67,9 @@ export class KiloRunner {
             if (settings.env.AGENT_TIMEOUT_MS) {
               customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
             }
+            if (!model && settings.env.KILO_MODEL) {
+              selectedModel = settings.env.KILO_MODEL;
+            }
           }
         }
       } catch (_e) {
@@ -64,10 +77,21 @@ export class KiloRunner {
       }
     }
 
+    // Apply mapping
+    if (MODEL_MAPPING[selectedModel]) {
+      selectedModel = MODEL_MAPPING[selectedModel];
+    } else if (model && MODEL_MAPPING[model]) {
+      selectedModel = MODEL_MAPPING[model];
+    }
+
     // Build kilocode args: kilocode [options] "prompt"
     const argsSpawn: string[] = [];
     if (mode) argsSpawn.push(`--mode`, mode);
-    if (sessionId) argsSpawn.push('--resume', sessionId);
+    if (sessionId) argsSpawn.push('--session', sessionId);
+    if (selectedModel) argsSpawn.push('--model', selectedModel);
+    
+    // Required for non-interactive execution with stdin/stdout
+    argsSpawn.push('--auto', '--json-io');
     argsSpawn.push(prompt);
 
     return new Promise((resolve) => {
@@ -116,10 +140,13 @@ export class KiloRunner {
       });
 
       child.on('error', (err: Error) => {
+        clearTimeout(timeout);
         resolve({ result: '', error: err.message, rawOutput: '' });
       });
 
-      if (child.stdin) child.stdin.end();
+      if (child.stdin) {
+        child.stdin.end();
+      }
     });
   }
 }

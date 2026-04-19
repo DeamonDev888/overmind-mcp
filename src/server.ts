@@ -20,6 +20,7 @@ import {
 } from './tools/manage_agents.js';
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
+import { shellExecute, shellExecuteSchema } from './tools/shell_execute.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -41,6 +42,14 @@ export function createServer(name: string = 'OverMind-MCP') {
 - cline: Cline (modes: plan, act)
 - opencode: OpenCode (opencode run)
 - trae: Trae (trae solo --headless)
+
+**Modèles Kilo (Alias Gratuits):**
+| Nom Amical | ID Technique | Description |
+| :--- | :--- | :--- |
+| **step 3.5 flash** | stepfun/step-3.5-flash:free | Modèle StepFun gratuit (262K context) |
+| **grok code** | x-ai/grok-code-fast-1:optimized:free | Grok Optimized gratuit (256K context) |
+| **elephant** | openrouter/elephant-alpha | Elephant Alpha gratuit (262K context) |
+| **free** | kilo-auto/free | Modèle Kilo Auto gratuit (204K context) |
 
 **Exemples:**
 run_agent(runner: "claude", agentName: "expert_python", prompt: "Analyse ce code")
@@ -150,6 +159,13 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
       'Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).',
     parameters: configExampleSchema,
     execute: configExample,
+  });
+
+  server.addTool({
+    name: 'shell_execute',
+    description: 'Exécute une commande shell sur le système (git, npm, ls, etc.)',
+    parameters: shellExecuteSchema,
+    execute: shellExecute,
   });
 
   return server;
