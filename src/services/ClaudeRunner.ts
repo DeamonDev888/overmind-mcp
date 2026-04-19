@@ -286,15 +286,11 @@ export class ClaudeRunner {
       }
 
       const isNarrator = agentName === 'sentinel_cortex' || (agentPromptPath && fs.existsSync(agentPromptPath));
-      const spawnCwd = isNarrator ? os.tmpdir() : cwd;
       let finalPrompt = prompt;
-      let systemArgs: string[] = [];
 
       if (agentPromptPath && fs.existsSync(agentPromptPath)) {
         const systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
-        if (isNarrator) {
-          systemArgs = ['--system-prompt', systemPrompt];
-        } else {
+        if (!isNarrator) {
           finalPrompt = `${systemPrompt}\n\n[USER QUERY]:\n${prompt}`;
         }
       }
