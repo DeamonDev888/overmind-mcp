@@ -19,6 +19,14 @@ export const runGeminiSchema = z.object({
     .describe(
       'Si true (et agentName fourni), reprend automatiquement la dernière conversation de cet agent',
     ),
+  cwd: z
+    .string()
+    .optional()
+    .describe("Le répertoire de travail (CWD) où l'agent sera lancé"),
+  configPath: z
+    .string()
+    .optional()
+    .describe("Le répertoire de configuration (.gemini) à utiliser"),
 });
 
 export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>): Promise<{
@@ -26,10 +34,10 @@ export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>): Pro
   isError?: boolean;
 }> {
   const runner = new GeminiRunner();
-  const { prompt, agentName, autoResume, sessionId } = args;
+  const { prompt, agentName, autoResume, sessionId, cwd, configPath } = args;
 
   const start = Date.now();
-  const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId });
+  const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId, cwd, configPath });
   const durationMs = Date.now() - start;
 
   // Auto-instrumentation

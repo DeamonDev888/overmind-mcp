@@ -9,14 +9,15 @@ import { PromptManager } from '../src/services/PromptManager.js';
 import { ClaudeRunner } from '../src/services/ClaudeRunner.js';
 
 vi.mock('../src/memory/PostgresMemoryProvider.js', () => ({
-  PostgresMemoryProvider: vi.fn().mockImplementation(() => ({
-    initializeDb: vi.fn(),
-    ensureDbExists: vi.fn(),
-    storeKnowledge: vi.fn().mockResolvedValue('k_mock'),
-    searchMemory: vi.fn().mockResolvedValue([]),
-    logRun: vi.fn(),
-    getRunHistory: vi.fn().mockResolvedValue([]),
-  })),
+  PostgresMemoryProvider: class {
+    async initializeDb() {}
+    async ensureDbExists() {}
+    async storeRun() { return 'run_mock'; }
+    async storeKnowledge() { return 'k_mock'; }
+    async searchMemory() { return []; }
+    async getRecentRuns() { return []; }
+    async getStats() { return { totalRuns: 0, totalKnowledge: 0, byRunner: [] }; }
+  }
 }));
 
 describe('MCP Tools Unit Tests', () => {

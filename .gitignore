@@ -22,6 +22,9 @@ Thumbs.db
 # Local config (contains absolute paths)
 .mcp.json
 mcp.json
+.mcp.sniperbot_analyst.json
+.mcp.local.json
+
 
 # Backups & scripts (local dev only)
 backup/
@@ -39,3 +42,20 @@ embed-analytics.json
 create_test_agent.js
 run_mission.js
 verify_memory.js
+
+# Browser data (Chrome User Data) - TEMPORARY FILES
+btc_ingest/browser_data/
+**/browser_data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+IndexedDB/
+Local Storage/
+Cookies/
+Cache/
+Code Cache/
+
+# Agent multi-specific
+agent_multi/node_modules/
+agent_multi/dist/
+agent_multi/.claude/

@@ -9,6 +9,8 @@ export interface RunAgentOptions {
   agentName?: string;
   sessionId?: string;
   autoResume?: boolean;
+  cwd?: string;
+  configPath?: string;
 }
 
 export interface RunAgentResult {
@@ -68,7 +70,7 @@ export class QwenRunner {
       const command = isWin ? 'qwen.cmd' : 'qwen';
 
       const child: ChildProcess = spawn(command, argsSpawn, {
-        cwd: process.cwd(),
+        cwd: options.cwd || process.cwd(),
         shell: isWin,
         windowsHide: true,
         env: {
