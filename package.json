@@ -1,6 +1,6 @@
 {
   "name": "overmind-mcp",
-  "version": "1.4.6",
+  "version": "1.4.7",
   "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut le protocole 'Custom-Nickname' pour identifier vos agents avec des surnoms originaux (The Chaos Prophet, Shadow Sniper, etc.) et l'isolation mémoire (Private Memory Context).",
   "type": "module",
   "main": "dist/index.js",
@@ -57,23 +57,23 @@
   },
   "packageManager": "pnpm@10.18.0",
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@types/node": "^22.15.0",
-    "@types/pg": "^8.16.0",
-    "eslint": "^9.39.2",
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^22.19.17",
+    "@types/pg": "^8.20.0",
+    "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
-    "globals": "^17.1.0",
-    "prettier": "^3.8.1",
-    "rimraf": "^6.0.1",
+    "globals": "^17.5.0",
+    "prettier": "^3.8.3",
+    "rimraf": "^6.1.3",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.53.1",
-    "vitest": "^4.0.18"
+    "typescript-eslint": "^8.58.2",
+    "vitest": "^4.1.4"
   },
   "dependencies": {
-    "dotenv": "^17.3.1",
-    "fastmcp": "^3.33.0",
-    "pg": "^8.18.0",
-    "overmind-postgres-mcp": "^1.1.4",
-    "zod": "^4.2.1"
+    "dotenv": "^17.4.2",
+    "fastmcp": "^3.35.0",
+    "overmind-postgres-mcp": "^1.1.6",
+    "pg": "^8.20.0",
+    "zod": "^4.3.6"
   }
 }
