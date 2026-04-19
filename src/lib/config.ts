@@ -12,6 +12,13 @@ export interface ConfigType {
       MCP: string;
     };
   };
+  KILO: {
+    CORE: string;
+    DEFAULT_MODEL: string;
+    PATHS: {
+      SETTINGS: string;
+    };
+  };
   TIMEOUT_MS: number;
 }
 
@@ -26,6 +33,13 @@ export const DEFAULT_CONFIG: ConfigType = {
     PATHS: {
       SETTINGS: './.claude/settings.json',
       MCP: '.mcp.json', // Will be resolved dynamically
+    },
+  },
+  KILO: {
+    CORE: '--auto --json-io',
+    DEFAULT_MODEL: 'stepfun/step-3.5-flash:free',
+    PATHS: {
+      SETTINGS: './.kilocode/settings.json',
     },
   },
 };
