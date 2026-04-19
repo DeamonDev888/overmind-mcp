@@ -3,13 +3,15 @@ import os from 'os';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
-import { getLastSessionId } from '../lib/sessions.js';
+import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 
 export interface RunAgentOptions {
   prompt: string;
   agentName?: string;
   sessionId?: string;
   autoResume?: boolean;
+  cwd?: string;
+  configPath?: string;
 }
 
 export interface RunAgentResult {
@@ -20,7 +22,7 @@ export interface RunAgentResult {
 }
 
 export class GeminiRunner {
-  private config: typeof CONFIG.CLAUDE; // Reusing config structure for isolation
+  private config: typeof CONFIG.CLAUDE; 
   private timeoutMs: number;
 
   constructor() {
@@ -32,7 +34,12 @@ export class GeminiRunner {
     const { prompt, agentName, autoResume } = options;
     let { sessionId } = options;
     const { PATHS } = this.config;
-    const agentCustomEnv: Record<string, string> = {};
+    
+    // Initial custom env
+    const agentCustomEnv: Record<string, string | undefined> = {
+      ...process.env,
+      ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
+    };
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
@@ -42,146 +49,171 @@ export class GeminiRunner {
       }
     }
 
-    let customTimeoutMs = this.timeoutMs;
-    let allowedMcpServers: string[] | null = null;
-
-    // --- Isolation & Env ---
+    // --- System Prompt Loading ---
+    let finalPrompt = prompt;
     if (agentName) {
       try {
-        const agentSettingsPath = resolveConfigPath(
-          path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
+        const settingsDir = path.dirname(PATHS.SETTINGS);
+        let agentPromptPath = resolveConfigPath(
+          path.join(settingsDir, 'agents', `${agentName}.md`),
+          options.configPath
         );
-        if (fs.existsSync(agentSettingsPath)) {
-          const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
-
-          if (settings.env) {
-            Object.assign(agentCustomEnv, settings.env);
-            if (settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS) {
-              const t = settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS;
-              customTimeoutMs = parseInt(t, 10) || customTimeoutMs;
-            }
-          }
-
-          // Capture enabled servers for --allowed-mcp-server-names
-          if (
-            settings.enableAllProjectMcpServers === false &&
-            Array.isArray(settings.enabledMcpjsonServers)
-          ) {
-            allowedMcpServers = settings.enabledMcpjsonServers;
-          }
+        
+        if (!fs.existsSync(agentPromptPath)) {
+          agentPromptPath = resolveConfigPath(
+            path.join(path.dirname(settingsDir), 'agents', `${agentName}.md`),
+            options.configPath
+          );
+        }
+        if (fs.existsSync(agentPromptPath)) {
+          const systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
+          finalPrompt = `${systemPrompt}\n\n[USER QUERY]:\n${prompt}`;
         }
       } catch (_e) {
-        // Skip filtering on error
+        // Silent failing
       }
     }
 
+    // --- OAuth Sync & Centralization (Recopie) ---
+    const userHome = process.env.USERPROFILE || process.env.HOME || '';
+    const globalGeminiPath = path.join(userHome, '.gemini');
+    
+    // Dossier centralisé Overmind explicite
+    const overmindGeminiPath = path.resolve(process.cwd(), '.overmind', 'gemini', agentName ? `agent_${agentName}` : 'central');
+    const overmindGeminiSubPath = path.join(overmindGeminiPath, '.gemini');
+    
+    // S'assurer que les dossiers existent
+    if (!fs.existsSync(overmindGeminiSubPath)) {
+      fs.mkdirSync(overmindGeminiSubPath, { recursive: true });
+    }
+
+    const filesToSync = ['settings.json', 'oauth_creds.json', 'google_accounts.json', 'projects.json', 'state.json'];
+    
+    for (const file of filesToSync) {
+      const globalFile = path.join(globalGeminiPath, file);
+      const localFile = path.join(overmindGeminiSubPath, file);
+      
+      if (fs.existsSync(globalFile)) {
+        try {
+          fs.copyFileSync(globalFile, localFile);
+          console.log(`[GeminiRunner] OAuth synchronisé: ${file} vers ${localFile}`);
+        } catch (err) {
+          console.error(`[GeminiRunner] Échec synchronisation ${file}: ${err}`);
+        }
+      }
+    }
+
+    agentCustomEnv.GEMINI_CLI_HOME = overmindGeminiPath;
+
+    // --- MCP Configuration & Settings Env ---
+    const mcpPath = path.join(overmindGeminiPath, 'mcp.json');
+
+    if (agentName) {
+      const settingsDir = path.dirname(PATHS.SETTINGS);
+      const agentSettingsPath = resolveConfigPath(
+        path.join(settingsDir, `settings_${agentName}.json`),
+        options.configPath
+      );
+      
+      if (fs.existsSync(agentSettingsPath)) {
+        const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+        
+        if (settings.env) {
+          Object.assign(agentCustomEnv, settings.env);
+        }
+
+        const originalMcpPath = resolveConfigPath(PATHS.MCP, options.configPath);
+        if (fs.existsSync(originalMcpPath)) {
+          const fullMcp = JSON.parse(fs.readFileSync(originalMcpPath, 'utf8'));
+          let mcpToUse = fullMcp;
+
+          if (settings.enableAllProjectMcpServers === false && Array.isArray(settings.enabledMcpjsonServers)) {
+            const filteredMcp: { mcpServers: Record<string, unknown> } = { mcpServers: {} };
+            for (const serverName of settings.enabledMcpjsonServers) {
+              if (fullMcp.mcpServers && fullMcp.mcpServers[serverName]) {
+                filteredMcp.mcpServers[serverName] = fullMcp.mcpServers[serverName];
+              }
+            }
+            mcpToUse = filteredMcp;
+          }
+          
+          fs.writeFileSync(mcpPath, JSON.stringify(mcpToUse, null, 2));
+          console.log(`[GeminiRunner] MCP synchronisé: ${mcpPath}`);
+        }
+      }
+    }
+
+    // --- SPAWN ---
     const isWin = process.platform === 'win32';
-    // Utilisation directe du bundle JS avec node pour éviter les bugs de quoting CMD.exe sur Windows
-    const command = isWin ? 'node' : 'gemini';
-    const bundlePath = 'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\node_modules\\@google\\gemini-cli\\bundle\\gemini.js';
-    const argsSpawn: string[] = isWin ? [bundlePath] : [];
+    let command = isWin ? 'gemini.cmd' : 'gemini';
+    const argsSpawn: string[] = [];
 
-    // --- SELECTION ET TRADUCTION DU MODELE ---
-    let modelToUse = agentCustomEnv.GEMINI_MODEL || agentCustomEnv.ANTHROPIC_MODEL || 'gemini-3-flash-preview';
-
-    const modelLower = modelToUse.toLowerCase();
-
-    // Traduction automatique : si le modèle configuré est un modèle Claude ou GLM (spécifique à Z.ai),
-    // ou s'il contient des mots clés de modèles externes, on bascule sur un modèle Gemini standard.
-    const isExternalModel = 
-      modelLower.includes('claude') || 
-      modelLower.includes('glm') ||
-      modelLower.includes('deepseek') ||
-      modelLower.includes('gpt') ||
-      modelLower.includes('sonnet') ||
-      modelLower.includes('opus') ||
-      modelLower.includes('haiku');
-
-    // Gestion des surnoms personnalisés OverMind (ex: "The Chaos Prophet", "Satoshi's Ear")
-    // On force l'utilisation des modèles Gemini 3 pour ces surnoms quand on utilise le runner gemini.
-    const isCustomNickname = !modelLower.startsWith('gemini-') && !modelLower.startsWith('models/');
-
-    if (isExternalModel || isCustomNickname) {
-      if (modelLower.includes('pro')) {
-        modelToUse = 'gemini-3.1-pro-preview';
-      } else {
-        // Par défaut, ou si 'flash' est mentionné dans le surnom
-        modelToUse = 'gemini-3-flash-preview';
-      }
+    // On Windows, calling gemini.cmd via shell spawn can split multiline prompts.
+    // We bypass gemini.cmd by calling the underlying gemini.js directly with node.
+    const userHomeNpm = path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming', 'npm');
+    const geminiJsPath = path.join(userHomeNpm, 'node_modules', '@google', 'gemini-cli', 'bundle', 'gemini.js');
+    
+    let useNodeDirectly = false;
+    if (isWin && fs.existsSync(geminiJsPath)) {
+      command = 'node';
+      argsSpawn.push(geminiJsPath);
+      useNodeDirectly = true;
     }
 
-    // Sécurité supplémentaire : si l'utilisateur a juste mis 'flash' ou 'pro'
-    if (modelToUse === 'flash') modelToUse = 'gemini-3-flash-preview';
-    if (modelToUse === 'pro') modelToUse = 'gemini-3.1-pro-preview';
+    argsSpawn.push('--approval-mode', 'yolo');
+    argsSpawn.push('--output-format', 'json');
+    argsSpawn.push('--prompt', finalPrompt);
 
-    if (modelToUse) {
-      argsSpawn.push('-m', modelToUse);
+    if (sessionId) {
+      argsSpawn.push('--resume', sessionId);
+    } else if (autoResume) {
+      argsSpawn.push('--resume', 'latest');
     }
-
-    // Config MCP (restrict to enabled servers if specified)
-    if (allowedMcpServers && allowedMcpServers.length > 0) {
-      argsSpawn.push('--allowed-mcp-server-names', allowedMcpServers.join(','));
-    }
-
-    // Always use YOLO mode for headless/non-interactive tool execution
-    argsSpawn.push('--yolo');
-
-    // Pass the prompt in headless mode
-    argsSpawn.push('-p', prompt);
 
     return new Promise((resolve) => {
       const child: ChildProcess = spawn(command, argsSpawn, {
-        cwd: process.cwd(),
-        shell: false,
+        cwd: options.cwd || process.cwd(),
+        shell: useNodeDirectly ? false : isWin,
         windowsHide: true,
-        env: {
-          ...process.env,
-          ...agentCustomEnv,
-          ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
-        },
+        env: agentCustomEnv as NodeJS.ProcessEnv,
       });
 
       let stdout = '';
       let stderr = '';
 
-      if (child.stdout) {
-        child.stdout.on('data', (d: Buffer) => {
-          const str = d.toString();
-          stdout += str;
-          process.stderr.write(str); // Redirect to stderr for safety in MCP context
-        });
-      }
-      if (child.stderr) {
-        child.stderr.on('data', (d: Buffer) => {
-          const str = d.toString();
-          stderr += str;
-          process.stderr.write(str); // Redirect to stderr for safety in MCP context
-        });
-      }
-
-      const cleanup = () => {
-        // No temporary files to cleanup for now as we don't use --mcp-config-path
-      };
-
-      const timeout = setTimeout(() => {
-        child.kill();
-        cleanup();
-        resolve({ result: '', error: `TIMEOUT`, rawOutput: stdout });
-      }, customTimeoutMs);
+      child.stdout?.on('data', (data) => { stdout += data.toString(); });
+      child.stderr?.on('data', (data) => { stderr += data.toString(); });
 
       child.on('close', async (code: number | null) => {
-        clearTimeout(timeout);
-        cleanup();
-
         if (code !== 0 && !stdout) {
-          return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr });
+          return resolve({ 
+            result: '', 
+            error: code === 41 ? '🔑 Erreur Auth/API Key (OAuth/GCloud)' : `EXIT_CODE_${code}\n${stderr}`, 
+            rawOutput: stderr 
+          });
         }
 
-        resolve({
-          result: stdout.trim(),
-          sessionId: sessionId,
-          rawOutput: stdout,
-        });
+        try {
+          const jsonOutput = JSON.parse(stdout.trim());
+          const resultText = jsonOutput.reply || jsonOutput.result || stdout.trim();
+          const newSessionId = jsonOutput.session_id || sessionId;
+
+          if (newSessionId && agentName) {
+            await saveSessionId(agentName, newSessionId);
+          }
+
+          resolve({
+            result: resultText,
+            sessionId: newSessionId,
+            rawOutput: stdout,
+          });
+        } catch (_e) {
+          resolve({
+            result: stdout.trim(),
+            sessionId: sessionId,
+            rawOutput: stdout,
+          });
+        }
       });
 
       child.on('error', (err: Error) => {

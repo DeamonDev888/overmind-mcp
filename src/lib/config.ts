@@ -136,10 +136,10 @@ export function getWorkspaceDir(): string {
 // Trigger initial environment loading on module import
 getWorkspaceDir();
 
-export function resolveConfigPath(configPath: string): string {
+export function resolveConfigPath(configPath: string, workspaceDirOverride?: string): string {
   if (path.isAbsolute(configPath)) return configPath;
 
-  const workspaceDir = getWorkspaceDir();
+  const workspaceDir = workspaceDirOverride || getWorkspaceDir();
   const fullPath = path.resolve(workspaceDir, configPath);
 
   // Special handling for MCP config to support .local variant
