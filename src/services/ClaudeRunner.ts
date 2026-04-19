@@ -310,6 +310,7 @@ export class ClaudeRunner {
       }
 
       if (agentName) {
+        agentCustomEnv.OVERMIND_AGENT_NAME = agentName;
         const id = agentCustomEnv.AGENT_NICKNAME || agentName;
         console.error(`[ClaudeRunner] 🚀 Démarrage de l'agent ${id}...`);
         console.error(`[ClaudeRunner] 📏 Prompt Size: ${finalPrompt.length} chars`);
