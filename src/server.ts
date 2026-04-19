@@ -43,6 +43,14 @@ export function createServer(name: string = 'OverMind-MCP') {
 - opencode: OpenCode (opencode run)
 - trae: Trae (trae solo --headless)
 
+**Modèles Kilo (Alias Gratuits):**
+| Nom Amical | ID Technique | Description |
+| :--- | :--- | :--- |
+| **step 3.5 flash** | stepfun/step-3.5-flash:free | Modèle StepFun gratuit (262K context) |
+| **grok code** | x-ai/grok-code-fast-1:optimized:free | Grok Optimized gratuit (256K context) |
+| **elephant** | openrouter/elephant-alpha | Elephant Alpha gratuit (262K context) |
+| **free** | kilo-auto/free | Modèle Kilo Auto gratuit (204K context) |
+
 **Parameters:**
 - runner: Type de runner (claude, gemini, etc.)
 - prompt: Instruction à envoyer à l'agent

@@ -1,6 +1,6 @@
 {
   "name": "overmind-mcp",
-  "version": "1.4.3",
+  "version": "1.4.5",
   "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut le protocole 'Custom-Nickname' pour identifier vos agents avec des surnoms originaux (The Chaos Prophet, Shadow Sniper, etc.) et l'isolation mémoire (Private Memory Context).",
   "type": "module",
   "main": "dist/index.js",
@@ -24,8 +24,8 @@
     "build": "tsc",
     "rebuild": "rimraf dist && tsc",
     "clean": "rimraf dist",
-    "start": "node --env-file=.env dist/bin/cli.js",
-    "dev": "node --watch --env-file=.env dist/bin/cli.js",
+    "start": "node --no-warnings --env-file=.env dist/bin/cli.js",
+    "dev": "node --no-warnings --watch --env-file=.env dist/bin/cli.js",
     "build:fix": "pnpm run clean && pnpm install && pnpm run build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

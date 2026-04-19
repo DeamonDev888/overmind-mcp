@@ -27,7 +27,7 @@ export class ClaudeRunner {
 
   constructor() {
     this.config = CONFIG.CLAUDE;
-    this.timeoutMs = CONFIG.TIMEOUT_MS || 120000;
+    this.timeoutMs = CONFIG.TIMEOUT_MS || 300000;
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
@@ -76,12 +76,7 @@ export class ClaudeRunner {
       }
       settingsPath = specificSettingsPath;
     }
-
     const cwd = process.cwd();
-    const relativeSettings = path.relative(cwd, settingsPath);
-    if (!relativeSettings.startsWith('..') && !path.isAbsolute(relativeSettings)) {
-      settingsPath = relativeSettings.startsWith('./') ? relativeSettings : `./${relativeSettings}`;
-    }
 
     let mcpPath = resolveConfigPath(PATHS.MCP, options.configPath);
     let tmpMcpPathToDelete: string | null = null;
@@ -99,9 +94,12 @@ export class ClaudeRunner {
     }
 
     // --- Isolation ---
+    let finalSettingsPath = settingsPath;
+    let agentSettingsPath = settingsPath;
+    
     if (agentName) {
       try {
-        const agentSettingsPath = resolveConfigPath(
+        agentSettingsPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
           options.configPath
         );
@@ -109,8 +107,12 @@ export class ClaudeRunner {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
 
           if (settings.env) {
-            // Mémoriser l'env configuré pour l'injection
             Object.assign(agentCustomEnv, settings.env);
+            if (!agentCustomEnv.ANTHROPIC_MODEL && (settings.env.ANTHROPIC_MODEL || settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL)) {
+              agentCustomEnv.ANTHROPIC_MODEL = (settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL && settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL.includes('claude')) 
+                ? settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL 
+                : 'claude-3-5-sonnet-20241022';
+            }
 
             // --- SMART NICKNAME FALLBACK ---
             const currentModel = settings.env.ANTHROPIC_MODEL;
@@ -138,10 +140,19 @@ export class ClaudeRunner {
             }
           }
 
-          if (
+          // Utiliser directement le fichier MCP spécifique de l'agent s'il existe
+          const agentMcpPath = resolveConfigPath(
+            path.join(path.dirname(PATHS.SETTINGS), `.mcp.${agentName}.json`),
+          );
+
+          if (fs.existsSync(agentMcpPath)) {
+            // Utiliser le fichier MCP spécifique à l'agent directement
+            mcpPath = agentMcpPath;
+          } else if (
             settings.enableAllProjectMcpServers === false &&
             Array.isArray(settings.enabledMcpjsonServers)
           ) {
+            // Fallback: utiliser le fichier MCP général avec filtrage
             if (fs.existsSync(mcpPath)) {
               const fullMcp = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
               const filteredMcp: { mcpServers: Record<string, unknown> } = { mcpServers: {} };
@@ -165,6 +176,9 @@ export class ClaudeRunner {
       } catch (_e) {
         // Warning
       }
+
+      // Utiliser directement le fichier settings original sans copie temporaire
+      finalSettingsPath = agentSettingsPath;
     }
 
     const relativeMcp = path.relative(cwd, mcpPath);
@@ -173,7 +187,6 @@ export class ClaudeRunner {
     }
 
     let tmpSettingsPathToDelete: string | null = null;
-    let finalSettingsPath = settingsPath;
 
     // Validation des chemins pour Windows
     if (process.platform === 'win32') {
@@ -213,6 +226,7 @@ export class ClaudeRunner {
     if (CORE) argsSpawn.push(...CORE.split(' ').filter(Boolean));
     if (PERMISSIONS) argsSpawn.push(...PERMISSIONS.split(' ').filter(Boolean));
     // DÉCISION IMPORTANTE: On n'ajoute pas de guillemets manuels ici, spawn s'en occupe
+
     argsSpawn.push('--settings', finalSettingsPath);
     argsSpawn.push('--mcp-config', mcpPath);
 
@@ -256,31 +270,38 @@ export class ClaudeRunner {
       let command = 'claude';
       let spawnArgs: string[] = [];
 
-      // Prepend persona if defined
-      let finalPrompt = prompt;
+      // Resolve Agent Prompt
+      let agentPromptPath = '';
       if (agentName) {
-        let agentPromptPath = resolveConfigPath(
+        agentPromptPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), 'agents', `${agentName}.md`),
           options.configPath
         );
         if (!fs.existsSync(agentPromptPath)) {
-          // Fallback: Check agents/ folder at the root level of settingsDir
           agentPromptPath = resolveConfigPath(
             path.join(path.dirname(path.dirname(PATHS.SETTINGS)), 'agents', `${agentName}.md`),
             options.configPath
           );
         }
+      }
 
-        if (fs.existsSync(agentPromptPath)) {
-          const systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
+      const isNarrator = agentName === 'sentinel_cortex' || (agentPromptPath && fs.existsSync(agentPromptPath));
+      const spawnCwd = isNarrator ? os.tmpdir() : cwd;
+      let finalPrompt = prompt;
+      let systemArgs: string[] = [];
+
+      if (agentPromptPath && fs.existsSync(agentPromptPath)) {
+        const systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
+        if (isNarrator) {
+          systemArgs = ['--system-prompt', systemPrompt];
+        } else {
           finalPrompt = `${systemPrompt}\n\n[USER QUERY]:\n${prompt}`;
         }
       }
 
-      // Pass prompt via stdin to avoid shell escaping issues with JSON special chars
-      // Use -p without argument, then write to stdin
       if (isWin) {
         // Sous Windows, TOUJOURS utiliser cmd.exe pour garantir la compatibilité
+
         // Le spawn direct de claude.cmd peut échouer avec EINVAL dans certains contextes
         command = 'cmd.exe';
         spawnArgs = ['/c', 'claude', ...argsSpawn, '-p'];
@@ -303,15 +324,8 @@ export class ClaudeRunner {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: options.cwd || process.cwd(),
         windowsHide: true,
-        env: {
-          ...process.env,
-          ...agentCustomEnv,
-          // Compatibilité Anthropic/Z.ai pour Claude Code standard
-          ...(agentCustomEnv.ANTHROPIC_AUTH_TOKEN && !agentCustomEnv.ANTHROPIC_API_KEY
-            ? { ANTHROPIC_API_KEY: agentCustomEnv.ANTHROPIC_AUTH_TOKEN }
-            : {}),
-          ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
-        },
+        env: { ...process.env, ...agentCustomEnv },
+        shell: false,
       });
 
       // Écrire le prompt via stdin (important: le faire avant d'écouter les événements)
@@ -371,7 +385,7 @@ export class ClaudeRunner {
       const timeout = setTimeout(() => {
         child.kill();
         cleanupTmpFiles();
-        resolve({ result: '', error: `TIMEOUT`, rawOutput: stdout });
+        resolve({ result: '', error: `TIMEOUT`, rawOutput: stdout + '\n\n' + stderr });
       }, customTimeoutMs);
 
       child.on('close', async (code: number | null) => {
@@ -421,6 +435,9 @@ export class ClaudeRunner {
           }
         }
 
+        const fullRaw = stdout + (stderr ? `\n\n--- STDERR ---\n${stderr}` : '');
+        let specificError: string | undefined;
+
         try {
           // Extract raw text output from claude CLI
           const rawText = stdout.trim();
@@ -444,11 +461,10 @@ export class ClaudeRunner {
             rawOutput: stdout,
           });
         } catch (_error) {
-          const specificError = detectError(stdout) || detectError(stderr);
           resolve({
             result: '',
             error: specificError || 'JSON_PARSE_ERROR',
-            rawOutput: stdout,
+            rawOutput: fullRaw,
           });
         }
       });
