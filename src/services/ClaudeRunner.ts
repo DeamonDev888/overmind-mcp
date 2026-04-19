@@ -22,6 +22,14 @@ export interface RunAgentResult {
 }
 
 export class ClaudeRunner {
+  private config: typeof CONFIG.CLAUDE;
+  private timeoutMs: number;
+
+  constructor() {
+    this.config = CONFIG.CLAUDE;
+    this.timeoutMs = CONFIG.TIMEOUT_MS || 300000;
+  }
+
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
     const { prompt, agentName, autoResume } = options;
     let { sessionId } = options;
@@ -86,13 +94,12 @@ export class ClaudeRunner {
     }
 
     // --- Isolation ---
+    let finalSettingsPath = settingsPath;
+    let agentSettingsPath = settingsPath;
+    
     if (agentName) {
-      const specificSettingsPath = resolveConfigPath(
-        path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
-      );
-      
       try {
-        const agentSettingsPath = resolveConfigPath(
+        agentSettingsPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
           options.configPath
         );
@@ -171,7 +178,6 @@ export class ClaudeRunner {
       }
 
       // Utiliser directement le fichier settings original sans copie temporaire
-      // Le modèle est passé via le flag --model qui est déjà configuré plus bas
       finalSettingsPath = agentSettingsPath;
     }
 
@@ -181,7 +187,6 @@ export class ClaudeRunner {
     }
 
     let tmpSettingsPathToDelete: string | null = null;
-    let finalSettingsPath = settingsPath;
 
     // Validation des chemins pour Windows
     if (process.platform === 'win32') {
@@ -221,7 +226,7 @@ export class ClaudeRunner {
     if (CORE) argsSpawn.push(...CORE.split(' ').filter(Boolean));
     if (PERMISSIONS) argsSpawn.push(...PERMISSIONS.split(' ').filter(Boolean));
     // DÉCISION IMPORTANTE: On n'ajoute pas de guillemets manuels ici, spawn s'en occupe
->>>>>>> origin/main
+
     argsSpawn.push('--settings', finalSettingsPath);
     argsSpawn.push('--mcp-config', mcpPath);
 
@@ -294,7 +299,9 @@ export class ClaudeRunner {
         }
       }
 
+      if (isWin) {
         // Sous Windows, TOUJOURS utiliser cmd.exe pour garantir la compatibilité
+
         // Le spawn direct de claude.cmd peut échouer avec EINVAL dans certains contextes
         command = 'cmd.exe';
         spawnArgs = ['/c', 'claude', ...argsSpawn, '-p'];
@@ -427,6 +434,9 @@ export class ClaudeRunner {
             });
           }
         }
+
+        const fullRaw = stdout + (stderr ? `\n\n--- STDERR ---\n${stderr}` : '');
+        let specificError: string | undefined;
 
         try {
           // Extract raw text output from claude CLI

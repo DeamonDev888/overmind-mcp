@@ -217,7 +217,6 @@ export class GeminiRunner {
       });
 
       child.on('error', (err: Error) => {
-        cleanup();
         resolve({ result: '', error: err.message, rawOutput: '' });
       });
 
