@@ -1,8 +1,11 @@
 # Dependencies
 node_modules/
 
+browser_data
+
 # Build output
 dist/
+*.tsbuildinfo
 
 # Environment & Secrets
 .env
@@ -15,9 +18,14 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Claude Code internal
+# AI Agents internal
 .claude/
 .gemini/
+.kilo/
+.overmind/
+.kilocode/
+.agent/
+browser_data/
 
 # Local config (contains absolute paths)
 .mcp.json

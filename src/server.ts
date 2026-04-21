@@ -21,6 +21,8 @@ import {
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
 import { shellExecute, shellExecuteSchema } from './tools/shell_execute.js';
+import { runNexusSentinelTool, runNexusSentinelSchema } from './tools/run_nexus_sentinel.js';
+import { runNexusAgentTool, runNexusAgentSchema } from './tools/run_nexus_agent.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -173,6 +175,42 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     description: 'Exécute une commande shell sur le système (git, npm, ls, etc.)',
     parameters: shellExecuteSchema,
     execute: shellExecute,
+  });
+
+  // ─── NEXUS SENTINEL ORCHESTRATION ─────────────────────────────────────────────
+
+  server.addTool({
+    name: 'run_nexus_sentinel',
+    description: `Déclenche le NEXUS SENTINEL COMMANDER, l'agent de contrôle tactique et de réconciliation du système Nexus.
+
+🎯 **Mission**:
+- Analyse les derniers rapports des agents de surveillance (006, 010, 013)
+- Identifie les goulots d'étranglement et régressions dans le pipeline
+- Vérifie l'état opérationnel des services critiques (DB, Tunnels, Ingest)
+- Détermine les ajustements prioritaires pour stabiliser le système
+- Produit une synthèse stratégique (Dominance Digest)
+
+📋 **Rapport généré**:
+Executive Summary, Agent Oversight, Critical Diagnosis, Infra Health, Action Plan, Dominance Digest
+
+L'agent enrichit automatiquement la mémoire Overmind avec ses conclusions.`,
+    parameters: runNexusSentinelSchema,
+    execute: runNexusSentinelTool,
+  });
+
+  server.addTool({
+    name: 'run_nexus_agent',
+    description: `Déclenche le NEXUS ALERT COMMANDER pour un audit global du pipeline et un rapport Discord.
+
+📋 **Mission**:
+- Collecte globale des rapports d'agents via memory_search
+- Audit pipeline : état système, gaps de monitoring, crashes, health score
+- Envoi automatique d'un rapport riche sur le canal Discord (1458647750450217135) via creer_embed
+
+ℹ️ **Paramètres**:
+- customPrompt: Prompt personnalisé pour remplacer le prompt d'audit par défaut (optionnel)`,
+    parameters: runNexusAgentSchema,
+    execute: runNexusAgentTool,
   });
 
   return server;
