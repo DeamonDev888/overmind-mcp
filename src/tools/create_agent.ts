@@ -24,7 +24,7 @@ export const createAgentSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Surnom original ou Modèle technique (ex: 'The Chaos Prophet', 'claude-3-5-sonnet-20241022'). Le protocole 'Custom-Nickname' d'Overmind permet d'assigner n'importe quel nom ici pour personnaliser votre Cortex. Le runner se chargera automatiquement de mapper ce surnom vers un modèle valide pour l'API.",
+      "Surnom original ou Modèle technique (ex: 'The Chaos Prophet', 'claude-sonnet-4-6'). Le protocole 'Custom-Nickname' d'Overmind permet d'assigner n'importe quel nom ici pour personnaliser votre Cortex. Le runner se chargera automatiquement de mapper ce surnom vers un modèle valide pour l'API.",
     ),
   copyEnvFrom: z
     .string()
@@ -57,7 +57,7 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>): Prom
   // src/tools/create_agent.ts -> src/tools -> src -> Workflow
   const projectRoot = path.resolve(path.dirname(currentFilePath), '../../');
 
-  const defaultModel = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
+  const defaultModel = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 
   const result = await manager.createAgent(
     name,
