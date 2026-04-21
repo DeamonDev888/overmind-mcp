@@ -51,6 +51,7 @@ export const runAgentSchema = z.object({
 export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
+  sessionId?: string;
 }> {
   const { runner, prompt, agentName, autoResume, sessionId, mode, path: argPath, config: argConfig } = args;
 
@@ -267,5 +268,6 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
       { type: 'text', text: `RUNNER: ${runner}` },
       { type: 'text', text: `SESSION_ID: ${result.sessionId}` },
     ],
+    sessionId: result.sessionId,
   };
 }
