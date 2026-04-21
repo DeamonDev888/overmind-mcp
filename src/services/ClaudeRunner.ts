@@ -111,7 +111,7 @@ export class ClaudeRunner {
             if (!agentCustomEnv.ANTHROPIC_MODEL && (settings.env.ANTHROPIC_MODEL || settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL)) {
               agentCustomEnv.ANTHROPIC_MODEL = (settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL && settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL.includes('claude')) 
                 ? settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL 
-                : 'claude-3-5-sonnet-20241022';
+                : 'claude-sonnet-4-6';
             }
 
             // --- SMART NICKNAME FALLBACK ---
@@ -131,7 +131,7 @@ export class ClaudeRunner {
               // On utilise le modèle Sonnet par défaut ou la valeur configurée si elle semble valide
               agentCustomEnv.ANTHROPIC_MODEL = (settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL && settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL.includes('claude')) 
                 ? settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL 
-                : 'claude-3-5-sonnet-20241022';
+                : 'claude-sonnet-4-6';
             }
 
             if (settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS) {
@@ -229,13 +229,14 @@ export class ClaudeRunner {
 
     argsSpawn.push('--settings', finalSettingsPath);
     argsSpawn.push('--mcp-config', mcpPath);
+    argsSpawn.push('--output-format', 'json');
 
-    if (sessionId) {
-      argsSpawn.push('--resume', sessionId);
+    if (sessionId && sessionId.trim() !== "") {
+      argsSpawn.push("--resume", sessionId);
     }
 
     // --- MODEL & NICKNAME FLAGS ---
-    const modelToUse = agentCustomEnv.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
+    const modelToUse = agentCustomEnv.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
     console.error(`[ClaudeRunner] 🛠️  Model override: ${modelToUse}`);
     argsSpawn.push('--model', modelToUse);
     
@@ -439,22 +440,28 @@ export class ClaudeRunner {
           // Extract raw text output from claude CLI
           const rawText = stdout.trim();
           
-          // Try to detect if the output is itself a JSON envelope (from --output-format json)
           let resultText = rawText;
+          let foundSessionId = sessionId;
+
           try {
+            // Tentative de parsing du JSON envelope (obligatoire avec --output-format json)
             const envelope = JSON.parse(rawText);
+            
             if (envelope.session_id && agentName) {
+              foundSessionId = envelope.session_id;
               await saveSessionId(agentName, envelope.session_id);
             }
-            // If it's an envelope with a reply field, extract it
+            
+            // Si c'est une enveloppe avec un champ reply, on l'extrait
             resultText = envelope.reply || envelope.result || rawText;
           } catch (_) {
-            // Not a JSON envelope - it's a plain text response (expected for non --output-format json mode)
+            // Fallback si ce n'est pas du JSON (ne devrait pas arriver avec --output-format json)
             resultText = rawText;
           }
 
           resolve({
             result: resultText,
+            sessionId: foundSessionId,
             rawOutput: stdout,
           });
         } catch (_error) {
