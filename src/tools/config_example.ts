@@ -23,9 +23,9 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
     "ANTHROPIC_MODEL": "Nom_Ou_Surnom_Agent", // L'identifiant / Surnom original de l'agent
     "ANTHROPIC_AUTH_TOKEN": "VOTRE_TOKEN_Z_AI",
     "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.6",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-4.7",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.7",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-sonnet-4-6",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-7",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
     "API_TIMEOUT_MS": "3000000"
   },
   "enableAllProjectMcpServers": false,
@@ -126,9 +126,9 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
     "ANTHROPIC_MODEL": "Satoshi's_Ear", // Exemple de surnom original
     "ANTHROPIC_SMALL_FAST_MODEL": "anthropic/claude-3-haiku",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "anthropic/claude-3-5-sonnet",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "anthropic/claude-3-opus",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "anthropic/claude-3-haiku"
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "anthropic/claude-sonnet-4-6",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "anthropic/claude-opus-4-7",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "anthropic/claude-sonnet-4-6"
   },
   "enableAllProjectMcpServers": false,
   "enabledMcpjsonServers": [
