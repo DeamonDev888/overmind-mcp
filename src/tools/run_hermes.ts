@@ -12,7 +12,7 @@ export const runHermesSchema = z.object({
   path: z.string().optional(),
   config: z.string().optional(),
   silent: z.boolean().optional().default(false),
-  model: z.string().optional().describe("Le modèle OpenRouter à utiliser (ex: tencent/hy3-preview)"),
+  model: z.string().optional().describe("Le modèle à utiliser. Priorité NVIDIA NIM (ex: deepseek-ai/deepseek-v4-pro) ou OpenRouter (ex: tencent/hy3-preview)"),
 });
 
 export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
@@ -34,5 +34,5 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
   storeRun({ runner: 'hermes', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
 
   if (result.error) return { content: [{ type: 'text' as const, text: `❌ Erreur NousHermes: ${result.error}` }], isError: true };
-  return { content: [{ type: 'text' as const, text: result.result }, ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : [])], sessionId: result.sessionId };
+  return { content: [{ type: 'text' as const, text: result.result }, ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : [])] };
 }
