@@ -218,32 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Active Navigation Link based on scroll position
-  const sections = document.querySelectorAll('.prompt-section[id]');
-  const navLinksArray = Array.from(document.querySelectorAll('.toc-link'));
-
-  function updateActiveNavLink() {
-    let currentSection = '';
-
-    sections.forEach(section => {
-      const sectionTop = section.offsetTop;
-      const sectionHeight = section.clientHeight;
-      if (window.pageYOffset >= (sectionTop - 200)) {
-        currentSection = section.getAttribute('id');
-      }
-    });
-
-    navLinksArray.forEach(link => {
-      link.classList.remove('active');
-      if (link.getAttribute('href') === `#${currentSection}`) {
-        link.classList.add('active');
-      }
-    });
-  }
-
-  window.addEventListener('scroll', updateActiveNavLink);
-  updateActiveNavLink(); // Initial call
-
   // Smooth reveal animation for prompt sections
   const observerOptions = {
     threshold: 0.1,
