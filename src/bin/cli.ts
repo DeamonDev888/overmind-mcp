@@ -39,6 +39,14 @@ loadEnvQuietly(path.resolve(__dirname, '../../../serveur_PostGreSQL/.env'));
 // Suppress experimental warnings (like node:sqlite) to avoid breaking MCP handshake
 process.removeAllListeners('warning');
 
+// 💥 ERROR HANDLING: Catch everything to avoid silent EOFs
+process.on('uncaughtException', (err) => {
+  console.error('💥 UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
+});
+
 // 🛡️ SHIELD: Prevent any library from logging to stdout during initialization
 // This is critical for MCP servers because any non-JSON output on stdout kills the handshake (EOF).
 console.log = (...args) => console.error(...args);
@@ -83,4 +91,6 @@ if (settingsPath || mcpPath) {
 }
 
 const server = createServer();
+console.error(`[Overmind] 🚀 Démarrage du serveur...`);
 server.start({ transportType: 'stdio' });
+console.error(`[Overmind] ✅ Serveur prêt sur STDIO.`);
