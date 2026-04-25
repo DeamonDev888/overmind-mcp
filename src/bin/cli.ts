@@ -39,11 +39,44 @@ loadEnvQuietly(path.resolve(__dirname, '../../../serveur_PostGreSQL/.env'));
 // Suppress experimental warnings (like node:sqlite) to avoid breaking MCP handshake
 process.removeAllListeners('warning');
 
+// 💥 ERROR HANDLING: Catch everything to avoid silent EOFs
+process.on('uncaughtException', (err) => {
+  console.error('💥 UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
+});
+
 // 🛡️ SHIELD: Prevent any library from logging to stdout during initialization
 // This is critical for MCP servers because any non-JSON output on stdout kills the handshake (EOF).
 console.log = (...args) => console.error(...args);
 console.info = (...args) => console.error(...args);
 console.warn = (...args) => console.error(...args);
+
+// 🛡️ ULTIMATE SHIELD: Proxy process.stdout.write to redirect non-JSON data to stderr
+const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+process.stdout.write = function (
+  chunk: string | Uint8Array,
+  encoding?: BufferEncoding | ((err?: Error | null) => void),
+  callback?: (err?: Error | null) => void,
+): boolean {
+  const str = typeof chunk === 'string' ? chunk : chunk.toString();
+  const trimmed = str.trim();
+
+  // Handle overload: if encoding is a function, it's actually the callback
+  if (typeof encoding === 'function') {
+    callback = encoding as (err?: Error | null) => void;
+    encoding = undefined;
+  }
+
+  // Allow JSON-RPC (starts with {) and empty/newline chunks (often used by transport)
+  if (trimmed.startsWith('{') || trimmed === '') {
+    return originalStdoutWrite(chunk, encoding as BufferEncoding, callback);
+  }
+
+  // Redirect everything else to stderr
+  return process.stderr.write(chunk, encoding as BufferEncoding, callback);
+} as typeof process.stdout.write;
 
 // Setup completed - Dynamically import server components AFTER process.env is configured
 const { createServer } = await import('../server.js');
@@ -68,4 +101,6 @@ if (settingsPath || mcpPath) {
 }
 
 const server = createServer();
+console.error(`[Overmind] 🚀 Démarrage du serveur...`);
 server.start({ transportType: 'stdio' });
+console.error(`[Overmind] ✅ Serveur prêt sur STDIO.`);
