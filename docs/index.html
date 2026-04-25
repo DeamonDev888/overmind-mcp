@@ -245,6 +245,78 @@
               </p>
               <div class="feature-border"></div>
             </div>
+            <div class="feature-card">
+              <div class="feature-icon">
+                <i class="fas fa-folder-tree"></i>
+                <div class="icon-bg"></div>
+              </div>
+              <h3>Metadata</h3>
+              <p>
+                Obtenez instantanément l'arborescence, les configs et les statistiques (fichiers,
+                lignes, langages) de n'importe quel projet — sans consommer un seul token d'agent.
+              </p>
+              <div class="feature-border"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="library" id="metadata">
+        <div class="container">
+          <div class="section-header">
+            <h2 class="section-title">
+              <i class="fas fa-folder-tree"></i>
+              Outil Metadata
+            </h2>
+            <p class="section-subtitle">
+              Métadonnées projet instantanées — arborescence, configs, statistiques et liste complète des fichiers sources.
+            </p>
+          </div>
+          <div class="code-container large">
+            <div class="code-header">
+              <span class="code-title">Signature</span>
+            </div>
+            <pre><code class="language-typescript">mcp__overmind__metadata({
+  path?        : string   // Chemin relatif au CWD (défaut : ".")
+  depth?       : number   // Profondeur de l'arborescence (défaut : 3)
+  includeStats?: boolean  // Inclure stats + liste fichiers (défaut : true)
+})</code></pre>
+          </div>
+          <div class="code-container large" style="margin-top: 20px">
+            <div class="code-header">
+              <span class="code-title">Exemples</span>
+              <div class="code-actions"><button class="copy-btn"><i class="fas fa-copy"></i></button></div>
+            </div>
+            <pre><code class="language-javascript">// Projet courant, depth 3
+metadata({ path: ".", depth: 3, includeStats: true })
+
+// Sous-dossier spécifique, arborescence seule
+metadata({ path: "discord_llm", depth: 4, includeStats: false })
+
+// Aperçu rapide sans stats
+metadata({ depth: 2, includeStats: false })</code></pre>
+          </div>
+          <div class="features-grid" style="margin-top: 30px">
+            <div class="feature-card">
+              <div class="feature-icon">📁</div>
+              <h3>Arborescence</h3>
+              <p>Vue tree-like récursive jusqu'à la profondeur choisie. Ignore automatiquement <code>node_modules</code>, <code>.git</code>, <code>.github</code>, <code>dist</code>, <code>build</code>…</p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon">⚙️</div>
+              <h3>Configurations</h3>
+              <p>Détecte et affiche automatiquement <code>package.json</code>, <code>tsconfig.json</code>, <code>Dockerfile</code>, <code>.env.example</code>, <code>vite.config.ts</code> et plus.</p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon">📊</div>
+              <h3>Statistiques</h3>
+              <p>Nombre de fichiers, lignes totales, répartition par langage (TypeScript, Python, Go, Rust, Java…) et liste complète des paths relatifs triés.</p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon">🔒</div>
+              <h3>Sandboxé</h3>
+              <p>Le <code>path</code> est strictement limité au répertoire de travail. Les chemins absolus, traversals <code>../../</code> et symlinks sont refusés.</p>
+            </div>
           </div>
         </div>
       </section>

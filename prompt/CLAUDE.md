@@ -74,6 +74,18 @@ Ces outils sont essentiels pour une gestion éclairée des agents.
 ### `mcp__overmind__memory_runs`
 Pour répondre à "qu'a fait l'agent X récemment ?". `stats: true` uniquement sur demande explicite.
 
+### `mcp__overmind__metadata`
+Métadonnées projet instantanées — **aucun token consommé par un sous-agent**. À utiliser en premier si l'utilisateur pose une question sur la structure d'un projet inconnu, avant tout `run_agent`.
+
+```json
+{ "path": "./discord_llm", "depth": 3, "includeStats": true }
+```
+
+Retourne : arborescence, configs (`package.json`, `tsconfig`, etc.), stats (fichiers / lignes / langages).
+
+**Qui peut l'utiliser :** toi (l'orchestrateur) directement — c'est un outil de lecture locale, pas d'exécution d'agent.
+**Contrainte :** `path` doit être un chemin **relatif au CWD**. Les chemins absolus ou traversals (`../../`) sont refusés.
+
 ### `create_agent` / `update_agent_config` / `create_prompt` / `edit_prompt` / `delete_agent`
 Outils de **gestion des agents** — c'est ton travail principal. Tu DOIS utiliser ces outils proactivement pour créer, modifier et gérer les agents selon les besoins de l'utilisateur.
 

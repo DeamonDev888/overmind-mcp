@@ -20,6 +20,7 @@ import {
 } from './tools/manage_agents.js';
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
+import { metadataTool, metadataSchema } from './tools/metadata.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -165,6 +166,23 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
       'Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).',
     parameters: configExampleSchema,
     execute: configExample,
+  });
+
+  // ─── METADATA ────────────────────────────────────────────────────────────────
+
+  server.addTool({
+    name: 'metadata',
+    description: `Retourne les métadonnées projet instantanément : arborescence, fichiers de config, statistiques (fichiers, lignes, langages).
+
+**Paramètres:**
+- path: Chemin du projet (défaut: répertoire courant)
+- depth: Profondeur de l'arborescence (défaut: 3)
+- includeStats: Inclure les statistiques de code (défaut: true)
+
+**Exemple:**
+metadata(path: "./my-project", depth: 4, includeStats: true)`,
+    parameters: metadataSchema,
+    execute: metadataTool,
   });
 
   return server;
