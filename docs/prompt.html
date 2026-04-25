@@ -277,7 +277,7 @@
               <div class="workflow-step">
                 <div class="step-number">3</div>
                 <div class="step-content">
-                  <code class="step-code">run_agent(runner="kilo", mode=&lt;code|architect|ask|debug&gt;, prompt=&lt;...&gt;)</code>
+                  <code class="step-code">run_agent(runner="kilo"|"hermes", mode=&lt;...&gt;, prompt=&lt;...&gt;)</code>
                 </div>
               </div>
               <div class="workflow-step">
@@ -312,6 +312,22 @@
                   <li><code>query</code> : reformule la demande utilisateur en 1 phrase clé</li>
                   <li><code>limit</code> : 5 par défaut, jamais &gt; 10</li>
                   <li><code>include_runs: true</code> uniquement si l'utilisateur demande "qu'est-ce qui a déjà été fait sur X"</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="tool-card">
+              <div class="tool-header">
+                <h3><code>mcp__overmind__run_agent</code> — runner <strong>hermes</strong> (NVIDIA NIM)</h3>
+                <span class="tool-badge tool-badge-success">Expert Coding</span>
+              </div>
+              <div class="tool-content">
+                <p>Le runner <strong>hermes</strong> est ton expert coding de pointe, propulsé par NVIDIA NIM. Utilise-le pour les tâches complexes nécessitant un raisonnement profond ou une exécution rapide via DeepSeek V4.</p>
+                
+                <h4>Modèles Hermes (Priorité NVIDIA) :</h4>
+                <ul class="model-list">
+                  <li><code>deepseek-ai/deepseek-v4-pro</code> (MoE haute performance) — Le meilleur pour le code complexe, l'architecture et les refactors massifs.</li>
+                  <li><code>deepseek-ai/deepseek-v4-flash</code> (Optimisé rapidité) — Idéal pour les corrections rapides, les explications de code et l'utilisation d'outils (agents).</li>
                 </ul>
               </div>
             </div>
@@ -474,7 +490,7 @@
               </div>
               <div class="dont-item">
                 <i class="fas fa-times"></i>
-                <p>Utiliser un autre runner que <code>kilo</code> sauf instruction explicite de l'utilisateur</p>
+                <p>Utiliser un autre runner que <code>kilo</code> ou <code>hermes</code> sauf instruction explicite de l'utilisateur</p>
               </div>
             </div>
           </div>
