@@ -213,13 +213,13 @@ export class GeminiRunner {
           }
 
           if (jsonOutput) {
-            const resultText = jsonOutput.reply || jsonOutput.result || stdout.trim();
-            const newSessionId = jsonOutput.session_id || sessionId;
-
+            const resultText = (jsonOutput.reply as string) || (jsonOutput.result as string) || stdout.trim();
+            const newSessionId = (jsonOutput.session_id as string) || sessionId;
+            
             if (newSessionId && agentName) {
               await saveSessionId(agentName, newSessionId, options.configPath);
             }
-
+            
             return resolve({
               result: resultText,
               sessionId: newSessionId,
