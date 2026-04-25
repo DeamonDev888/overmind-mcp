@@ -2090,6 +2090,15 @@ footer {
   box-shadow: 0 10px 30px rgba(255, 0, 85, 0.2);
 }
 
+.tool-card-primary {
+  border-color: rgba(0, 255, 245, 0.3);
+}
+
+.tool-card-primary:hover {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 10px 30px rgba(0, 255, 245, 0.2);
+}
+
 .tool-header {
   display: flex;
   justify-content: space-between;

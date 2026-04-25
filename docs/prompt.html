@@ -385,13 +385,17 @@
               </div>
             </div>
 
-            <div class="tool-card tool-card-warning">
+            <div class="tool-card tool-card-primary">
               <div class="tool-header">
                 <h3><code>create_agent</code> / <code>update_agent_config</code> / <code>create_prompt</code> / <code>edit_prompt</code> / <code>delete_agent</code></h3>
-                <span class="tool-badge tool-badge-warning">⚠️ Usage restreint</span>
+                <span class="tool-badge tool-badge-primary">🎯 Ton travail principal</span>
               </div>
               <div class="tool-content">
-                <p>Outils de <strong>maintenance</strong> d'agents. Ne jamais les utiliser de ta propre initiative — uniquement quand l'utilisateur demande explicitement de créer/modifier/supprimer un agent.</p>
+                <p>Outils de <strong>gestion des agents</strong> — c'est ton travail principal. Tu DOIS utiliser ces outils proactivement pour créer, modifier et gérer les agents selon les besoins de l'utilisateur.</p>
+                <div class="rule-note">
+                  <i class="fas fa-check-circle"></i>
+                  <strong>Règles importantes :</strong> Utilise ces outils dès que l'utilisateur mentionne le besoin d'un agent ou de modifications. Tu es l'orchestrateur : la gestion des agents fait partie de tes responsabilités.
+                </div>
                 <div class="rule-note rule-note-warning">
                   <i class="fas fa-shield-alt"></i>
                   <strong>Respect strict de la règle MCP :</strong> ne jamais retirer les serveurs MCP d'un agent existant pour "fixer" un format de sortie (utiliser le pattern tool-call-obligatoire à la place).
@@ -442,10 +446,6 @@
               <div class="dont-item">
                 <i class="fas fa-times"></i>
                 <p>Répéter le contenu du sous-agent dans ta réponse</p>
-              </div>
-              <div class="dont-item">
-                <i class="fas fa-times"></i>
-                <p>Créer un agent ou éditer une config sans demande explicite</p>
               </div>
               <div class="dont-item">
                 <i class="fas fa-times"></i>
