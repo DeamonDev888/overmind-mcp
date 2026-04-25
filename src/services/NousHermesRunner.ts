@@ -53,6 +53,9 @@ export class NousHermesRunner {
       ANSICON: '1',
       // Map OpenRouter key if needed
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || process.env.OVERMIND_EMBEDDING_KEY,
+      // Map NVIDIA NIM key
+      NVIDIA_API_KEY: process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY,
+      NVIDIA_API_BASE: process.env.NVIDIA_API_BASE || 'https://integrate.api.nvidia.com/v1',
       ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
     };
 
@@ -80,31 +83,45 @@ export class NousHermesRunner {
     // --- CLI Arguments ---
     // Based on research: hermes chat -q "prompt"
     // We'll try to find a way to pass session if possible, otherwise we rely on internal hermes history.
-    const argsSpawn: string[] = ['chat', '-q', `"${prompt.replace(/"/g, '\\"')}"`, '--ignore-user-config', '--source', 'tool'];
-    if (options.model) {
-      argsSpawn.push('--model', options.model);
+    const isWin = process.platform === 'win32';
+    // Use the absolute path discovered earlier for reliability on Windows
+    const command = isWin 
+      ? 'C:\\Users\\Deamon\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\hermes.exe' 
+      : 'hermes';
+
+    if (!silent) {
+      console.error(`[NousHermesRunner] 🚀 Starting Hermes Agent...`);
     }
 
-    // Note: If hermes supports --session or --resume in CLI, we should add it here.
-    // For now, we'll assume -q is the standard for single-shot.
+    // We remove the manual quotes here because shell: false handles it correctly via the array
+    const cleanArgs = ['chat', '-q', prompt, '--ignore-user-config', '--source', 'tool'];
+    
+    // --- Model & Provider selection ---
+    const DEFAULT_MODEL = 'deepseek-ai/deepseek-v4-pro';
+    const model = options.model || DEFAULT_MODEL;
+    
+    // Automatic provider selection based on model
+    const isNvidiaModel = model.includes('deepseek') || model.includes('nvidia');
+    const hasNvidiaKey = !!(agentCustomEnv.NVIDIA_API_KEY || agentCustomEnv.NVAPI_KEY);
+
+    cleanArgs.push('--model', model);
+
+    if (isNvidiaModel) {
+      if (hasNvidiaKey) {
+        if (!silent) console.error(`[NousHermesRunner] 🎯 Using NVIDIA NIM (High Performance) for ${model}`);
+        cleanArgs.push('--provider', 'nvidia');
+      } else {
+        if (!silent) {
+          console.error(`[NousHermesRunner] ⚠️ NVIDIA_API_KEY missing. Falling back to OpenRouter for ${model}...`);
+        }
+        cleanArgs.push('--provider', 'openrouter');
+      }
+    } else {
+      // Fallback for non-nvidia models (like gemini or claude via openrouter)
+      cleanArgs.push('--provider', 'openrouter');
+    }
 
     return new Promise((resolve) => {
-      const isWin = process.platform === 'win32';
-      // Use the absolute path discovered earlier for reliability on Windows
-      const command = isWin 
-        ? 'C:\\Users\\Deamon\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\hermes.exe' 
-        : 'hermes';
-
-      if (!silent) {
-        console.error(`[NousHermesRunner] 🚀 Starting Hermes Agent...`);
-      }
-
-      // We remove the manual quotes here because shell: false handles it correctly via the array
-      const cleanArgs = ['chat', '-q', prompt, '--ignore-user-config', '--source', 'tool'];
-      if (options.model) {
-        cleanArgs.push('--model', options.model);
-      }
-
       const child: ChildProcess = spawn(command, cleanArgs, {
         cwd: options.cwd || process.cwd(),
         shell: false,
