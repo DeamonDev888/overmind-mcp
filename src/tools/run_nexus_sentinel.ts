@@ -76,6 +76,7 @@ Agis maintenant.`;
       runner: 'claude',
       agentName: 'nexus_sentinel_commander',
       autoResume: false,
+      silent: false,
       prompt,
     });
 

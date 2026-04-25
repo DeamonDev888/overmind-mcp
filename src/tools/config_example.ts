@@ -6,9 +6,7 @@ export const configExampleSchema = z.object({
     .describe('Le fournisseur pour lequel vous voulez un exemple de configuration.'),
 });
 
-export async function configExample(args: z.infer<typeof configExampleSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-}> {
+export async function configExample(args: z.infer<typeof configExampleSchema>) {
   const { provider } = args;
   let text = '';
 
@@ -169,6 +167,6 @@ export async function configExample(args: z.infer<typeof configExampleSchema>): 
   }
 
   return {
-    content: [{ type: 'text', text }],
+    content: [{ type: 'text' as const, text }],
   };
 }

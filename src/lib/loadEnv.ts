@@ -1,8 +1,6 @@
-import { memorySearchTool } from './memory_search.js';
 import fs from 'fs';
 
-
-function loadEnvQuietly(envPath: string) {
+export function loadEnvQuietly(envPath: string): void {
   try {
     if (fs.existsSync(envPath)) {
       const content = fs.readFileSync(envPath, 'utf8');
@@ -18,20 +16,7 @@ function loadEnvQuietly(envPath: string) {
         }
       });
     }
-  } catch (_e) { /* ignore */ }
+  } catch {
+    // ignore errors
+  }
 }
-
-loadEnvQuietly('.env');
-loadEnvQuietly('../serveur_PostGreSQL/.env');
-
-async function main() {
-  const q1 = await memorySearchTool({ query: "RAPPORT D'AUDIT", limit: 20, include_runs: false });
-  const q2 = await memorySearchTool({ query: "RAPPORT COMPLET", limit: 20, include_runs: false });
-  
-  console.log("--- RAPPORT D'AUDIT ---");
-  console.log(q1.content[0].text);
-  console.log("\n--- RAPPORT COMPLET ---");
-  console.log(q2.content[0].text);
-}
-
-main().catch(console.error);

@@ -16,7 +16,7 @@ export const createAgentSchema = z.object({
       "Le prompt système OBLIGATOIRE. Tu DOIS y définir le persona de l'agent, ses missions, les outils MCP qu'il est autorisé à utiliser, et lui ordonner de consulter/enrichir systématiquement sa mémoire Overmind.",
     ),
   runner: z
-    .enum(['claude', 'gemini', 'kilo', 'qwen', 'openclaw', 'cline', 'opencode', 'trae'])
+    .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
     .optional()
     .default('claude')
     .describe('Type de runner pour cet agent (défaut: claude)'),
@@ -42,19 +42,15 @@ export const createAgentSchema = z.object({
   cliPath: z
     .string()
     .optional()
-    .describe('Chemin vers l\'exécutable CLI (ex: "cline", "opencode", "./trae")'),
+    .describe('Chemin vers l\'exécutable CLI (ex: "cline", "opencode")'),
 });
 
-export async function createAgent(args: z.infer<typeof createAgentSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function createAgent(args: z.infer<typeof createAgentSchema>) {
   const manager = new AgentManager();
   const { name, prompt, runner, model, copyEnvFrom, mode, cliPath } = args;
 
   const currentFileUrl = import.meta.url;
   const currentFilePath = fileURLToPath(currentFileUrl);
-  // src/tools/create_agent.ts -> src/tools -> src -> Workflow
   const projectRoot = path.resolve(path.dirname(currentFilePath), '../../');
 
   const defaultModel = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
@@ -74,8 +70,8 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>): Prom
     return {
       content: [
         {
-          type: 'text',
-          text: `❌ **Nom d'agent invalide**\n\nLe nom '${name}' contient des caractères interdits.\n\n💡 **Règle:** Utilisez uniquement des lettres, chiffres, tirets (-) et underscores (_).\n\nExemple valide: 'agent_finance', 'expert-seo'`,
+          type: 'text' as const,
+          text: `❌ **Nom d'agent invalide**\n\nLe nom '${name}' contient des caractères interdits.`,
         },
       ],
       isError: true,
@@ -87,11 +83,11 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>): Prom
     claude: 'Claude Code',
     gemini: 'Gemini',
     kilo: 'Kilocode',
-    qwen: 'Qwen Code',
+    qwencli: 'Qwen CLI',
     openclaw: 'OpenClaw',
     cline: 'Cline',
     opencode: 'OpenCode',
-    trae: 'Trae',
+    hermes: 'Nous Hermes',
   };
 
   const runnerName = runnerInfo[runner as keyof typeof runnerInfo] || 'Claude Code';
@@ -99,8 +95,8 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>): Prom
   return {
     content: [
       {
-        type: 'text',
-        text: `✅ Agent '${name}' créé avec succès pour ${runnerName} !\n\n📂 Fichiers créés :\n- Prompt : ${result.promptPath}\n- Config : ${result.settingsPath}\n\n🚀 Pour lancer cet agent avec le runner ${runner} :\n\`\`\`bash\n# Via l'outil MCP run_agent:\nrun_agent(runner: "${runner}", agentName: "${name}", prompt: "votre prompt")\n\`\`\`\n\n🔧 **Configuration requise :**\n1. Utilise \`config_example\` pour obtenir les exemples de configuration settings.json selon votre fournisseur (GLM/Z.AI, MiniMax, OpenRouter).\n2. Vérifie la config avec \`get_agent_configs(name: "${name}")\` pour voir les 4 fichiers (prompt.md, .mcp.json, settings.json, skill.md).\n3. ⚠️ **IMPORTANT** : Modifiez impérativement les variables d'environnement dans le fichier settings.json. Notez que le champ **Modèle** (ANTHROPIC_MODEL) sert désormais à définir le **Surnom original** de votre agent pour une immersion totale dans le Nexus.\n\n💡 **Runners disponibles:**\n- claude: Claude Code (défaut)\n- gemini: Gemini\n- kilo: Kilocode${mode ? ` (mode: ${mode})` : ''}\n- qwen: Qwen Code\n- openclaw: OpenClaw\n- cline: Cline${mode ? ` (mode: ${mode})` : ''}\n- opencode: OpenCode\n- trae: Trae`,
+        type: 'text' as const,
+        text: `✅ Agent '${name}' créé avec succès pour ${runnerName} !\n\n📂 Fichiers créés :\n- Prompt : ${result.promptPath}\n- Config : ${result.settingsPath}\n\n🚀 Pour lancer cet agent avec le runner ${runner} :\n\`\`\`bash\n# Via l'outil MCP run_agent:\nrun_agent(runner: "${runner}", agentName: "${name}", prompt: "votre prompt")\n\`\`\`\n\n💡 **Runners disponibles:**\n- claude: Claude Code (défaut)\n- gemini: Gemini\n- kilo: Kilocode${mode ? ` (mode: ${mode})` : ''}\n- qwencli: Qwen CLI\n- openclaw: OpenClaw\n- cline: Cline${mode ? ` (mode: ${mode})` : ''}\n- opencode: OpenCode\n- hermes: Nous Hermes`,
       },
     ],
   };
