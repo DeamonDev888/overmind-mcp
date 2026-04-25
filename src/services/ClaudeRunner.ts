@@ -331,9 +331,7 @@ export class ClaudeRunner {
       if (child.stdin) {
         try {
           // S'assurer que le prompt ne contient pas de surrogates isolés (casse l'encodage UTF-8)
-          const sanitizedPrompt = typeof (finalPrompt as string).toWellFormed === 'function' 
-            ? (finalPrompt as string).toWellFormed()
-            : finalPrompt.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
+          const sanitizedPrompt = finalPrompt.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
             
           child.stdin.write(sanitizedPrompt);
           child.stdin.end();
@@ -465,12 +463,12 @@ export class ClaudeRunner {
           if (jsonEnvelope) {
             let foundSessionId = sessionId;
             if (jsonEnvelope.session_id && agentName) {
-              foundSessionId = jsonEnvelope.session_id;
-              await saveSessionId(agentName, jsonEnvelope.session_id, options.configPath);
+              foundSessionId = jsonEnvelope.session_id as string;
+              await saveSessionId(agentName, jsonEnvelope.session_id as string, options.configPath);
             }
-
+            
             return resolve({
-              result: jsonEnvelope.reply || jsonEnvelope.result || stdout.trim(),
+              result: (jsonEnvelope.reply as string) || (jsonEnvelope.result as string) || stdout.trim(),
               sessionId: foundSessionId,
               rawOutput: stdout,
             });
