@@ -23,11 +23,12 @@ export interface RunAgentResult {
 }
 
 const MODEL_MAPPING: Record<string, string> = {
+  'tencent hy3': 'kilo/tencent/hy3-preview:free',
   'step 3.5 flash': 'kilo/stepfun/step-3.5-flash:free',
   'grok code': 'kilo/x-ai/grok-code-fast-1:optimized:free',
   'grok code fast 1 optimised': 'kilo/x-ai/grok-code-fast-1:optimized:free',
-  'elephant': 'kilo/openrouter/elephant-alpha',
-  'free': 'kilo/openrouter/free',
+  elephant: 'kilo/openrouter/elephant-alpha',
+  free: 'kilo/openrouter/free',
 };
 
 export class KiloRunner {
@@ -53,7 +54,7 @@ export class KiloRunner {
 
   constructor() {
     this.config = CONFIG.KILO;
-    this.timeoutMs = CONFIG.TIMEOUT_MS || 300000; // Augmenté à 5 min par défaut pour les tâches complexes
+    this.timeoutMs = CONFIG.TIMEOUT_MS || 900000; // 15 minutes par défaut
   }
 
   async verifyInstallation(): Promise<{ ok: boolean; message?: string }> {
@@ -64,7 +65,7 @@ export class KiloRunner {
         if (error) {
           return resolve({
             ok: false,
-            message: `❌ **Kilo CLI introuvable !**\n\nL'exécutable 'kilo' n'est pas installé ou n'est pas dans votre PATH.\n${KiloRunner.INSTALL_INSTRUCTIONS}`
+            message: `❌ **Kilo CLI introuvable !**\n\nL'exécutable 'kilo' n'est pas installé ou n'est pas dans votre PATH.\n${KiloRunner.INSTALL_INSTRUCTIONS}`,
           });
         }
         const version = stdout.trim();
@@ -72,14 +73,13 @@ export class KiloRunner {
         if (!version.includes(REQUIRED_VERSION) && !version.startsWith('7.')) {
           return resolve({
             ok: false,
-            message: `⚠️ **Version Incorrecte détectée : ${version}** (Attendu: ${REQUIRED_VERSION})\n\nIl est fortement recommandé de mettre à jour vers la version officielle v7.x.\n${KiloRunner.INSTALL_INSTRUCTIONS}`
+            message: `⚠️ **Version Incorrecte détectée : ${version}** (Attendu: ${REQUIRED_VERSION})\n\nIl est fortement recommandé de mettre à jour vers la version officielle v7.x.\n${KiloRunner.INSTALL_INSTRUCTIONS}`,
           });
         }
         resolve({ ok: true });
       });
     });
   }
-
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
     const { prompt, agentName, autoResume, mode, cwd } = options;
@@ -105,7 +105,7 @@ export class KiloRunner {
       try {
         const agentSettingsPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
-          options.configPath
+          options.configPath,
         );
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
@@ -133,7 +133,7 @@ export class KiloRunner {
 
     // Build kilo args: kilo run [prompt] [options]
     const argsSpawn: string[] = ['run'];
-    
+
     // Le prompt est un argument positionnel pour 'run'
     argsSpawn.push(prompt);
 
@@ -141,30 +141,32 @@ export class KiloRunner {
       // Dans v7.x, les modes code/architect sont souvent des agents prédéfinis
       argsSpawn.push('--agent', mode);
     }
-    
+
     if (sessionId) argsSpawn.push('--session', sessionId);
     if (selectedModel) argsSpawn.push('--model', selectedModel);
-    
+
     // Required for non-interactive execution
     argsSpawn.push('--auto');
     argsSpawn.push('--format', 'json');
 
     if (cwd) {
-      argsSpawn.push('--dir', cwd);
+      argsSpawn.push('--dir', '.');
     }
 
     return new Promise((resolve) => {
-      const isWin = process.platform === 'win32';
       const command = 'kilo';
 
-      console.log(`\n\x1b[33m[Kilo] ⚡ Initialisation de l'agent: ${agentName || 'Anonyme'}\x1b[0m`);
+      console.log(
+        `\n\x1b[33m[Kilo] ⚡ Initialisation de l'agent: ${agentName || 'Anonyme'}\x1b[0m`,
+      );
       console.log(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m`);
       if (mode) console.log(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m`);
       if (sessionId) console.log(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m`);
 
+      console.log(`\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m`);
       const child: ChildProcess = spawn(command, argsSpawn, {
         cwd: options.cwd || process.cwd(),
-        shell: isWin,
+        shell: false,
         windowsHide: true,
         env: {
           ...process.env,
@@ -182,16 +184,16 @@ export class KiloRunner {
         child.stdout.on('data', (d: Buffer) => {
           const chunk = d.toString();
           stdout += chunk;
-          
+
           // Traitement par ligne pour le format JSON
           const lines = chunk.split('\n');
           for (const line of lines) {
             const trimmedLine = line.trim();
             if (!trimmedLine) continue;
-            
+
             try {
               const event = JSON.parse(trimmedLine);
-              
+
               // Tracking du sessionID dans n'importe quel event
               if (event.sessionID && !lastSessionId) {
                 lastSessionId = event.sessionID;
@@ -201,7 +203,7 @@ export class KiloRunner {
               if (event.type === 'text' && event.part && event.part.text) {
                 finalResult += event.part.text;
               } else if (event.type === 'message' || event.type === 'reply') {
-                finalResult += (event.content || event.text || '');
+                finalResult += event.content || event.text || '';
               } else if (event.type === 'session') {
                 lastSessionId = event.id || event.sessionID || lastSessionId;
               } else if (event.type === 'error') {
@@ -221,13 +223,15 @@ export class KiloRunner {
         child.stderr.on('data', (d: Buffer) => {
           const chunk = d.toString();
           stderr += chunk;
-          
+
           // DÉTECTION QUOTA / EXHAUSTED
           const lowerChunk = chunk.toLowerCase();
-          if (lowerChunk.includes('quota') || 
-              lowerChunk.includes('exhausted') || 
-              lowerChunk.includes('rate limit') ||
-              chunk.includes('429')) {
+          if (
+            lowerChunk.includes('quota') ||
+            lowerChunk.includes('exhausted') ||
+            lowerChunk.includes('rate limit') ||
+            chunk.includes('429')
+          ) {
             console.log(`\n\x1b[41m\x1b[37m[Kilo ALERT] QUOTA ATTEINT / MODÈLE ÉPUISÉ\x1b[0m`);
             console.log(`\x1b[31m[Détail] ${chunk.trim()}\x1b[0m`);
           } else {
@@ -249,7 +253,9 @@ export class KiloRunner {
           return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr || stdout });
         }
 
-        console.log(`\x1b[32m[Kilo] ✅ Mission terminée (${((Date.now() - startTime) / 1000).toFixed(1)}s)\x1b[0m`);
+        console.log(
+          `\x1b[32m[Kilo] ✅ Mission terminée (${((Date.now() - startTime) / 1000).toFixed(1)}s)\x1b[0m`,
+        );
 
         if (agentName && lastSessionId) {
           await saveSessionId(agentName, lastSessionId);
@@ -273,4 +279,3 @@ export class KiloRunner {
     });
   }
 }
-

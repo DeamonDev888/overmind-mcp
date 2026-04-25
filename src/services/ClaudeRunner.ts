@@ -27,7 +27,7 @@ export class ClaudeRunner {
 
   constructor() {
     this.config = CONFIG.CLAUDE;
-    this.timeoutMs = CONFIG.TIMEOUT_MS || 300000;
+    this.timeoutMs = CONFIG.TIMEOUT_MS || 900000;
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
@@ -329,7 +329,12 @@ export class ClaudeRunner {
       // Écrire le prompt via stdin (important: le faire avant d'écouter les événements)
       if (child.stdin) {
         try {
-          child.stdin.write(finalPrompt);
+          // S'assurer que le prompt ne contient pas de surrogates isolés (casse l'encodage UTF-8)
+          const sanitizedPrompt = typeof (finalPrompt as any).toWellFormed === 'function' 
+            ? (finalPrompt as any).toWellFormed()
+            : finalPrompt.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
+            
+          child.stdin.write(sanitizedPrompt);
           child.stdin.end();
         } catch (stdinError) {
           console.error(`[ClaudeRunner] ⚠️ Stdin write error: ${stdinError}`);

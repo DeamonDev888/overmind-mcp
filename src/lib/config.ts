@@ -26,7 +26,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const DEFAULT_CONFIG: ConfigType = {
-  TIMEOUT_MS: 300000, // 5 minutes
+  TIMEOUT_MS: 900000, // 15 minutes
   CLAUDE: {
     CORE: '--output-format json',
     PERMISSIONS: '--dangerously-skip-permissions',
@@ -37,7 +37,7 @@ export const DEFAULT_CONFIG: ConfigType = {
   },
   KILO: {
     CORE: '--auto --json-io',
-    DEFAULT_MODEL: 'stepfun/step-3.5-flash:free',
+    DEFAULT_MODEL: 'kilo/tencent/hy3-preview:free',
     PATHS: {
       SETTINGS: './.kilocode/settings.json',
     },
