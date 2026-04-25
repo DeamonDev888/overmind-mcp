@@ -37,7 +37,7 @@ export const updateAgentConfigSchema = z.object({
       "Variables d'environnement supplémentaires à définir ou écraser (ex: { 'API_KEY': '123' })",
     ),
   runner: z
-    .enum(['claude', 'gemini', 'kilo', 'qwen', 'openclaw', 'cline', 'opencode', 'trae'])
+    .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
     .optional()
     .describe('Type de runner pour cet agent'),
   mode: z
@@ -60,10 +60,7 @@ export const updateAgentConfigSchema = z.object({
 
 // --- Tools ---
 
-export async function listAgents(args: z.infer<typeof listAgentsSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function listAgents(args: z.infer<typeof listAgentsSchema>) {
   const manager = new AgentManager();
   try {
     const agentsList = await manager.listAgents(args.details);
@@ -95,10 +92,7 @@ export async function listAgents(args: z.infer<typeof listAgentsSchema>): Promis
   }
 }
 
-export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>) {
   const manager = new AgentManager();
   const { name } = args;
 
@@ -126,10 +120,7 @@ export async function deleteAgent(args: z.infer<typeof deleteAgentSchema>): Prom
   };
 }
 
-export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSchema>) {
   const manager = new AgentManager();
   const { name, model, mcpServers, env, runner, mode, cliPath, file, content } = args;
 
@@ -138,16 +129,8 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
       model,
       mcpServers,
       env,
-      runner,
-      mode: mode as
-        | 'code'
-        | 'architect'
-        | 'ask'
-        | 'debug'
-        | 'orchestrator'
-        | 'plan'
-        | 'act'
-        | undefined,
+      runner: runner as any,
+      mode: mode as any,
       cliPath,
       file,
       content,

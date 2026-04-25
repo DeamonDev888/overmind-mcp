@@ -12,6 +12,7 @@ export interface RunAgentOptions {
   autoResume?: boolean;
   cwd?: string;
   configPath?: string;
+  silent?: boolean;
 }
 
 export interface RunAgentResult {
@@ -38,7 +39,7 @@ export class ClaudeRunner {
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName);
+      const lastId = await getLastSessionId(agentName, options.configPath);
       if (lastId) {
         sessionId = lastId;
       }
@@ -306,7 +307,7 @@ export class ClaudeRunner {
         spawnArgs = [...argsSpawn, '-p'];
       }
 
-      if (agentName) {
+      if (agentName && !options.silent) {
         agentCustomEnv.OVERMIND_AGENT_NAME = agentName;
         const id = agentCustomEnv.AGENT_NICKNAME || agentName;
         console.error(`[ClaudeRunner] 🚀 Démarrage de l'agent ${id}...`);
@@ -368,7 +369,7 @@ export class ClaudeRunner {
         child.stdout.on('data', (d: Buffer) => {
           const chunk = d.toString();
           stdout += chunk;
-          if (agentName) {
+          if (agentName && !options.silent) {
             const id = agentCustomEnv.AGENT_NICKNAME || agentName;
             process.stderr.write(`[ClaudeRunner:${id}] ${chunk}`);
           }
@@ -378,7 +379,7 @@ export class ClaudeRunner {
         child.stderr.on('data', (d: Buffer) => {
           const chunk = d.toString();
           stderr += chunk;
-          if (agentName) {
+          if (agentName && !options.silent) {
             const id = agentCustomEnv.AGENT_NICKNAME || agentName;
             process.stderr.write(`[ClaudeRunner:${id}:ERR] ${chunk}`);
           }
@@ -439,40 +440,60 @@ export class ClaudeRunner {
         }
 
         const fullRaw = stdout + (stderr ? `\n\n--- STDERR ---\n${stderr}` : '');
-        let specificError: string | undefined;
-
+        
         try {
-          // Extract raw text output from claude CLI
-          const rawText = stdout.trim();
+          // Robust JSON extraction from stdout
+          let jsonEnvelope: any = null;
+          const trimmedStdout = stdout.trim();
           
-          let resultText = rawText;
-          let foundSessionId = sessionId;
-
           try {
-            // Tentative de parsing du JSON envelope (obligatoire avec --output-format json)
-            const envelope = JSON.parse(rawText);
-            
-            if (envelope.session_id && agentName) {
-              foundSessionId = envelope.session_id;
-              await saveSessionId(agentName, envelope.session_id);
-            }
-            
-            // Si c'est une enveloppe avec un champ reply, on l'extrait
-            resultText = envelope.reply || envelope.result || rawText;
+            jsonEnvelope = JSON.parse(trimmedStdout);
           } catch (_) {
-            // Fallback si ce n'est pas du JSON (ne devrait pas arriver avec --output-format json)
-            resultText = rawText;
+            // If direct parse fails, try to find the last JSON object in the output
+            // (claude CLI sometimes outputs logs before the JSON envelope)
+            const lastBrace = trimmedStdout.lastIndexOf('}');
+            const firstBrace = trimmedStdout.lastIndexOf('{', lastBrace);
+            if (firstBrace !== -1 && lastBrace !== -1) {
+              try {
+                jsonEnvelope = JSON.parse(trimmedStdout.substring(firstBrace, lastBrace + 1));
+              } catch (__) {
+                // Still failed
+              }
+            }
+          }
+
+          if (jsonEnvelope) {
+            let foundSessionId = sessionId;
+            if (jsonEnvelope.session_id && agentName) {
+              foundSessionId = jsonEnvelope.session_id;
+              await saveSessionId(agentName, jsonEnvelope.session_id, options.configPath);
+            }
+
+            return resolve({
+              result: jsonEnvelope.reply || jsonEnvelope.result || stdout.trim(),
+              sessionId: foundSessionId,
+              rawOutput: stdout,
+            });
+          }
+
+          // Fallback to raw text if no JSON found but code was 0
+          if (code === 0) {
+            return resolve({
+              result: stdout.trim(),
+              sessionId,
+              rawOutput: stdout,
+            });
           }
 
           resolve({
-            result: resultText,
-            sessionId: foundSessionId,
-            rawOutput: stdout,
+            result: '',
+            error: 'JSON_PARSE_ERROR',
+            rawOutput: fullRaw,
           });
-        } catch (_error) {
+        } catch (error) {
           resolve({
             result: '',
-            error: specificError || 'JSON_PARSE_ERROR',
+            error: `INTERNAL_ERROR: ${error instanceof Error ? error.message : String(error)}`,
             rawOutput: fullRaw,
           });
         }

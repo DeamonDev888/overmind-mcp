@@ -11,6 +11,7 @@ export interface RunAgentOptions {
   autoResume?: boolean;
   cwd?: string;
   configPath?: string;
+  silent?: boolean;
 }
 
 export interface RunAgentResult {
@@ -20,13 +21,13 @@ export interface RunAgentResult {
   rawOutput?: string;
 }
 
-export class TraeRunner {
+export class QwenCLIRunner {
   private config: typeof CONFIG.CLAUDE;
   private timeoutMs: number;
 
   constructor() {
     this.config = CONFIG.CLAUDE;
-    this.timeoutMs = CONFIG.TIMEOUT_MS || 60000; // Trae may need more time
+    this.timeoutMs = CONFIG.TIMEOUT_MS || 30000;
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
@@ -36,7 +37,7 @@ export class TraeRunner {
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName);
+      const lastId = await getLastSessionId(agentName, options.configPath);
       if (lastId) {
         sessionId = lastId;
       }
@@ -49,6 +50,7 @@ export class TraeRunner {
       try {
         const agentSettingsPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
+          options.configPath
         );
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
@@ -61,13 +63,13 @@ export class TraeRunner {
       }
     }
 
-    // Trae CLI: `trae solo "prompt"` for SOLO agentic mode
-    const argsSpawn: string[] = ['solo', '--headless', prompt];
-    if (sessionId) argsSpawn.push('--session', sessionId);
+    // qwen-code CLI: `qwen -p "prompt"` (non-interactive mode via stdin)
+    const argsSpawn: string[] = ['-p', prompt];
 
     return new Promise((resolve) => {
       const isWin = process.platform === 'win32';
-      const command = isWin ? 'trae.exe' : 'trae';
+      // `qwen` binary from @qwen-code/qwen-code global install
+      const command = isWin ? 'qwen.cmd' : 'qwen';
 
       const child: ChildProcess = spawn(command, argsSpawn, {
         cwd: options.cwd || process.cwd(),
@@ -98,7 +100,7 @@ export class TraeRunner {
         }
 
         if (agentName && sessionId) {
-          await saveSessionId(agentName, sessionId);
+          await saveSessionId(agentName, sessionId, options.configPath);
         }
 
         resolve({
