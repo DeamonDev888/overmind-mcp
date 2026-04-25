@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Installation | OverMind-MCP</title>
+    <meta
+      name="description"
+      content="Guide d'installation d'OverMind-MCP - Installation globale via NPM ou locale pour le développement"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link rel="stylesheet" href="styles.css?v=1.3.4" />
+  </head>
+  <body>
+    <canvas class="matrix-bg" id="matrix"></canvas>
+    <div class="grid-overlay"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="main-content">
+      <header>
+        <div class="container">
+          <nav>
+            <div class="logo">
+              <i class="fas fa-brain"></i>
+              <span class="logo-text">OverMind-MCP</span>
+              <div class="logo-glitch"></div>
+            </div>
+            <ul class="nav-links">
+              <li><a href="features.html" class="nav-link">Fonctionnalités</a></li>
+              <li><a href="installation.html" class="nav-link active">Installation</a></li>
+              <li><a href="library.html" class="nav-link">Bibliothèque</a></li>
+              <li><a href="prompt.html" class="nav-link"><i class="fas fa-robot"></i> Prompt</a></li>
+              <li>
+                <a
+                  href="https://deamondev888.github.io/PostgreSQL-MCP-Serveur/"
+                  target="_blank"
+                  class="nav-link nav-link-highlight"
+                  ><i class="fas fa-database"></i> PostgreSQL-MCP</a
+                >
+              </li>
+            </ul>
+            <div class="mobile-toggle">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </nav>
+        </div>
+      </header>
+
+      <section class="hero hero-small">
+        <div class="container">
+          <div class="hero-content">
+            <a href="index.html" class="back-btn">
+              <i class="fas fa-arrow-left"></i>
+              Retour à l'accueil
+            </a>
+            <h1 class="hero-title"><span class="glitch" data-text="Installation">Installation</span></h1>
+            <p class="hero-subtitle">Déployez l'OverMind en quelques minutes</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="installation">
+        <div class="container">
+          <div class="section-header">
+            <h2 class="section-title">
+              <i class="fas fa-download"></i>
+              Installation
+            </h2>
+          </div>
+          <div class="install-tabs">
+            <button class="tab-btn active" data-tab="global">
+              <i class="fas fa-globe"></i>
+              Globale via NPM
+            </button>
+            <button class="tab-btn" data-tab="local">
+              <i class="fas fa-folder"></i>
+              Locale (Dev)
+            </button>
+          </div>
+          <div class="tab-content active" id="global">
+            <div class="code-container">
+              <div class="code-header">
+                <span class="code-title">Terminal</span>
+                <div class="code-actions">
+                  <button class="copy-btn">
+                    <i class="fas fa-copy"></i>
+                  </button>
+                </div>
+              </div>
+              <pre><code class="language-bash"># Installation globale
+npm install -g overmind-mcp
+
+# Configuration MCP pour Client IDE ou CLI
+{
+  "mcpServers": {
+    "overmind": {
+      "command": "npx",
+      "args": ["-y", "overmind-mcp@latest"]
+    }
+  }
+}</code></pre>
+            </div>
+          </div>
+          <div class="tab-content" id="local">
+            <div class="code-container">
+              <div class="code-header">
+                <span class="code-title">Terminal</span>
+                <div class="code-actions">
+                  <button class="copy-btn">
+                    <i class="fas fa-copy"></i>
+                  </button>
+                </div>
+              </div>
+              <pre><code class="language-bash"># 1. Cloner le repo localement
+git clone https://github.com/DeamonDev888/overmind-mcp
+cd overmind-mcp
+
+# 2. Installer les dépendances
+pnpm install
+
+# 3. Build le projet
+pnpm run build
+
+# Configuration MCP
+{
+  "mcpServers": {
+    "overmind": {
+      "command": "node",
+      "args": ["PATH/ABSOLU/dist/bin/cli.js"]
+    }
+  }
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div class="container">
+          <div class="footer-content">
+            <div class="footer-brand">
+              <div class="footer-logo">
+                <i class="fas fa-brain"></i>
+                <span>OverMind-MCP</span>
+              </div>
+              <p>Le futur de l'orchestration IA</p>
+            </div>
+            <div class="footer-social">
+              <a href="https://www.npmjs.com/package/overmind-mcp" target="_blank" title="NPM">
+                <i class="fab fa-npm"></i>
+              </a>
+              <a href="https://github.com/DeamonDev888/overmind-mcp" target="_blank" title="GitHub">
+                <i class="fab fa-github"></i>
+              </a>
+              <a href="https://discord.gg/4AR82phtBz" target="_blank" title="Discord">
+                <i class="fab fa-discord"></i>
+              </a>
+              <a
+                href="https://deamondev888.github.io/PostgreSQL-MCP-Serveur/"
+                target="_blank"
+                title="PostgreSQL-MCP"
+              >
+                <i class="fas fa-database"></i>
+              </a>
+            </div>
+          </div>
+          <div class="footer-bottom">
+            <p>Projet propulsé par DeaMoN888 - 2026</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <!-- SVG Visual Effects Definitions -->
+    <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="cyber-glitch">
+          <feTurbulence type="fractalNoise" baseFrequency="0.00001" numOctaves="1" result="noise" />
+          <feOffset dx="0" dy="0" result="offset" />
+          <feDisplacementMap inSourceGraphic" in2="noise" scale="2" />
+        </filter>
+
+        <filter id="noiseFilter">
+          <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="3" stitchTiles="stitch" />
+          <feColorMatrix type="saturate" values="0" />
+          <feComponentTransfer>
+            <feFuncA type="linear" slope="0.05" />
+          </feComponentTransfer>
+        </filter>
+
+        <linearGradient id="cyber-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="var(--neon-cyan)" />
+          <stop offset="50%" stop-color="var(--neon-blue)" />
+          <stop offset="100%" stop-color="var(--neon-cyan)" />
+        </linearGradient>
+      </defs>
+    </svg>
+
+    <script src="script.js?v=1.3.4" defer></script>
+  </body>
+</html>
