@@ -178,8 +178,104 @@ document.addEventListener('DOMContentLoaded', () => {
   if (mobileToggle) {
     mobileToggle.addEventListener('click', () => {
       navLinks.classList.toggle('active');
+      mobileToggle.classList.toggle('active');
+    });
+
+    // Close mobile menu when clicking on a link
+    const mobileNavLinks = navLinks.querySelectorAll('.nav-link');
+    mobileNavLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        navLinks.classList.remove('active');
+        mobileToggle.classList.remove('active');
+      });
+    });
+
+    // Close mobile menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('nav') && navLinks.classList.contains('active')) {
+        navLinks.classList.remove('active');
+        mobileToggle.classList.remove('active');
+      }
     });
   }
+
+  // Scroll to Top Button
+  const scrollTopBtn = document.getElementById('scrollTop');
+  if (scrollTopBtn) {
+    window.addEventListener('scroll', () => {
+      if (window.pageYOffset > 300) {
+        scrollTopBtn.classList.add('visible');
+      } else {
+        scrollTopBtn.classList.remove('visible');
+      }
+    });
+
+    scrollTopBtn.addEventListener('click', () => {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    });
+  }
+
+  // Active Navigation Link based on scroll position
+  const sections = document.querySelectorAll('.prompt-section[id]');
+  const navLinksArray = Array.from(document.querySelectorAll('.toc-link'));
+
+  function updateActiveNavLink() {
+    let currentSection = '';
+
+    sections.forEach(section => {
+      const sectionTop = section.offsetTop;
+      const sectionHeight = section.clientHeight;
+      if (window.pageYOffset >= (sectionTop - 200)) {
+        currentSection = section.getAttribute('id');
+      }
+    });
+
+    navLinksArray.forEach(link => {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === `#${currentSection}`) {
+        link.classList.add('active');
+      }
+    });
+  }
+
+  window.addEventListener('scroll', updateActiveNavLink);
+  updateActiveNavLink(); // Initial call
+
+  // Smooth reveal animation for prompt sections
+  const observerOptions = {
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px'
+  };
+
+  const sectionObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.style.opacity = '1';
+        entry.target.style.transform = 'translateY(0)';
+      }
+    });
+  }, observerOptions);
+
+  document.querySelectorAll('.prompt-section').forEach(section => {
+    section.style.opacity = '0';
+    section.style.transform = 'translateY(30px)';
+    section.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+    sectionObserver.observe(section);
+  });
+
+  // Rule cards hover effect enhancement
+  const ruleCards = document.querySelectorAll('.rule-card');
+  ruleCards.forEach(card => {
+    card.addEventListener('mouseenter', () => {
+      card.style.zIndex = '10';
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.zIndex = '1';
+    });
+  });
 
   // PROFESSIONAL CORTEX ENGINE
   const cortex = document.querySelector('.orchestration-cortex');
