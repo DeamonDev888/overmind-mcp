@@ -26,7 +26,7 @@ export class GeminiRunner {
 
   constructor() {
     this.config = CONFIG.CLAUDE;
-    this.timeoutMs = CONFIG.TIMEOUT_MS || 300000; // 5 min default for tools
+    this.timeoutMs = CONFIG.TIMEOUT_MS || 900000; // 15 min default
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {

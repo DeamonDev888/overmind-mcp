@@ -53,7 +53,7 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
   isError?: boolean;
   sessionId?: string;
 }> {
-  const { runner, prompt, agentName, autoResume, sessionId, mode, path: argPath, config: argConfig } = args;
+  const { runner, prompt, agentName, autoResume = false, sessionId, mode, path: argPath, config: argConfig } = args;
 
   const finalPath = argPath || getWorkspaceDir();
   const finalConfig = argConfig || getWorkspaceDir();
@@ -72,6 +72,8 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
     switch (runner) {
       case 'claude': {
         const claudeRunner = new ClaudeRunner();
+
+        // Première tentative avec le sessionId fourni
         result = await claudeRunner.runAgent({
           prompt,
           agentName,
@@ -80,6 +82,21 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           cwd: finalPath,
           configPath: finalConfig,
         });
+
+        // [FIX] Si sessionId invalide, retenter sans sessionId (nouvelle session)
+        if (result.error?.includes('No conversation found') ||
+            result.error?.includes('session') ||
+            result.error?.includes('EXIT_CODE_1')) {
+          console.warn(`[run_agent] Session invalide détectée, création nouvelle session...`);
+          result = await claudeRunner.runAgent({
+            prompt,
+            agentName,
+            autoResume: false, // Force nouvelle session
+            sessionId: undefined, // Pas de sessionId pour nouvelle session
+            cwd: finalPath,
+            configPath: finalConfig,
+          });
+        }
         break;
       }
 
@@ -93,6 +110,21 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           cwd: finalPath,
           configPath: finalConfig,
         });
+
+        // Retry si session invalide
+        if (result.error?.includes('No conversation found') ||
+            result.error?.includes('session') ||
+            result.error?.includes('EXIT_CODE_1')) {
+          console.warn(`[run_agent] Session Gemini invalide, création nouvelle session...`);
+          result = await geminiRunner.runAgent({
+            prompt,
+            agentName,
+            autoResume: false,
+            sessionId: undefined,
+            cwd: finalPath,
+            configPath: finalConfig,
+          });
+        }
         break;
       }
 
@@ -114,6 +146,22 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           cwd: finalPath,
           configPath: finalConfig,
         });
+
+        // Retry si session invalide
+        if (result.error?.includes('No conversation found') ||
+            result.error?.includes('session') ||
+            result.error?.includes('EXIT_CODE_1')) {
+          console.warn(`[run_agent] Session Kilo invalide, création nouvelle session...`);
+          result = await kiloRunner.runAgent({
+            prompt,
+            agentName,
+            autoResume: false,
+            sessionId: undefined,
+            mode: mode as 'code' | 'architect' | 'ask' | 'debug' | 'orchestrator' | undefined,
+            cwd: finalPath,
+            configPath: finalConfig,
+          });
+        }
         break;
       }
 
@@ -127,6 +175,21 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           cwd: finalPath,
           configPath: finalConfig,
         });
+
+        // Retry si session invalide
+        if (result.error?.includes('No conversation found') ||
+            result.error?.includes('session') ||
+            result.error?.includes('EXIT_CODE_1')) {
+          console.warn(`[run_agent] Session Qwen invalide, création nouvelle session...`);
+          result = await qwenRunner.runAgent({
+            prompt,
+            agentName,
+            autoResume: false,
+            sessionId: undefined,
+            cwd: finalPath,
+            configPath: finalConfig,
+          });
+        }
         break;
       }
 
@@ -140,6 +203,21 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           cwd: finalPath,
           configPath: finalConfig,
         });
+
+        // Retry si session invalide
+        if (result.error?.includes('No conversation found') ||
+            result.error?.includes('session') ||
+            result.error?.includes('EXIT_CODE_1')) {
+          console.warn(`[run_agent] Session OpenClaw invalide, création nouvelle session...`);
+          result = await openClawRunner.runAgent({
+            prompt,
+            agentName,
+            autoResume: false,
+            sessionId: undefined,
+            cwd: finalPath,
+            configPath: finalConfig,
+          });
+        }
         break;
       }
 
@@ -154,6 +232,22 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           cwd: finalPath,
           configPath: finalConfig,
         });
+
+        // Retry si session invalide
+        if (result.error?.includes('No conversation found') ||
+            result.error?.includes('session') ||
+            result.error?.includes('EXIT_CODE_1')) {
+          console.warn(`[run_agent] Session Cline invalide, création nouvelle session...`);
+          result = await clineRunner.runAgent({
+            prompt,
+            agentName,
+            autoResume: false,
+            sessionId: undefined,
+            mode: mode as 'plan' | 'act' | undefined,
+            cwd: finalPath,
+            configPath: finalConfig,
+          });
+        }
         break;
       }
 
@@ -167,6 +261,21 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           cwd: finalPath,
           configPath: finalConfig,
         });
+
+        // Retry si session invalide
+        if (result.error?.includes('No conversation found') ||
+            result.error?.includes('session') ||
+            result.error?.includes('EXIT_CODE_1')) {
+          console.warn(`[run_agent] Session OpenCode invalide, création nouvelle session...`);
+          result = await openCodeRunner.runAgent({
+            prompt,
+            agentName,
+            autoResume: false,
+            sessionId: undefined,
+            cwd: finalPath,
+            configPath: finalConfig,
+          });
+        }
         break;
       }
 
@@ -180,6 +289,21 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           cwd: finalPath,
           configPath: finalConfig,
         });
+
+        // Retry si session invalide
+        if (result.error?.includes('No conversation found') ||
+            result.error?.includes('session') ||
+            result.error?.includes('EXIT_CODE_1')) {
+          console.warn(`[run_agent] Session Trae invalide, création nouvelle session...`);
+          result = await traeRunner.runAgent({
+            prompt,
+            agentName,
+            autoResume: false,
+            sessionId: undefined,
+            cwd: finalPath,
+            configPath: finalConfig,
+          });
+        }
         break;
       }
 
@@ -262,11 +386,12 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
     };
   }
 
+  // Formater la réponse de manière propre et structurée
+  const responseText = result.result || '';
+
   return {
     content: [
-      { type: 'text', text: result.result || '' },
-      { type: 'text', text: `RUNNER: ${runner}` },
-      { type: 'text', text: `SESSION_ID: ${result.sessionId}` },
+      { type: 'text', text: responseText },
     ],
     sessionId: result.sessionId,
   };
