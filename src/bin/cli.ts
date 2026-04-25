@@ -45,6 +45,21 @@ console.log = (...args) => console.error(...args);
 console.info = (...args) => console.error(...args);
 console.warn = (...args) => console.error(...args);
 
+// 🛡️ ULTIMATE SHIELD: Proxy process.stdout.write to redirect non-JSON data to stderr
+const originalStdoutWrite = process.stdout.write;
+process.stdout.write = function (chunk: string | Uint8Array, encoding?: any, callback?: any): boolean {
+  const str = typeof chunk === 'string' ? chunk : chunk.toString();
+  const trimmed = str.trim();
+  
+  // Allow JSON-RPC (starts with {) and empty/newline chunks (often used by transport)
+  if (trimmed.startsWith('{') || trimmed === '') {
+    return originalStdoutWrite.call(process.stdout, chunk, encoding, callback);
+  }
+  
+  // Redirect everything else to stderr
+  return process.stderr.write(chunk, encoding, callback);
+} as any;
+
 // Setup completed - Dynamically import server components AFTER process.env is configured
 const { createServer } = await import('../server.js');
 const { updateConfig } = await import('../lib/config.js');
