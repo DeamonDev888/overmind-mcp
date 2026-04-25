@@ -397,6 +397,11 @@ nav {
   position: relative;
 }
 
+.hero-small {
+  min-height: 40vh;
+  padding: 40px 0 60px;
+}
+
 .hero .container {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1207,6 +1212,32 @@ section {
 .section-subtitle {
   font-size: 1.2rem;
   color: var(--text-secondary);
+}
+
+/* Back Button */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 30px;
+  padding: 12px 24px;
+  background: rgba(0, 255, 245, 0.1);
+  border: 1px solid var(--neon-cyan);
+  border-radius: 8px;
+  color: var(--neon-cyan);
+  text-decoration: none;
+  transition: all 0.3s ease;
+  font-weight: 600;
+}
+
+.back-btn:hover {
+  background: rgba(0, 255, 245, 0.2);
+  transform: translateX(-5px);
+  box-shadow: 0 5px 15px rgba(0, 255, 245, 0.2);
+}
+
+.back-btn i {
+  font-size: 1rem;
 }
 
 /* Features Section */
