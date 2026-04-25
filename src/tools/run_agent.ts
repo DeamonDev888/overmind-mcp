@@ -14,14 +14,8 @@ export const runAgentSchema = z.object({
     .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
     .describe('Type de runner à utiliser'),
   prompt: z.string().describe("Le prompt à envoyer à l'agent"),
-  sessionId: z
-    .string()
-    .optional()
-    .describe('ID de session pour continuer une conversation (manuel)'),
-  agentName: z
-    .string()
-    .optional()
-    .describe("Nom de l'agent (pour logging/monitoring et persistance)"),
+  sessionId: z.string().optional(),
+  agentName: z.string().optional().describe("Nom de l'agent (pour logging/monitoring et persistance)"),
   autoResume: z
     .boolean()
     .optional()
@@ -53,7 +47,7 @@ export const runAgentSchema = z.object({
     .string()
     .optional()
     .describe("Modèle spécifique à utiliser (ex: tencent/hy3-preview pour hermes)"),
-});
+}).passthrough();
 
 import { verifyInstallation } from '../lib/InstallHelper.js';
 
