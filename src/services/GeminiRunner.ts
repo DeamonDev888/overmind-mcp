@@ -96,7 +96,7 @@ export class GeminiRunner {
       if (fs.existsSync(globalFile)) {
         try {
           fs.copyFileSync(globalFile, localFile);
-          if (!options.silent) console.log(`[GeminiRunner] OAuth synchronisé: ${file} vers ${localFile}`);
+          if (!options.silent) console.error(`[GeminiRunner] OAuth synchronisé: ${file} vers ${localFile}`);
         } catch (err) {
           if (!options.silent) console.error(`[GeminiRunner] Échec synchronisation ${file}: ${err}`);
         }
@@ -138,7 +138,7 @@ export class GeminiRunner {
           }
           
           fs.writeFileSync(mcpPath, JSON.stringify(mcpToUse, null, 2));
-          if (!options.silent) console.log(`[GeminiRunner] MCP synchronisé: ${mcpPath}`);
+          if (!options.silent) console.error(`[GeminiRunner] MCP synchronisé: ${mcpPath}`);
         }
       }
     }
