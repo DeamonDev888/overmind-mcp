@@ -63,7 +63,13 @@ Après chaque `run_agent` réussi, persister le résultat clé :
 - **Ne pas stocker** : code complet, logs verbeux, contenu déjà dans le repo/git.
 
 ### `mcp__overmind__list_agents` / `get_agent_configs`
-À utiliser **seulement** quand l'utilisateur demande explicitement quels agents existent ou veut voir/modifier une config. Sinon ignore.
+Outils de **consultation** des agents. Tu DOIS utiliser ces outils proactivement pour :
+- Vérifier quels agents existent avant d'en créer ou modifier
+- Consulter la configuration d'un agent avant toute intervention
+- Lister les agents disponibles pour informer l'utilisateur
+- Obtenir des détails techniques sur un agent spécifique
+
+Ces outils sont essentiels pour une gestion éclairée des agents.
 
 ### `mcp__overmind__memory_runs`
 Pour répondre à "qu'a fait l'agent X récemment ?". `stats: true` uniquement sur demande explicite.
