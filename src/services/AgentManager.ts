@@ -43,6 +43,7 @@ export class AgentManager {
     const files = await fs.readdir(agentsDir);
     const agentFiles = files.filter((f) => f.endsWith('.md'));
     const agentsList: string[] = [];
+    const availableServers = await this.getAvailableMcpServers();
 
     for (const file of agentFiles) {
       const agentName = file.replace('.md', '');
@@ -59,7 +60,6 @@ export class AgentManager {
         const model = settings.env?.ANTHROPIC_MODEL || 'settings-default';
         const servers = settings.enabledMcpjsonServers || [];
 
-        const availableServers = await this.getAvailableMcpServers();
         const serverStatus = servers.map((s: string) => {
           if (availableServers.includes(s)) return s;
 
