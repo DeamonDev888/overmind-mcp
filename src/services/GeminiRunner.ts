@@ -195,7 +195,7 @@ export class GeminiRunner {
 
         try {
           // Robust JSON extraction from stdout
-          let jsonOutput: any = null;
+          let jsonOutput: Record<string, unknown> | null = null;
           const trimmedStdout = stdout.trim();
           
           try {

@@ -331,8 +331,8 @@ export class ClaudeRunner {
       if (child.stdin) {
         try {
           // S'assurer que le prompt ne contient pas de surrogates isolés (casse l'encodage UTF-8)
-          const sanitizedPrompt = typeof (finalPrompt as any).toWellFormed === 'function' 
-            ? (finalPrompt as any).toWellFormed()
+          const sanitizedPrompt = typeof (finalPrompt as string).toWellFormed === 'function' 
+            ? (finalPrompt as string).toWellFormed()
             : finalPrompt.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
             
           child.stdin.write(sanitizedPrompt);
@@ -441,9 +441,9 @@ export class ClaudeRunner {
 
         const fullRaw = stdout + (stderr ? `\n\n--- STDERR ---\n${stderr}` : '');
         
-        try {
-          // Robust JSON extraction from stdout
-          let jsonEnvelope: any = null;
+          try {
+            // Robust JSON extraction from stdout
+            let jsonEnvelope: Record<string, unknown> | null = null;
           const trimmedStdout = stdout.trim();
           
           try {

@@ -102,14 +102,14 @@ export async function verifyInstallation(runnerKey: string): Promise<{ ok: boole
                      `Plus d'infos : ${meta.url}`
           };
         }
-      } catch (verErr) {
+      } catch (_verErr) {
         // Version check failed but CLI exists, maybe just warn?
         console.error(`[InstallHelper] Warning: Could not check version for ${meta.name}`);
       }
     }
 
     return { ok: true };
-  } catch (err) {
+  } catch (_err) {
     return {
       ok: false,
       message: `❌ **${meta.name} n'est pas installé !**\n\n` +

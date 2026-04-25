@@ -79,13 +79,13 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>) {
     case 'gemini':
       return runGeminiAgent(params);
     case 'kilo':
-      return runKiloAgent(params as any);
+      return runKiloAgent(params);
     case 'qwencli':
       return runQwenCLIAgent(params);
     case 'openclaw':
       return runOpenClawAgent(params);
     case 'cline':
-      return runClineAgent(params as any);
+      return runClineAgent(params);
     case 'opencode':
       return runOpenCodeAgent(params);
     case 'hermes':

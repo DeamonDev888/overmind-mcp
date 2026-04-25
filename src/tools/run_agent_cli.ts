@@ -29,7 +29,7 @@ async function main() {
   console.error(`\n[CLI] 🤖 Lancement de l'agent '${agentName}' via '${runner}'${model ? ` (Modèle: ${model})` : ''}...`);
   
   const result = await runAgent({
-    runner: runner as any,
+    runner: runner as Parameters<typeof runAgent>[0]['runner'],
     agentName,
     prompt,
     model,
