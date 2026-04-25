@@ -224,8 +224,20 @@ export class ClaudeRunner {
     }
 
     const argsSpawn: string[] = [];
-    if (CORE) argsSpawn.push(...CORE.split(' ').filter(Boolean));
+    const debugInfo = `[ClaudeRunner] 🔍 PERMISSIONS="${PERMISSIONS}" CORE="${CORE}"`;
+    console.error(debugInfo);
+    // Also write to file for debugging
+    fs.appendFileSync('C:\\SierraChart\\ACS_Source\\BTCacsil\\btc_ingest\\logs\\claude_runner_debug.log', 
+      `${new Date().toISOString()} ${debugInfo}\n`);
+    
+    if (CORE) {
+      argsSpawn.push(...CORE.split(' ').filter(Boolean));
+    }
     if (PERMISSIONS) argsSpawn.push(...PERMISSIONS.split(' ').filter(Boolean));
+    const fullArgsInfo = `[ClaudeRunner] 🔍 Full args: ${JSON.stringify(argsSpawn)}`;
+    console.error(fullArgsInfo);
+    fs.appendFileSync('C:\\SierraChart\\ACS_Source\\BTCacsil\\btc_ingest\\logs\\claude_runner_debug.log', 
+      `${new Date().toISOString()} ${fullArgsInfo}\n`);
     // DÉCISION IMPORTANTE: On n'ajoute pas de guillemets manuels ici, spawn s'en occupe
 
     argsSpawn.push('--settings', finalSettingsPath);
@@ -313,6 +325,7 @@ export class ClaudeRunner {
         console.error(`[ClaudeRunner] 🚀 Démarrage de l'agent ${id}...`);
         console.error(`[ClaudeRunner] 📏 Prompt Size: ${finalPrompt.length} chars`);
         // Debug: Log la commande pour faciliter le troubleshooting
+        console.error(`[ClaudeRunner] 🔧 Full Args: ${command} ${spawnArgs.join(' ')}`);
         if (process.env.DEBUG_CLAUDE_RUNNER) {
           console.error(`[ClaudeRunner] 🔧 Command: ${command}`);
           console.error(`[ClaudeRunner] 🔧 Args: ${spawnArgs.slice(0, 3).join(' ')}... (${spawnArgs.length} args total)`);
@@ -443,7 +456,7 @@ export class ClaudeRunner {
             // Robust JSON extraction from stdout
             let jsonEnvelope: Record<string, unknown> | null = null;
           const trimmedStdout = stdout.trim();
-          
+           
           try {
             jsonEnvelope = JSON.parse(trimmedStdout);
           } catch (_) {
@@ -459,14 +472,17 @@ export class ClaudeRunner {
               }
             }
           }
-
+          
+          console.error(`[ClaudeRunner] 🔍 jsonEnvelope keys: ${jsonEnvelope ? Object.keys(jsonEnvelope).join(', ') : 'null'}`);
+          console.error(`[ClaudeRunner] 🔍 jsonEnvelope.result type: ${typeof jsonEnvelope?.result}, length: ${typeof jsonEnvelope?.result === 'string' ? (jsonEnvelope.result as string).length : 'N/A'}`);
+          
           if (jsonEnvelope) {
             let foundSessionId = sessionId;
             if (jsonEnvelope.session_id && agentName) {
               foundSessionId = jsonEnvelope.session_id as string;
               await saveSessionId(agentName, jsonEnvelope.session_id as string, options.configPath);
             }
-            
+             
             return resolve({
               result: (jsonEnvelope.reply as string) || (jsonEnvelope.result as string) || stdout.trim(),
               sessionId: foundSessionId,

@@ -139,14 +139,14 @@ export class KiloRunner {
       const command = 'kilo';
 
       if (!options.silent) {
-        console.log(
-          `\n\x1b[33m[Kilo] ⚡ Initialisation de l'agent: ${agentName || 'Anonyme'}\x1b[0m`,
+        process.stderr.write(
+          `\n\x1b[33m[Kilo] ⚡ Initialisation de l'agent: ${agentName || 'Anonyme'}\x1b[0m\n`,
         );
-        console.log(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m`);
-        if (mode) console.log(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m`);
-        if (sessionId) console.log(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m`);
+        process.stderr.write(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m\n`);
+        if (mode) process.stderr.write(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m\n`);
+        if (sessionId) process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
 
-        console.log(`\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m`);
+        process.stderr.write(`\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m\n`);
       }
       const child: ChildProcess = spawn(command, argsSpawn, {
         cwd: options.cwd || process.cwd(),
@@ -196,7 +196,7 @@ export class KiloRunner {
             } catch (_e) {
               // Si ce n'est pas du JSON, c'est peut-être du log
               if (!trimmedLine.startsWith('{') && !options.silent) {
-                process.stdout.write(`\x1b[36m[Kilo]\x1b[0m ${trimmedLine}\n`);
+                process.stderr.write(`\x1b[36m[Kilo]\x1b[0m ${trimmedLine}\n`);
               }
             }
           }
@@ -216,10 +216,10 @@ export class KiloRunner {
             lowerChunk.includes('rate limit') ||
             chunk.includes('429')
           ) {
-            console.log(`\n\x1b[41m\x1b[37m[Kilo ALERT] QUOTA ATTEINT / MODÈLE ÉPUISÉ\x1b[0m`);
-            console.log(`\x1b[31m[Détail] ${chunk.trim()}\x1b[0m`);
+            process.stderr.write(`\n\x1b[41m\x1b[37m[Kilo ALERT] QUOTA ATTEINT / MODÈLE ÉPUISÉ\x1b[0m\n`);
+            process.stderr.write(`\x1b[31m[Détail] ${chunk.trim()}\x1b[0m\n`);
           } else if (!options.silent) {
-            process.stdout.write(`\x1b[31m[Kilo STDERR]\x1b[0m ${chunk}`);
+            process.stderr.write(`\x1b[31m[Kilo STDERR]\x1b[0m ${chunk}`);
           }
         });
       }
@@ -233,12 +233,12 @@ export class KiloRunner {
         clearTimeout(timeout);
 
         if (code !== 0 && !finalResult && !stdout) {
-          console.log(`\x1b[31m[Kilo] ❌ Échec avec Code: ${code}\x1b[0m`);
+          process.stderr.write(`\x1b[31m[Kilo] ❌ Échec avec Code: ${code}\x1b[0m\n`);
           return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr || stdout });
         }
 
-        console.log(
-          `\x1b[32m[Kilo] ✅ Mission terminée (${((Date.now() - startTime) / 1000).toFixed(1)}s)\x1b[0m`,
+        process.stderr.write(
+          `\x1b[32m[Kilo] ✅ Mission terminée (${((Date.now() - startTime) / 1000).toFixed(1)}s)\x1b[0m\n`,
         );
 
         if (agentName && lastSessionId) {
