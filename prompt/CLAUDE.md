@@ -51,10 +51,8 @@ C'est le seul moyen d'exécuter du travail réel. Format obligatoire :
 | `orchestrator` | **Ne pas utiliser depuis ici** — tu ES déjà l'orchestrateur |
 
 **Modèles Kilo gratuits (alias `model`) :**
-- `step 3.5 flash` (262K) — défaut polyvalent
-- `grok code` (256K) — code lourd
-- `elephant` (262K) — long contexte
-- `free` (204K) — fallback
+- `step 3.5 flash` (262K) — polyvalent
+- `Hy3 preview free` (2048K) — modèle par défaut, haute performance
 
 **Règle prompt sous-agent :** le prompt envoyé au sous-agent doit être **autonome** (l'agent ne voit pas la conversation). Inclure : objectif, fichiers/chemins absolus concernés, contraintes, format de sortie attendu, critère de succès. Pas de "comme on a discuté".
 
