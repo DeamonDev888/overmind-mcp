@@ -1,6 +1,6 @@
 # 🧠 OverMind-MCP
 
-_Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini-cli, Qwen, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite._
+_Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini-cli, QwenCli, Nous Hermes, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite._
 
 ![OverMind-MCP Banner](assets/overmind_mcp_banner_slim.png)
 
@@ -11,19 +11,20 @@ _Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Cod
 
 ## 👋 C'est quoi ?
 
-**OverMind-MCP** est une conscience supérieure conçue pour orchestrer, commander et automatiser une flotte illimitée d'agents IA. Compatible avec **Claude-Code, Gemini-cli, Qwen-cli, Kilo/Cline, OpenClaw**, et prêt pour **GLM, Minimax, Kimi, Ollama** et bien d'autres. Plus qu'un simple runner, c'est le **Cortex Central** de votre infrastructure IA.
+**OverMind-MCP** est une conscience supérieure conçue pour orchestrer, commander et automatiser une flotte illimitée d'agents IA. Compatible avec **Claude-Code, Gemini-cli, QwenCli, Nous Hermes, Kilo/Cline, OpenClaw**, et prêt pour **GLM, Minimax, Kimi, Ollama** et bien d'autres. Plus qu'un simple runner, c'est le **Cortex Central** de votre infrastructure IA.
 
 Il transforme les outils CLI isolés en une force coordonnée, pilotable par API ou par MCP, capable d'exécuter des missions complexes en 2 secondes chrono. de creer et d orchestrer des pipeline de plusieurs agent. il est expert en outils MCP et peu etre scripté pour les faire fonctionner ensemble et les mettre en productions
 
 ## ✨ Ce que ça fait
 
-- **🔌 Contrôle Total** : Lancez des missions complexes via MCP ou directement via le code.
-- **🏗️ Architecture Pro** : Basé sur des services (`AgentManager`, `ClaudeRunner`, `PromptManager`) pour une stabilité maximale.
-- **🧠 Mémoire Haute-Performance (4096D)** : Système RAG intégré via PostgreSQL + `pgvector` supportant les embeddings SOTA (Qwen 8B).
-- **🛡️ Mémoire Ségréguée** : Chaque agent peut posséder ses propres souvenirs isolés tout en ayant accès au socle de connaissances global.
-- **🛠️ Capacités Étendues** : L'agent piloté peut utiliser VOS outils (Base de données, Scrapers, etc.).
-- **🤖 Multi-Agents** : Créez, configurez et gérez des personnalités d'agents isolées (Prompts & Settings dédiés).
-- **📦 Prêt pour l'Intégration** : Importable comme un module NPM dans vos autres projets.
+- 🔌 **Contrôle Total** : Lancez des missions complexes via MCP ou directement via le code (Claude, Gemini, QwenCli, Hermes).
+- 🏗️ **Architecture Pro** : Basé sur des services (`AgentManager`, `ClaudeRunner`, `PromptManager`) pour une stabilité maximale.
+- 🧠 **Mémoire Haute-Performance (4096D)** : Système RAG intégré via PostgreSQL + `pgvector` supportant les embeddings SOTA (Qwen 8B).
+- 🕵️ **Auto-Diagnostic CLI** : Détecte automatiquement les runners manquants et fournit les instructions/liens officiels pour l'installation.
+- 🛡️ **Mémoire Ségréguée** : Chaque agent peut posséder ses propres souvenirs isolés tout en ayant accès au socle de connaissances global.
+- 🛠️ **Capacités Étendues** : L'agent piloté peut utiliser VOS outils (Base de données, Scrapers, etc.).
+- 🤖 **Multi-Agents** : Créez, configurez et gérez des personnalités d'agents isolées (Prompts & Settings dédiés).
+- 📦 **Prêt pour l'Intégration** : Importable comme un module NPM dans vos autres projets.
 
 ---
 

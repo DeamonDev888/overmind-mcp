@@ -21,8 +21,6 @@ import {
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
 import { shellExecute, shellExecuteSchema } from './tools/shell_execute.js';
-import { runNexusSentinelTool, runNexusSentinelSchema } from './tools/run_nexus_sentinel.js';
-import { runNexusAgentTool, runNexusAgentSchema } from './tools/run_nexus_agent.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -39,11 +37,11 @@ export function createServer(name: string = 'OverMind-MCP') {
 - claude: Claude Code (claude -p)
 - gemini: Gemini CLI
 - kilo: Kilocode (modes: code, architect, ask, debug, orchestrator)
-- qwen: Qwen Code (qwen -p)
+- qwencli: Qwen Code CLI (qwen -p)
 - openclaw: OpenClaw (openclaw message send)
 - cline: Cline (modes: plan, act)
 - opencode: OpenCode (opencode run)
-- trae: Trae (trae solo --headless)
+- hermes: Nous Hermes Agent (hermes chat -q)
 
 **Modèles Kilo (Alias Gratuits):**
 | Nom Amical | ID Technique | Description |
@@ -75,7 +73,7 @@ run_agent(runner: "cline", agentName: "planner", mode: "plan", prompt: "Planifie
     name: 'create_agent',
     description: `Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.
 
-**Runners supportés:** claude, gemini, kilo, qwen, openclaw, cline, opencode, trae
+**Runners supportés:** claude, gemini, kilo, qwencli, openclaw, cline, opencode, hermes
 
 **Exemples:**
 create_agent(name: "expert_python", runner: "claude", prompt: "Tu es un expert Python...")
@@ -175,42 +173,6 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     description: 'Exécute une commande shell sur le système (git, npm, ls, etc.)',
     parameters: shellExecuteSchema,
     execute: shellExecute,
-  });
-
-  // ─── NEXUS SENTINEL ORCHESTRATION ─────────────────────────────────────────────
-
-  server.addTool({
-    name: 'run_nexus_sentinel',
-    description: `Déclenche le NEXUS SENTINEL COMMANDER, l'agent de contrôle tactique et de réconciliation du système Nexus.
-
-🎯 **Mission**:
-- Analyse les derniers rapports des agents de surveillance (006, 010, 013)
-- Identifie les goulots d'étranglement et régressions dans le pipeline
-- Vérifie l'état opérationnel des services critiques (DB, Tunnels, Ingest)
-- Détermine les ajustements prioritaires pour stabiliser le système
-- Produit une synthèse stratégique (Dominance Digest)
-
-📋 **Rapport généré**:
-Executive Summary, Agent Oversight, Critical Diagnosis, Infra Health, Action Plan, Dominance Digest
-
-L'agent enrichit automatiquement la mémoire Overmind avec ses conclusions.`,
-    parameters: runNexusSentinelSchema,
-    execute: runNexusSentinelTool,
-  });
-
-  server.addTool({
-    name: 'run_nexus_agent',
-    description: `Déclenche le NEXUS ALERT COMMANDER pour un audit global du pipeline et un rapport Discord.
-
-📋 **Mission**:
-- Collecte globale des rapports d'agents via memory_search
-- Audit pipeline : état système, gaps de monitoring, crashes, health score
-- Envoi automatique d'un rapport riche sur le canal Discord (1458647750450217135) via creer_embed
-
-ℹ️ **Paramètres**:
-- customPrompt: Prompt personnalisé pour remplacer le prompt d'audit par défaut (optionnel)`,
-    parameters: runNexusAgentSchema,
-    execute: runNexusAgentTool,
   });
 
   return server;

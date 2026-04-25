@@ -76,7 +76,7 @@
               <div class="feature-card">
                 <i class="fas fa-running card-icon"></i>
                 <h3>Runners IA</h3>
-                <p>Moteurs d'exécution pour Claude, Gemini, Qwen, Kilo, Cline et Trae.</p>
+                <p>Moteurs d'exécution pour Claude, Gemini, QwenCli, Nous Hermes, Kilo et Cline.</p>
                 <a
                   href="#runners"
                   class="btn btn-secondary elite-btn-secondary"
@@ -123,7 +123,7 @@
                 <pre><code class="language-typescript">import { runAgent } from 'overmind-mcp';
 
 const { content, isError } = await runAgent({
-  runner: 'claude',       // 'claude', 'gemini', 'trae', 'kilo', 'qwen', etc.
+  runner: 'claude',       // 'claude', 'gemini', 'qwencli', 'hermes', 'kilo', etc.
   agentName: 'expert-seo', 
   prompt: 'Analyse example.com',
   autoResume: true        // Reprend la conversation précédente

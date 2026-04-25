@@ -13,6 +13,7 @@ export interface RunAgentOptions {
   model?: string;
   cwd?: string;
   configPath?: string;
+  silent?: boolean;
 }
 
 export interface RunAgentResult {
@@ -58,27 +59,8 @@ export class KiloRunner {
   }
 
   async verifyInstallation(): Promise<{ ok: boolean; message?: string }> {
-    const REQUIRED_VERSION = '7.2.14';
-    const { exec } = await import('child_process');
-    return new Promise((resolve) => {
-      exec('kilo --version', (error, stdout) => {
-        if (error) {
-          return resolve({
-            ok: false,
-            message: `❌ **Kilo CLI introuvable !**\n\nL'exécutable 'kilo' n'est pas installé ou n'est pas dans votre PATH.\n${KiloRunner.INSTALL_INSTRUCTIONS}`,
-          });
-        }
-        const version = stdout.trim();
-        // Vérification flexible : soit la version exacte, soit une version 7.x
-        if (!version.includes(REQUIRED_VERSION) && !version.startsWith('7.')) {
-          return resolve({
-            ok: false,
-            message: `⚠️ **Version Incorrecte détectée : ${version}** (Attendu: ${REQUIRED_VERSION})\n\nIl est fortement recommandé de mettre à jour vers la version officielle v7.x.\n${KiloRunner.INSTALL_INSTRUCTIONS}`,
-          });
-        }
-        resolve({ ok: true });
-      });
-    });
+    const { verifyInstallation: check } = await import('../lib/InstallHelper.js');
+    return check('kilo');
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
@@ -91,7 +73,7 @@ export class KiloRunner {
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName);
+      const lastId = await getLastSessionId(agentName, options.configPath);
       if (lastId) {
         sessionId = lastId;
       }
@@ -156,14 +138,16 @@ export class KiloRunner {
     return new Promise((resolve) => {
       const command = 'kilo';
 
-      console.log(
-        `\n\x1b[33m[Kilo] ⚡ Initialisation de l'agent: ${agentName || 'Anonyme'}\x1b[0m`,
-      );
-      console.log(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m`);
-      if (mode) console.log(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m`);
-      if (sessionId) console.log(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m`);
+      if (!options.silent) {
+        console.log(
+          `\n\x1b[33m[Kilo] ⚡ Initialisation de l'agent: ${agentName || 'Anonyme'}\x1b[0m`,
+        );
+        console.log(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m`);
+        if (mode) console.log(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m`);
+        if (sessionId) console.log(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m`);
 
-      console.log(`\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m`);
+        console.log(`\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m`);
+      }
       const child: ChildProcess = spawn(command, argsSpawn, {
         cwd: options.cwd || process.cwd(),
         shell: false,
@@ -211,7 +195,7 @@ export class KiloRunner {
               }
             } catch (_e) {
               // Si ce n'est pas du JSON, c'est peut-être du log
-              if (!trimmedLine.startsWith('{')) {
+              if (!trimmedLine.startsWith('{') && !options.silent) {
                 process.stdout.write(`\x1b[36m[Kilo]\x1b[0m ${trimmedLine}\n`);
               }
             }
@@ -234,7 +218,7 @@ export class KiloRunner {
           ) {
             console.log(`\n\x1b[41m\x1b[37m[Kilo ALERT] QUOTA ATTEINT / MODÈLE ÉPUISÉ\x1b[0m`);
             console.log(`\x1b[31m[Détail] ${chunk.trim()}\x1b[0m`);
-          } else {
+          } else if (!options.silent) {
             process.stdout.write(`\x1b[31m[Kilo STDERR]\x1b[0m ${chunk}`);
           }
         });
@@ -258,7 +242,7 @@ export class KiloRunner {
         );
 
         if (agentName && lastSessionId) {
-          await saveSessionId(agentName, lastSessionId);
+          await saveSessionId(agentName, lastSessionId, options.configPath);
         }
 
         resolve({

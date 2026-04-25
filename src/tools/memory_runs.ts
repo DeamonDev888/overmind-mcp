@@ -27,10 +27,7 @@ export const memoryRunsSchema = z.object({
     .describe('Filtrer par agent (détecté automatiquement si exécuté via OverMind)'),
 });
 
-export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>) {
   const provider = getMemoryProvider();
   // Priorité à l'agent détecté (Privacy)
   const effectiveAgentName = process.env.OVERMIND_AGENT_NAME || args.agent_name;
@@ -48,7 +45,7 @@ export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Pr
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `📊 **OverMind Statistics (${scopeLabel})**\n\n- Runs totaux : **${s.totalRuns}**\n- Connaissances stockées : **${s.totalKnowledge}**\n\n**Par runner :**\n${rows || '  _(aucun run enregistré)_'}`,
         },
       ],
@@ -65,7 +62,7 @@ export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Pr
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `📭 Aucun run enregistré${args.runner ? ` pour le runner **${args.runner}**` : ''}.`,
         },
       ],
@@ -84,7 +81,7 @@ export async function memoryRunsTool(args: z.infer<typeof memoryRunsSchema>): Pr
   return {
     content: [
       {
-        type: 'text',
+        type: 'text' as const,
         text: `🕐 **${runs.length} run(s)${args.runner ? ` pour ${args.runner}` : ''}**\n\n${lines.join('\n\n')}`,
       },
     ],

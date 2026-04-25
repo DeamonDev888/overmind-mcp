@@ -1,77 +1,37 @@
 import { z } from 'zod';
 import { OpenClawRunner } from '../services/OpenClawRunner.js';
 import { storeRun } from '../memory/MemoryFactory.js';
+import { getWorkspaceDir } from '../lib/config.js';
+import { deleteSessionId } from '../lib/sessions.js';
 
 export const runOpenClawSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent OpenClaw"),
-  sessionId: z
-    .string()
-    .optional()
-    .describe('ID de session pour continuer une conversation (manuel)'),
-  agentName: z
-    .string()
-    .optional()
-    .describe("Nom de l'agent (pour logging/monitoring et persistance)"),
-  autoResume: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe(
-      'Si true (et agentName fourni), reprend automatiquement la dernière conversation de cet agent',
-    ),
+  sessionId: z.string().optional(),
+  agentName: z.string().optional(),
+  autoResume: z.boolean().optional().default(false),
+  path: z.string().optional(),
+  config: z.string().optional(),
+  silent: z.boolean().optional().default(false),
 });
 
-export async function runOpenClawAgent(args: z.infer<typeof runOpenClawSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function runOpenClawAgent(args: z.infer<typeof runOpenClawSchema>) {
   const runner = new OpenClawRunner();
-  const { prompt, agentName, autoResume, sessionId } = args;
+  const { prompt, agentName, autoResume, sessionId, path: argPath, config: argConfig, silent } = args;
+  const finalPath = argPath || getWorkspaceDir();
+  const finalConfig = argConfig || getWorkspaceDir();
 
   const start = Date.now();
-  const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId });
+  let result = await runner.runAgent({ prompt, agentName, autoResume, sessionId, cwd: finalPath, configPath: finalConfig, silent });
+
+  // Retry if session invalid
+  if (result.error?.includes('session') || result.error?.includes('EXIT_CODE_1')) {
+    if (agentName) await deleteSessionId(agentName, finalConfig);
+    result = await runner.runAgent({ prompt, agentName, autoResume: false, sessionId: undefined, cwd: finalPath, configPath: finalConfig, silent });
+  }
+
   const durationMs = Date.now() - start;
+  storeRun({ runner: 'openclaw', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
 
-  // Auto-instrumentation
-  storeRun({
-    runner: 'openclaw',
-    agentName,
-    prompt,
-    result: result.result,
-    error: result.error,
-    durationMs,
-    success: !result.error,
-    sessionId: result.sessionId,
-  });
-
-  if (result.error === 'INVALID_AGENT') {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `❌ **Erreur Configuration Agent**\n\nL'agent '${agentName}' est introuvable ou mal configuré.\n\n💡 **Solution:**\nUtilisez l'outil \`create_agent\` pour créer cet agent avant de l'exécuter.`,
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  if (result.error) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `❌ Erreur lors de l'exécution OpenClaw: ${result.error}\n\n⚡ _L'OverMind surveille les OpenClaw qui n'obéissent pas._`,
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  return {
-    content: [
-      { type: 'text', text: result.result },
-      { type: 'text', text: `RAW: ${result.rawOutput}` },
-    ],
-  };
+  if (result.error) return { content: [{ type: 'text' as const, text: `❌ Erreur OpenClaw: ${result.error}` }], isError: true };
+  return { content: [{ type: 'text' as const, text: result.result }, ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : [])], sessionId: result.sessionId };
 }

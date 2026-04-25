@@ -16,10 +16,7 @@ export const editPromptSchema = z.object({
 
 // --- Tools ---
 
-export async function createPrompt(args: z.infer<typeof createPromptSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function createPrompt(args: z.infer<typeof createPromptSchema>) {
   const manager = new PromptManager();
   const { name, content } = args;
 
@@ -28,17 +25,14 @@ export async function createPrompt(args: z.infer<typeof createPromptSchema>): Pr
   return {
     content: [
       {
-        type: 'text',
+        type: 'text' as const,
         text: `✅ Prompt '${name}' ${result.existed ? 'mis à jour' : 'créé'} avec succès.\n📍 ${result.filePath}`,
       },
     ],
   };
 }
 
-export async function editPrompt(args: z.infer<typeof editPromptSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function editPrompt(args: z.infer<typeof editPromptSchema>) {
   const manager = new PromptManager();
   const { name, search, replace } = args;
 
@@ -50,7 +44,7 @@ export async function editPrompt(args: z.infer<typeof editPromptSchema>): Promis
         isError: true,
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `❌ Erreur : Le texte recherché n'a pas été trouvé dans '${name}.md'.\n\nTexte recherché :\n${search}`,
           },
         ],
@@ -60,7 +54,7 @@ export async function editPrompt(args: z.infer<typeof editPromptSchema>): Promis
         isError: true,
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `❌ Erreur lors de la lecture du fichier '${name}.md': ${result.error}`,
           },
         ],
@@ -71,7 +65,7 @@ export async function editPrompt(args: z.infer<typeof editPromptSchema>): Promis
   return {
     content: [
       {
-        type: 'text',
+        type: 'text' as const,
         text: `✅ Prompt '${name}' modifié avec succès.\n\n🔻 Avant :\n${search}\n\n🔺 Après :\n${replace}`,
       },
     ],
