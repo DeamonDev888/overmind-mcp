@@ -18,10 +18,14 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Claude Code internal
+# AI Agents internal
 .claude/
 .gemini/
+.kilo/
 .overmind/
+.kilocode/
+.agent/
+browser_data/
 
 # Local config (contains absolute paths)
 .mcp.json

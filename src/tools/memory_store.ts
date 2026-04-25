@@ -16,10 +16,7 @@ export const memoryStoreSchema = z.object({
     .describe("Nom de l'agent (détecté automatiquement si exécuté via OverMind)"),
 });
 
-export async function memoryStoreTool(args: z.infer<typeof memoryStoreSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function memoryStoreTool(args: z.infer<typeof memoryStoreSchema>) {
   try {
     const provider = getMemoryProvider();
     // Priorité à l'agent détecté (Privacy)
@@ -33,7 +30,7 @@ export async function memoryStoreTool(args: z.infer<typeof memoryStoreSchema>): 
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `✅ **Souvenir mémorisé** [${args.source}]\nID: \`${id}\`\n\n_"${args.text.slice(0, 200)}${args.text.length > 200 ? '…' : ''}"_`,
         },
       ],
@@ -42,7 +39,7 @@ export async function memoryStoreTool(args: z.infer<typeof memoryStoreSchema>): 
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `❌ Erreur de mémorisation: ${err instanceof Error ? err.message : String(err)}`,
         },
       ],

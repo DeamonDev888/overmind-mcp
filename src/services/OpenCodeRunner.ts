@@ -11,6 +11,7 @@ export interface RunAgentOptions {
   autoResume?: boolean;
   cwd?: string;
   configPath?: string;
+  silent?: boolean;
 }
 
 export interface RunAgentResult {
@@ -36,7 +37,7 @@ export class OpenCodeRunner {
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName);
+      const lastId = await getLastSessionId(agentName, options.configPath);
       if (lastId) {
         sessionId = lastId;
       }
@@ -49,6 +50,7 @@ export class OpenCodeRunner {
       try {
         const agentSettingsPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
+          options.configPath
         );
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
@@ -98,7 +100,7 @@ export class OpenCodeRunner {
         }
 
         if (agentName && sessionId) {
-          await saveSessionId(agentName, sessionId);
+          await saveSessionId(agentName, sessionId, options.configPath);
         }
 
         resolve({

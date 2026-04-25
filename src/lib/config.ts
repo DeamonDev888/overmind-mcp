@@ -2,6 +2,7 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { loadEnvQuietly } from './loadEnv.js';
 
 export interface ConfigType {
   CLAUDE: {
@@ -19,6 +20,12 @@ export interface ConfigType {
       SETTINGS: string;
     };
   };
+  HERMES: {
+    CORE: string;
+    PATHS: {
+      SETTINGS: string;
+    };
+  };
   TIMEOUT_MS: number;
 }
 
@@ -26,7 +33,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const DEFAULT_CONFIG: ConfigType = {
-  TIMEOUT_MS: 300000, // 5 minutes
+  TIMEOUT_MS: 900000, // 15 minutes
   CLAUDE: {
     CORE: '--output-format json',
     PERMISSIONS: '--dangerously-skip-permissions',
@@ -37,35 +44,20 @@ export const DEFAULT_CONFIG: ConfigType = {
   },
   KILO: {
     CORE: '--auto --json-io',
-    DEFAULT_MODEL: 'stepfun/step-3.5-flash:free',
+    DEFAULT_MODEL: 'kilo/tencent/hy3-preview:free',
     PATHS: {
       SETTINGS: './.kilocode/settings.json',
+    },
+  },
+  HERMES: {
+    CORE: 'chat -q',
+    PATHS: {
+      SETTINGS: './.hermes/settings.json',
     },
   },
 };
 
 export const CONFIG = { ...DEFAULT_CONFIG };
-
-// Helper to manually parse .env without any noisy console.logs
-function loadEnvQuietly(envPath: string) {
-  try {
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf8');
-      content.split('\n').forEach((line) => {
-        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-        if (match) {
-          const key = match[1];
-          let value = (match[2] || '').replace(/\s*#.*$/, '').trim();
-          if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
-          else if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
-          if (!process.env[key]) process.env[key] = value;
-        }
-      });
-    }
-  } catch (_e) {
-    // Ignore .env parsing errors
-  }
-}
 
 let cachedWorkspaceDir: string | null = null;
 

@@ -1,19 +1,17 @@
 import { z } from 'zod';
-import { ClaudeRunner } from '../services/ClaudeRunner.js';
-import { GeminiRunner } from '../services/GeminiRunner.js';
-import { KiloRunner } from '../services/KiloRunner.js';
-import { QwenRunner } from '../services/QwenRunner.js';
-import { OpenClawRunner } from '../services/OpenClawRunner.js';
-import { ClineRunner } from '../services/ClineRunner.js';
-import { OpenCodeRunner } from '../services/OpenCodeRunner.js';
-import { TraeRunner } from '../services/TraeRunner.js';
-import { storeRun } from '../memory/MemoryFactory.js';
-import { getWorkspaceDir } from '../lib/config.js';
+import { runClaudeAgent } from './run_claude.js';
+import { runGeminiAgent } from './run_gemini.js';
+import { runKiloAgent } from './run_kilo.js';
+import { runQwenCLIAgent } from './run_qwencli.js';
+import { runOpenClawAgent } from './run_openclaw.js';
+import { runClineAgent } from './run_cline.js';
+import { runOpenCodeAgent } from './run_opencode.js';
+import { runHermesAgent } from './run_hermes.js';
 
 // Schéma unifié pour tous les runners
 export const runAgentSchema = z.object({
   runner: z
-    .enum(['claude', 'gemini', 'kilo', 'qwen', 'openclaw', 'cline', 'opencode', 'trae'])
+    .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
     .describe('Type de runner à utiliser'),
   prompt: z.string().describe("Le prompt à envoyer à l'agent"),
   sessionId: z
@@ -46,228 +44,56 @@ export const runAgentSchema = z.object({
     .string()
     .optional()
     .describe("Le répertoire racine de l'Overmind (contenant .claude/, .mcp.json, etc.) (par défaut: dossier Overmind)"),
+  silent: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe('Désactive les logs de debug sur stderr'),
+  model: z
+    .string()
+    .optional()
+    .describe("Modèle spécifique à utiliser (ex: tencent/hy3-preview pour hermes)"),
 });
 
-export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-  sessionId?: string;
-}> {
-  const { runner, prompt, agentName, autoResume, sessionId, mode, path: argPath, config: argConfig } = args;
+import { verifyInstallation } from '../lib/InstallHelper.js';
 
-  const finalPath = argPath || getWorkspaceDir();
-  const finalConfig = argConfig || getWorkspaceDir();
+/**
+ * ORCHESTRATEUR CENTRAL
+ * Redirige l'exécution vers le module spécifique approprié.
+ */
+export async function runAgent(args: z.infer<typeof runAgentSchema>) {
+  const { runner, ...params } = args;
 
-  const start = Date.now();
-
-  // Sélection du runner approprié
-  let result: {
-    result?: string;
-    error?: string;
-    sessionId?: string;
-    rawOutput?: string;
-  };
-
-  try {
-    switch (runner) {
-      case 'claude': {
-        const claudeRunner = new ClaudeRunner();
-        result = await claudeRunner.runAgent({
-          prompt,
-          agentName,
-          autoResume,
-          sessionId,
-          cwd: finalPath,
-          configPath: finalConfig,
-        });
-        break;
-      }
-
-      case 'gemini': {
-        const geminiRunner = new GeminiRunner();
-        result = await geminiRunner.runAgent({
-          prompt,
-          agentName,
-          autoResume,
-          sessionId,
-          cwd: finalPath,
-          configPath: finalConfig,
-        });
-        break;
-      }
-
-      case 'kilo': {
-        const kiloRunner = new KiloRunner();
-        const verification = await kiloRunner.verifyInstallation();
-        if (!verification.ok) {
-          return {
-            content: [{ type: 'text', text: verification.message || 'Kilo non configuré.' }],
-            isError: true
-          };
-        }
-        result = await kiloRunner.runAgent({
-          prompt,
-          agentName,
-          autoResume,
-          sessionId,
-          mode: mode as 'code' | 'architect' | 'ask' | 'debug' | 'orchestrator' | undefined,
-          cwd: finalPath,
-          configPath: finalConfig,
-        });
-        break;
-      }
-
-      case 'qwen': {
-        const qwenRunner = new QwenRunner();
-        result = await qwenRunner.runAgent({
-          prompt,
-          agentName,
-          autoResume,
-          sessionId,
-          cwd: finalPath,
-          configPath: finalConfig,
-        });
-        break;
-      }
-
-      case 'openclaw': {
-        const openClawRunner = new OpenClawRunner();
-        result = await openClawRunner.runAgent({
-          prompt,
-          agentName,
-          autoResume,
-          sessionId,
-          cwd: finalPath,
-          configPath: finalConfig,
-        });
-        break;
-      }
-
-      case 'cline': {
-        const clineRunner = new ClineRunner();
-        result = await clineRunner.runAgent({
-          prompt,
-          agentName,
-          autoResume,
-          sessionId,
-          mode: mode as 'plan' | 'act' | undefined,
-          cwd: finalPath,
-          configPath: finalConfig,
-        });
-        break;
-      }
-
-      case 'opencode': {
-        const openCodeRunner = new OpenCodeRunner();
-        result = await openCodeRunner.runAgent({
-          prompt,
-          agentName,
-          autoResume,
-          sessionId,
-          cwd: finalPath,
-          configPath: finalConfig,
-        });
-        break;
-      }
-
-      case 'trae': {
-        const traeRunner = new TraeRunner();
-        result = await traeRunner.runAgent({
-          prompt,
-          agentName,
-          autoResume,
-          sessionId,
-          cwd: finalPath,
-          configPath: finalConfig,
-        });
-        break;
-      }
-
-      default:
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `❌ Runner inconnu: ${runner}\n\nRunners disponibles: claude, gemini, kilo, qwen, openclaw, cline, opencode, trae`,
-            },
-          ],
-          isError: true,
-        };
-    }
-  } catch (error) {
+  // --- VÉRIFICATION DE L'INSTALLATION ---
+  const check = await verifyInstallation(runner);
+  if (!check.ok) {
     return {
-      content: [
-        {
-          type: 'text',
-          text: `❌ Erreur lors de l'exécution du runner ${runner}: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
+      content: [{ type: 'text' as const, text: check.message || `CLI non installé.` }],
       isError: true,
     };
   }
 
-  const durationMs = Date.now() - start;
-
-  // Auto-instrument: enregistrer chaque run dans la mémoire OverMind
-  Promise.resolve(
-    storeRun({
-      runner,
-      agentName,
-      prompt,
-      result: result.result,
-      error: result.error,
-      durationMs,
-      success: !result.error,
-      sessionId: result.sessionId,
-    }),
-  ).catch(() => {
-    /* silent — la mémoire ne doit jamais bloquer le runner */
-  });
-
-  // Gestion des erreurs spécifiques
-  if (result.error === 'INVALID_AGENT') {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `❌ **Erreur Configuration Agent**\n\nL'agent '${agentName}' est introuvable ou mal configuré.\n\n💡 **Solution:**\nUtilisez l'outil \`create_agent\` pour créer cet agent avant de l'exécuter.`,
-        },
-      ],
-      isError: true,
-    };
+  switch (runner) {
+    case 'claude':
+      return runClaudeAgent(params as Parameters<typeof runClaudeAgent>[0]);
+    case 'gemini':
+      return runGeminiAgent(params as Parameters<typeof runGeminiAgent>[0]);
+    case 'kilo':
+      return runKiloAgent(params as Parameters<typeof runKiloAgent>[0]);
+    case 'qwencli':
+      return runQwenCLIAgent(params as Parameters<typeof runQwenCLIAgent>[0]);
+    case 'openclaw':
+      return runOpenClawAgent(params as Parameters<typeof runOpenClawAgent>[0]);
+    case 'cline':
+      return runClineAgent(params as Parameters<typeof runClineAgent>[0]);
+    case 'opencode':
+      return runOpenCodeAgent(params as Parameters<typeof runOpenCodeAgent>[0]);
+    case 'hermes':
+      return runHermesAgent(params as Parameters<typeof runHermesAgent>[0]);
+    default:
+      return {
+        content: [{ type: 'text' as const, text: `❌ Runner inconnu: ${runner}` }],
+        isError: true,
+      };
   }
-
-  if (result.error === 'JSON_PARSE_ERROR') {
-    const preview = result.rawOutput?.trim().substring(0, 500);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `⚠️ **Réponse Agent Non-Conforme (JSON invalide)**\n\nL'agent '${agentName || 'default'}' a répondu, mais le format JSON est cassé.\n\n🔍 **Début de la réponse reçue:**\n\`\`\`text\n${preview}...\n\`\`\`\n\n💡 **Conseil:** Vérifiez que le prompt demande explicitement une sortie JSON pure.`,
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  if (result.error) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `❌ Erreur lors de l'exécution du runner ${runner}: ${result.error}${result.rawOutput ? `\n\n🔍 **Détails:**\n\`\`\`text\n${result.rawOutput}\n\`\`\`` : ''}`,
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  return {
-    content: [
-      { type: 'text', text: result.result || '' },
-      { type: 'text', text: `RUNNER: ${runner}` },
-      { type: 'text', text: `SESSION_ID: ${result.sessionId}` },
-    ],
-    sessionId: result.sessionId,
-  };
 }

@@ -15,10 +15,7 @@ export const memorySearchSchema = z.object({
     .describe("Filtrer par nom d'agent (détecté automatiquement si exécuté via OverMind)"),
 });
 
-export async function memorySearchTool(args: z.infer<typeof memorySearchSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function memorySearchTool(args: z.infer<typeof memorySearchSchema>) {
   const provider = getMemoryProvider();
   // Priorité à l'agent détecté (Privacy)
   const effectiveAgentName = process.env.OVERMIND_AGENT_NAME || args.agent_name;
@@ -34,7 +31,7 @@ export async function memorySearchTool(args: z.infer<typeof memorySearchSchema>)
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `🔍 Aucun souvenir trouvé pour : _"${args.query}"_\n\nUtilisez \`memory_store\` pour ajouter des connaissances.`,
         },
       ],
@@ -49,7 +46,7 @@ export async function memorySearchTool(args: z.infer<typeof memorySearchSchema>)
   return {
     content: [
       {
-        type: 'text',
+        type: 'text' as const,
         text: `🧠 **${results.length} résultat(s) trouvé(s) pour "${args.query}"**\n\n${lines.join('\n\n---\n\n')}`,
       },
     ],

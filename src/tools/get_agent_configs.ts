@@ -5,10 +5,7 @@ export const getAgentConfigsSchema = z.object({
   name: z.string().describe("Nom de l'agent dont on veut voir les configurations."),
 });
 
-export async function getAgentConfigs(args: z.infer<typeof getAgentConfigsSchema>): Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}> {
+export async function getAgentConfigs(args: z.infer<typeof getAgentConfigsSchema>) {
   const manager = new AgentManager();
   const { name } = args;
 

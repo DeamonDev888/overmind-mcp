@@ -11,6 +11,7 @@ export interface RunAgentOptions {
   autoResume?: boolean;
   cwd?: string;
   configPath?: string;
+  silent?: boolean;
 }
 
 export interface RunAgentResult {
@@ -26,7 +27,7 @@ export class GeminiRunner {
 
   constructor() {
     this.config = CONFIG.CLAUDE;
-    this.timeoutMs = CONFIG.TIMEOUT_MS || 300000; // 5 min default for tools
+    this.timeoutMs = CONFIG.TIMEOUT_MS || 900000; // 15 min default
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
@@ -42,7 +43,7 @@ export class GeminiRunner {
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName);
+      const lastId = await getLastSessionId(agentName, options.configPath);
       if (lastId) {
         sessionId = lastId;
       }
@@ -95,9 +96,9 @@ export class GeminiRunner {
       if (fs.existsSync(globalFile)) {
         try {
           fs.copyFileSync(globalFile, localFile);
-          console.log(`[GeminiRunner] OAuth synchronisé: ${file} vers ${localFile}`);
+          if (!options.silent) console.log(`[GeminiRunner] OAuth synchronisé: ${file} vers ${localFile}`);
         } catch (err) {
-          console.error(`[GeminiRunner] Échec synchronisation ${file}: ${err}`);
+          if (!options.silent) console.error(`[GeminiRunner] Échec synchronisation ${file}: ${err}`);
         }
       }
     }
@@ -137,7 +138,7 @@ export class GeminiRunner {
           }
           
           fs.writeFileSync(mcpPath, JSON.stringify(mcpToUse, null, 2));
-          console.log(`[GeminiRunner] MCP synchronisé: ${mcpPath}`);
+          if (!options.silent) console.log(`[GeminiRunner] MCP synchronisé: ${mcpPath}`);
         }
       }
     }
@@ -193,17 +194,42 @@ export class GeminiRunner {
         }
 
         try {
-          const jsonOutput = JSON.parse(stdout.trim());
-          const resultText = jsonOutput.reply || jsonOutput.result || stdout.trim();
-          const newSessionId = jsonOutput.session_id || sessionId;
+          // Robust JSON extraction from stdout
+          let jsonOutput: Record<string, unknown> | null = null;
+          const trimmedStdout = stdout.trim();
+          
+          try {
+            jsonOutput = JSON.parse(trimmedStdout);
+          } catch (_) {
+            const lastBrace = trimmedStdout.lastIndexOf('}');
+            const firstBrace = trimmedStdout.lastIndexOf('{', lastBrace);
+            if (firstBrace !== -1 && lastBrace !== -1) {
+              try {
+                jsonOutput = JSON.parse(trimmedStdout.substring(firstBrace, lastBrace + 1));
+              } catch (__) {
+                // Ignore parsing errors
+              }
+            }
+          }
 
-          if (newSessionId && agentName) {
-            await saveSessionId(agentName, newSessionId);
+          if (jsonOutput) {
+            const resultText = (jsonOutput.reply as string) || (jsonOutput.result as string) || stdout.trim();
+            const newSessionId = (jsonOutput.session_id as string) || sessionId;
+            
+            if (newSessionId && agentName) {
+              await saveSessionId(agentName, newSessionId, options.configPath);
+            }
+            
+            return resolve({
+              result: resultText,
+              sessionId: newSessionId,
+              rawOutput: stdout,
+            });
           }
 
           resolve({
-            result: resultText,
-            sessionId: newSessionId,
+            result: stdout.trim(),
+            sessionId: sessionId,
             rawOutput: stdout,
           });
         } catch (_e) {

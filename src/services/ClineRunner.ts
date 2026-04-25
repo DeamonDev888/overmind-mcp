@@ -12,6 +12,7 @@ export interface RunAgentOptions {
   mode?: 'plan' | 'act';
   cwd?: string;
   configPath?: string;
+  silent?: boolean;
 }
 
 export interface RunAgentResult {
@@ -37,7 +38,7 @@ export class ClineRunner {
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName);
+      const lastId = await getLastSessionId(agentName, options.configPath);
       if (lastId) {
         sessionId = lastId;
       }
@@ -103,7 +104,7 @@ export class ClineRunner {
         }
 
         if (agentName && sessionId) {
-          await saveSessionId(agentName, sessionId);
+          await saveSessionId(agentName, sessionId, options.configPath);
         }
 
         resolve({
