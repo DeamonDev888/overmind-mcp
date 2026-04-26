@@ -57,29 +57,24 @@ C'est le seul moyen d'exécuter du travail réel. Format obligatoire :
 
 **Modèles Kilo gratuits (alias `model`) :**
 
-- `tencent/hy3-preview:free` (262K) — modèle par défaut, haute performance Mixture-of-Experts
-- `step 3.5 flash` (262K) — polyvalent
+- `tencent/hy3-preview:free` (262K) — modèle par défaut, haute performance Mixture-of-Experts (MoE).
+- `step 3.5 flash` (262K) — polyvalent et rapide.
 
 ### `mcp__overmind__run_agent` — runner **hermes** (OpenRouter / NIM)
 
-Le runner **hermes** est ton expert coding polyvalent. Par défaut, il utilise un modèle gratuit haute performance via OpenRouter. **Attention : comme pour Claude, il nécessite la création préalable de l'agent via `create_agent`** (pour charger son prompt système et sa configuration).
+Le runner **hermes** est ton expert coding polyvalent. 
+
+**Règle de Sécurité (Provisioning) :** Contrairement à Kilo, Hermes nécessite un agent pré-configuré. Avant chaque `run_agent(runner="hermes")`, tu DOIS :
+1. Vérifier l'existence de l'agent avec `list_agents`.
+2. Si absent, le créer avec `create_agent` (ex: `name: "chat_mcp_assistant", runner: "hermes"`). 
+3. Si présent, vérifier sa config avec `get_agent_configs` si nécessaire.
 
 **Modèles Hermes recommandés :**
+- `tencent/hy3-preview:free` (**Défaut**) — MoE 262K gratuit, excellent pour tout type de code.
+- `deepseek-ai/deepseek-v4-pro` — Le meilleur pour l'architecture complexe (NVIDIA NIM).
 
-- `tencent/hy3-preview:free` (**Défaut**) — MoE 262K gratuit via OpenRouter, excellent pour tout type de code et l'utilisation d'outils.
-- `deepseek-ai/deepseek-v4-pro` — Le meilleur pour le code complexe, l'architecture et les refactors massifs (nécessite NVIDIA_API_KEY).
-
-**Paramètre clé `agentName` :** Obligatoire — nom de l'agent pré-créé (ex: "chat_mcp_assistant", "frontend_expert"). Sans cela, Hermes retourne "INVALID_AGENT" avec la liste des 33 agents disponibles.
-
-**Exemple concret :**
-
-```json
-{
-  "runner": "hermes",
-  "agentName": "chat_mcp_assistant",
-  "prompt": "Analyse le fichier Start_Discord_LLM_Bot.bat et donne-moi: 1) Objectif principal 2) Dépendances techniques 3) Variables d'environnement requises 4) Points d'amélioration avec priorité"
-}
-```
+**Exemple de workflow correct :**
+`list_agents()` → `create_agent(...)` → `run_agent(runner="hermes", agentName="...")`.
 
 **Règle prompt sous-agent :** le prompt envoyé au sous-agent doit être **autonome** (l'agent ne voit pas la conversation). Inclure : objectif, fichiers/chemins absolus concernés, contraintes, format de sortie attendu, critère de succès. Pas de "comme on a discuté".
 
