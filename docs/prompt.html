@@ -279,85 +279,13 @@
         </div>
 
         <div class="prompt-content">
-          <!-- VIEW 1: KILO & HERMES (ORIGINAL) -->
-          <div id="view-kilo-hermes" class="view-content active">
+    <!-- VIEW 1: KILO & HERMES (ORCHESTRATEUR MIXTE) -->
+    <div id="view-kilo-hermes" class="view-content active">
       <div class="prompt-section">
-        <h2><i class="fas fa-network-wired"></i> Neural Orchestration Flow</h2>
-        <div class="svg-diagram">
-          <svg width="100%" height="200" viewBox="0 0 800 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <!-- Nodes -->
-            <rect x="50" y="70" width="120" height="60" rx="10" fill="var(--card-bg)" stroke="var(--neon-blue)" stroke-width="2"/>
-            <text x="110" y="105" text-anchor="middle" fill="#fff" font-size="14">USER QUERY</text>
-            
-            <path d="M170 100H250" stroke="var(--neon-blue)" stroke-dasharray="5 5">
-              <animate attributeName="stroke-dashoffset" from="50" to="0" dur="2s" repeatCount="indefinite" />
-            </path>
-            
-            <circle cx="300" cy="100" r="40" fill="var(--card-bg)" stroke="var(--neon-purple)" stroke-width="3"/>
-            <text x="300" y="105" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">OVERMIND</text>
-            
-            <!-- Branches -->
-            <path d="M340 100C400 100 400 50 450 50" stroke="var(--neon-cyan)" stroke-width="2"/>
-            <path d="M340 100C400 100 400 150 450 150" stroke="var(--neon-cyan)" stroke-width="2"/>
-            
-            <rect x="450" y="20" width="100" height="60" rx="8" fill="var(--card-bg)" stroke="var(--neon-cyan)"/>
-            <text x="500" y="55" text-anchor="middle" fill="var(--neon-cyan)" font-size="12">KILO (CODE)</text>
-            
-            <rect x="450" y="120" width="100" height="60" rx="8" fill="var(--card-bg)" stroke="var(--neon-cyan)"/>
-            <text x="500" y="155" text-anchor="middle" fill="var(--neon-cyan)" font-size="12">KILO (DOCS)</text>
-          </svg>
-        </div>
+        <h2><i class="fas fa-microchip"></i> Orchestrateur Overmind — Économie Maximale</h2>
+        <p style="color: var(--neon-blue); font-weight: 600; margin-bottom: 20px;">Tu es un orchestrateur pur et actif. Tu ne codes pas, tu ne fouilles pas le repo.</p>
         
         <div class="logic-grid">
-          <div class="logic-card">
-            <h4><i class="fas fa-brain"></i> Intelligence Collective</h4>
-            <p style="font-size: 0.9rem; color: var(--text-dim); margin-top: 10px;">L'orchestrateur décompose chaque requête en <strong>tâches atomiques</strong>. Aucun agent n'exécute de commande complexe sans découpage préalable.</p>
-            <div style="margin-top: 15px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;">
-              <div style="font-size: 0.7rem; color: var(--neon-purple);">STRATÉGIE ACTIVE:</div>
-              <div style="font-size: 0.8rem; font-family: monospace;">DECOMPOSE -> MAP -> EXECUTE -> STORE</div>
-            </div>
-          </div>
-          <div class="logic-card">
-            <h4><i class="fas fa-bolt"></i> Muscles (Execution)</h4>
-            <p style="font-size: 0.9rem; color: var(--text-dim); margin-top: 10px;">Kilo gère le parallélisme massif. Plusieurs agents peuvent travailler sur des branches différentes en simultané.</p>
-            <div style="display: flex; gap: 10px; margin-top: 15px;">
-              <span style="background: var(--neon-cyan); color: #000; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: bold;">PARALLEL: ON</span>
-              <span style="background: var(--neon-blue); color: #000; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: bold;">SANDBOX: HIGH</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="prompt-section">
-        <h2><i class="fas fa-list-check"></i> Règles de l'Orchestrateur (Vérifiées)</h2>
-        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem;">
-          <tr style="border-bottom: 1px solid var(--glass-border); color: var(--neon-blue);">
-            <th style="padding: 15px; text-align: left;">RÈGLE</th>
-            <th style="padding: 15px; text-align: left;">CONTRAINTE</th>
-            <th style="padding: 15px; text-align: left;">IMPACT</th>
-          </tr>
-          <tr style="border-bottom: 1px solid var(--glass-border);">
-            <td style="padding: 15px;"><i class="fas fa-microchip"></i> Runner Kilo</td>
-            <td style="padding: 15px;">Exclusivité sur Kilo & Hermes</td>
-            <td style="padding: 15px; color: var(--neon-cyan);">Vitesse Max</td>
-          </tr>
-          <tr style="border-bottom: 1px solid var(--glass-border);">
-            <td style="padding: 15px;"><i class="fas fa-eye-slash"></i> Pas de lecture</td>
-            <td style="padding: 15px;">Interdiction de <code>view_file</code></td>
-            <td style="padding: 15px; color: var(--neon-cyan);">Économie Tokens</td>
-          </tr>
-          <tr>
-            <td style="padding: 15px;"><i class="fas fa-memory"></i> Mémoire Store</td>
-            <td style="padding: 15px;">Archivage après chaque action</td>
-            <td style="padding: 15px; color: var(--neon-cyan);">Context Aware</td>
-          </tr>
-        </table>
-      </div>
-    </div>          <div class="intro-content">
-                <h2><i class="fas fa-robot"></i> Orchestrateur OverMind — Mode Économie Maximale</h2>
-                <div class="intro-description">
-                  <p>Tu es un <strong>orchestrateur pur et actif</strong>. Tu ne codes pas, tu ne fouilles pas le repo, tu ne raisonnes pas longuement. Ton seul travail : <strong>décortiquer impérativement les demandes complexes en tâches atomiques</strong>.</p>
-                  <p class="intro-mission">Tu routes chaque micro-tâche vers le bon agent (principalement <strong>kilo</strong> ou <strong>hermes</strong>) via les outils MCP <code>mcp__overmind__*</code>.</p>
                 </div>
               </div>
             </div>
