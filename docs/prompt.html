@@ -1,717 +1,291 @@
 <!DOCTYPE html>
 <html lang="fr">
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-    />
-    <link rel="stylesheet" href="styles.css?v=1.3.4" />
-    <style>
-      .prompt-container {
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 40px 20px;
-      }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OverMind Control Center — AI Orchestration</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #05070a;
+      --card-bg: rgba(13, 17, 23, 0.8);
+      --neon-blue: #00d2ff;
+      --neon-cyan: #00ffaa;
+      --neon-purple: #bd00ff;
+      --neon-orange: #ffaa00;
+      --text-main: #e6edf3;
+      --text-dim: #8b949e;
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --scan-line: rgba(0, 210, 255, 0.05);
+    }
 
-      .prompt-header {
-        text-align: center;
-        margin-bottom: 40px;
-      }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-      .prompt-header h1 {
-        font-size: 2.5rem;
-        margin-bottom: 10px;
-        background: linear-gradient(135deg, var(--neon-cyan), var(--neon-blue));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-      }
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(0, 210, 255, 0.15) 0%, transparent 50%),
+        linear-gradient(rgba(13, 17, 23, 0.4) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(13, 17, 23, 0.4) 1px, transparent 1px);
+      background-size: 100% 100%, 40px 40px, 40px 40px;
+      color: var(--text-main);
+      font-family: 'Outfit', sans-serif;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
 
-      .prompt-content {
-        background: rgba(0, 20, 40, 0.8);
-        border: 1px solid var(--neon-cyan);
-        border-radius: 10px;
-        padding: 30px;
-        box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
-        overflow-x: auto;
-      }
+    /* Scanline Animation */
+    body::after {
+      content: "";
+      position: fixed; top: 0; left: 0; width: 100%; height: 4px;
+      background: var(--scan-line);
+      z-index: 100; pointer-events: none;
+      animation: scan 10s linear infinite;
+    }
+    @keyframes scan { 0% { top: -5%; } 100% { top: 105%; } }
 
-      .prompt-content pre {
-        margin: 0;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        font-family: 'Courier New', monospace;
-        font-size: 0.95rem;
-        line-height: 1.6;
-        color: #e0e0e0;
-      }
+    .container { max-width: 1200px; margin: 0 auto; padding: 60px 20px; }
 
-      .prompt-content h1 {
-        color: var(--neon-cyan);
-        font-size: 1.8rem;
-        margin-bottom: 20px;
-        border-bottom: 1px solid var(--neon-blue);
-        padding-bottom: 10px;
-      }
+    header { text-align: center; margin-bottom: 50px; }
+    .logo-box { 
+      display: inline-flex; padding: 25px; background: var(--card-bg); 
+      border: 1px solid var(--glass-border); border-radius: 24px; 
+      backdrop-filter: blur(10px); box-shadow: 0 0 40px rgba(0, 210, 255, 0.15);
+      margin-bottom: 25px;
+    }
 
-      .prompt-content h2 {
-        color: var(--neon-blue);
-        font-size: 1.4rem;
-        margin-top: 25px;
-        margin-bottom: 15px;
-      }
+    h1 { font-size: 3.5rem; font-weight: 800; letter-spacing: -2px; margin-bottom: 10px; }
+    .gradient-text { background: linear-gradient(90deg, #fff, var(--neon-blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-      .prompt-content h3 {
-        color: #00d4ff;
-        font-size: 1.2rem;
-        margin-top: 20px;
-        margin-bottom: 10px;
-      }
+    .status-row { display: flex; justify-content: center; gap: 20px; margin-top: 15px; font-size: 0.75rem; letter-spacing: 1px; color: var(--text-dim); }
+    .status-pill { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 5px 15px; border-radius: 20px; border: 1px solid var(--glass-border); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--neon-cyan); box-shadow: 0 0 8px var(--neon-cyan); }
+    .pulse { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.3); } }
 
-      .prompt-content code {
-        background: rgba(0, 255, 255, 0.1);
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-family: 'Courier New', monospace;
-        font-size: 0.9em;
-      }
+    /* Switcher Navigation */
+    .view-nav {
+      display: flex; justify-content: center; gap: 15px; margin-bottom: 40px;
+      padding: 10px; background: rgba(255,255,255,0.02); border-radius: 18px; border: 1px solid var(--glass-border);
+    }
+    .nav-btn {
+      flex: 1; max-width: 250px; padding: 18px; border: none; background: transparent;
+      color: var(--text-dim); cursor: pointer; border-radius: 12px; transition: 0.3s;
+      display: flex; flex-direction: column; align-items: center; gap: 8px; font-weight: 600;
+    }
+    .nav-btn i { font-size: 1.4rem; }
+    .nav-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .nav-btn.active { background: var(--card-bg); color: #fff; border: 1px solid var(--glass-border); box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+    .nav-btn.active::after { content: ""; width: 40px; height: 3px; background: var(--neon-blue); border-radius: 10px; margin-top: 5px; box-shadow: 0 0 10px var(--neon-blue); }
 
-      .prompt-content pre code {
-        background: transparent;
-        padding: 0;
-      }
+    /* Content Area */
+    .view-pane { display: none; animation: slideUp 0.6s cubic-bezier(0.23, 1, 0.32, 1); }
+    .view-pane.active { display: block; }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
 
-      .prompt-content ul, .prompt-content ol {
-        margin: 15px 0;
-        padding-left: 25px;
-      }
+    .card {
+      background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 28px;
+      padding: 40px; margin-bottom: 30px; backdrop-filter: blur(20px); position: relative; overflow: hidden;
+    }
+    .card::before { content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 70%); pointer-events: none; }
 
-      .prompt-content li {
-        margin: 8px 0;
-        line-height: 1.5;
-      }
+    h2 { font-size: 1.8rem; margin-bottom: 25px; display: flex; align-items: center; gap: 15px; color: #fff; }
+    h2 i { color: var(--neon-blue); }
 
-      .prompt-content strong {
-        color: var(--neon-cyan);
-        font-weight: 600;
-      }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .item-card { background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); padding: 25px; border-radius: 20px; transition: 0.3s; }
+    .item-card:hover { transform: translateY(-5px); border-color: var(--neon-blue); background: rgba(255,255,255,0.05); }
+    .item-card h4 { color: var(--neon-blue); margin-bottom: 12px; font-size: 1.1rem; }
 
-      .prompt-content table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 20px 0;
-      }
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th { text-align: left; padding: 15px; color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; border-bottom: 1px solid var(--glass-border); }
+    td { padding: 18px 15px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.95rem; }
 
-      .prompt-content th, .prompt-content td {
-        border: 1px solid rgba(0, 255, 255, 0.3);
-        padding: 12px;
-        text-align: left;
-      }
+    /* Badges */
+    .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+    .badge-blue { background: rgba(0,210,255,0.2); color: var(--neon-blue); border: 1px solid var(--neon-blue); }
+    .badge-cyan { background: rgba(0,255,170,0.2); color: var(--neon-cyan); border: 1px solid var(--neon-cyan); }
+    .badge-orange { background: rgba(255,170,0,0.2); color: var(--neon-orange); border: 1px solid var(--neon-orange); }
 
-      .prompt-content th {
-        background: rgba(0, 255, 255, 0.1);
-        color: var(--neon-cyan);
-      }
+    /* Code & Terminal */
+    code { font-family: 'Fira Code', monospace; background: #000; padding: 15px; border-radius: 12px; display: block; font-size: 0.85rem; color: #5af78e; border: 1px solid var(--glass-border); margin-top: 15px; }
 
-      .back-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 30px;
-        padding: 12px 24px;
-        background: rgba(0, 255, 255, 0.1);
-        border: 1px solid var(--neon-cyan);
-        border-radius: 5px;
-        color: var(--neon-cyan);
-        text-decoration: none;
-        transition: all 0.3s ease;
-      }
+    @media (max-width: 768px) {
+      h1 { font-size: 2.2rem; }
+      .view-nav { flex-direction: column; }
+      .nav-btn { max-width: none; }
+    }
+  </style>
+</head>
+<body>
 
-      .back-btn:hover {
-        background: rgba(0, 255, 255, 0.2);
-        transform: translateX(-5px);
-      }
+<div class="container">
+  <header>
+    <div class="logo-box">
+      <i class="fas fa-brain fa-3x" style="color: var(--neon-blue);"></i>
+    </div>
+    <h1><span class="gradient-text">OVERMIND</span> SYSTEM</h1>
+    <div class="status-row">
+      <div class="status-pill"><div class="dot pulse"></div> ENGINE ONLINE</div>
+      <div class="status-pill"><i class="fas fa-shield"></i> SECURED</div>
+      <div class="status-pill"><i class="fas fa-network-wired"></i> V7.2</div>
+    </div>
+  </header>
 
-      /* Selector Styles */
-      .prompt-selector {
-        display: flex;
-        justify-content: center;
-        gap: 15px;
-        margin-bottom: 40px;
-        flex-wrap: wrap;
-      }
+  <nav class="view-nav">
+    <button class="nav-btn active" onclick="switchView('view-kilo-hermes', this)">
+      <i class="fas fa-microchip"></i>
+      <span>Orchestrateur Mixte</span>
+    </button>
+    <button class="nav-btn" onclick="switchView('view-kilo', this)">
+      <i class="fas fa-bolt"></i>
+      <span>Kilo Engine</span>
+    </button>
+    <button class="nav-btn" onclick="switchView('view-claude', this)">
+      <i class="fas fa-code-commit"></i>
+      <span>Claude Code</span>
+    </button>
+  </nav>
 
-      .selector-btn {
-        padding: 12px 20px;
-        background: rgba(0, 20, 40, 0.6);
-        border: 1px solid rgba(0, 255, 255, 0.2);
-        border-radius: 8px;
-        color: #a0aec0;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-family: 'Inter', sans-serif;
-        font-size: 0.9rem;
-      }
-
-      .selector-btn i {
-        font-size: 1.1rem;
-        transition: transform 0.3s ease;
-      }
-
-      .selector-btn:hover {
-        border-color: var(--neon-cyan);
-        color: var(--neon-cyan);
-        background: rgba(0, 255, 255, 0.05);
-        transform: translateY(-2px);
-      }
-
-      .selector-btn.active {
-        background: rgba(0, 255, 255, 0.15);
-        border-color: var(--neon-cyan);
-        color: #fff;
-        box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
-      }
-
-      .selector-btn.active i {
-        color: var(--neon-cyan);
-        transform: scale(1.1);
-      }
-
-      .prompt-view {
-        animation: fadeIn 0.5s ease-out;
-      }
-
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-
-      .prompt-meta-dynamic {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        margin-bottom: 20px;
-      }
-    </style>
-  </head>
-  <body>
-    <canvas class="matrix-bg" id="matrix"></canvas>
-    <div class="grid-overlay"></div>
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="orb orb-3"></div>
-
-    <div class="main-content">
-      <header>
-        <div class="container">
-          <nav>
-            <div class="logo">
-              <i class="fas fa-brain"></i>
-              <span class="logo-text">OverMind-MCP</span>
-              <div class="logo-glitch"></div>
-            </div>
-            <ul class="nav-links">
-              <li><a href="index.html#features" class="nav-link">Fonctionnalités</a></li>
-              <li><a href="index.html#install" class="nav-link">Installation</a></li>
-              <li><a href="library.html" class="nav-link">Bibliothèque</a></li>
-              <li><a href="prompt.html" class="nav-link active"><i class="fas fa-robot"></i> Prompt</a></li>
-              <li>
-                <a
-                  href="https://deamondev888.github.io/PostgreSQL-MCP-Serveur/"
-                  target="_blank"
-                  class="nav-link nav-link-highlight"
-                  ><i class="fas fa-database"></i> PostgreSQL-MCP</a
-                >
-              </li>
-            </ul>
-            <div class="mobile-toggle">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-          </nav>
+  <!-- VIEW 1: KILO & HERMES -->
+  <div id="view-kilo-hermes" class="view-pane active">
+    <div class="card">
+      <h2><i class="fas fa-robot"></i> Orchestrateur Overmind — Économie Maximale</h2>
+      <p style="color: var(--text-dim); margin-bottom: 25px;">Tu es un orchestrateur pur et actif. Ton seul travail : décortiquer les demandes complexes en tâches atomiques.</p>
+      
+      <div class="grid">
+        <div class="item-card">
+          <h4>Règles d'or</h4>
+          <p style="font-size: 0.85rem; line-height: 1.8;">
+            • Séquentiel strict (1 agent à la fois)<br>
+            • Interdiction d'exploration locale<br>
+            • Pas de raisonnement étendu<br>
+            • Granularité Atomique obligatoire
+          </p>
         </div>
-      </header>
-
-      <div class="prompt-container">
-        <div class="prompt-header">
-          <div class="prompt-badges" id="header-badges">
-            <span class="badge badge-primary">
-              <i class="fas fa-microchip"></i>
-              Système
-            </span>
-            <span class="badge badge-secondary">
-              <i class="fas fa-bolt"></i>
-              Économie Maximale
-            </span>
-          </div>
-          <h1 id="header-title"><i class="fas fa-robot"></i> Prompt OverMind</h1>
-          <p class="prompt-subtitle" id="header-subtitle">Orchestrateur pur — Délégation totale aux sous-agents MCP</p>
-          
-          <div class="prompt-selector">
-            <button class="selector-btn active" onclick="switchPrompt('kilo-hermes', this)">
-              <i class="fas fa-balance-scale"></i> Kilo & Hermes
-            </button>
-            <button class="selector-btn" onclick="switchPrompt('kilo', this)">
-              <i class="fas fa-bolt"></i> Kilo Uniquement
-            </button>
-            <button class="selector-btn" onclick="switchPrompt('claude', this)">
-              <i class="fas fa-code"></i> Claude Code
-            </button>
-          </div>
-
-          <div class="prompt-meta">
-            <span class="meta-item">
-              <i class="fas fa-clock"></i>
-              Temps de lecture: ~5 min
-            </span>
-            <span class="meta-item">
-              <i class="fas fa-layer-group"></i>
-              6 sections
-            </span>
-            <span class="meta-item">
-              <i class="fas fa-code"></i>
-              Format: Markdown
-            </span>
-          </div>
-        </div>
-
-        <div class="prompt-content">
-    <!-- VIEW 1: KILO & HERMES (ORCHESTRATEUR MIXTE) -->
-    <div id="view-kilo-hermes" class="view-content active">
-      <div class="prompt-section">
-        <h2><i class="fas fa-microchip"></i> Orchestrateur Overmind — Économie Maximale</h2>
-        <p style="color: var(--neon-blue); font-weight: 600; margin-bottom: 20px;">Tu es un orchestrateur pur et actif. Tu ne codes pas, tu ne fouilles pas le repo.</p>
-        
-        <div class="logic-grid">
-                </div>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-gem"></i> Règle d'or — économie de tokens</h2>
-              <div class="rules-grid">
-                <div class="rule-card rule-1">
-                  <div class="rule-number">01</div>
-                  <h3>Séquentiel strict</h3>
-                  <p>Un seul sous-agent à la fois. Interdit de lancer des agents en parallèle. Attends le résultat avant la suite.</p>
-                </div>
-                <div class="rule-card rule-2">
-                  <div class="rule-number">02</div>
-                  <h3>Pas de travail local</h3>
-                  <p>Pas de <code>Read</code> / <code>Grep</code> / <code>Bash</code> — c'est le job exclusif du sous-agent.</p>
-                </div>
-                <div class="rule-card rule-3">
-                  <div class="rule-number">03</div>
-                  <h3>Pas de raisonnement étendu</h3>
-                  <p>Pas de plans longs. Enchaîne : <code>memory_search</code> → <code>run_agent</code> → <code>memory_store</code> → réponse ≤ 3 lignes.</p>
-                </div>
-                <div class="rule-card rule-4">
-                  <div class="rule-number">04</div>
-                  <h3>Pas de re-lecture</h3>
-                  <p>Le résultat est dans <code>memory_store</code> ; tu ne le recopies pas, tu donnes l'essentiel.</p>
-                </div>
-                <div class="rule-card rule-5">
-                  <div class="rule-number">05</div>
-                  <h3>Réponse depuis mémoire</h3>
-                  <p>Si la tâche est triviale et déjà répondue par <code>memory_search</code>, tu ne lances PAS d'agent.</p>
-                </div>
-                <div class="rule-card rule-6">
-                  <div class="rule-number">06</div>
-                  <h3>Granularité Atomique</h3>
-                  <p>INTERDIT de soumettre une demande multi-étapes. Découpe en micro-tâches (Audit → Code → Test).</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-tools"></i> Usage des outils MCP OverMind</h2>
-              <div class="tool-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
-                <div class="tool-card">
-                  <div class="tool-header"><h3>metadata</h3></div>
-                  <div class="tool-content"><p>Analyse la structure du projet, les fichiers de config et les statistiques de code.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>list_agents</h3></div>
-                  <div class="tool-content"><p>Liste tous les agents disponibles et leur configuration actuelle.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>create_agent</h3></div>
-                  <div class="tool-content"><p>Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>update_agent_config</h3></div>
-                  <div class="tool-content"><p>Modifie la config technique (Runner, Modèle, Serveurs MCP, Env) d'un agent.</p></div>
-                </div>
-                <div class="tool-card tool-card-primary">
-                  <div class="tool-header"><h3>run_agent</h3></div>
-                  <div class="tool-content"><p>Exécute une commande via le runner spécifié (kilo, hermes, claude, etc.).</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>memory_store</h3></div>
-                  <div class="tool-content"><p>Mémorise durablement une connaissance, décision ou pattern d'orchestration.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>memory_search</h3></div>
-                  <div class="tool-content"><p>Recherche sémantique + full-text dans la mémoire OverMind.</p></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-microchip"></i> Kilo & Hermes Engine</h2>
-              <div class="kilo-terminal" style="background: #0d1117; border: 1px solid var(--neon-cyan); border-radius: 6px; padding: 20px; font-family: 'Fira Code', monospace; box-shadow: 0 0 20px rgba(0, 255, 255, 0.1); margin-bottom: 25px;">
-                <div style="color: #8b949e; margin-bottom: 10px;">// Orchestration Standard</div>
-                <div style="color: var(--neon-cyan);">run_agent</div>({
-                <br>&nbsp;&nbsp;runner: <span style="color: #ce9178;">"kilo"</span>,
-                <br>&nbsp;&nbsp;mode: <span style="color: #ce9178;">"code"</span>,
-                <br>&nbsp;&nbsp;prompt: <span style="color: #ce9178;">"Vérifie la sécurité de ce script..."</span>
-                <br>});
-              </div>
-              
-              <div class="logic-card" style="background: rgba(0, 255, 255, 0.05); border-left: 4px solid var(--neon-cyan); padding: 15px; border-radius: 4px;">
-                <h4 style="color: var(--neon-cyan);"><i class="fas fa-cogs"></i> Pipeline de Commande Réel</h4>
-                <code style="display: block; background: #000; padding: 10px; margin-top: 10px; color: #fff; font-size: 0.8rem;">
-                  kilo run "[prompt]" --agent [mode] --model [selectedModel] --auto --format json --dir .
-                </code>
-                <ul style="margin-top: 10px; font-size: 0.85rem; padding-left: 20px;">
-                  <li><strong>Auto-Resume :</strong> Utilise <code>getLastSessionId(agentName)</code> pour charger l'historique.</li>
-                  <li><strong>Mapping Modèles :</strong> Traduit "step 3.5 flash" → <code>kilo/stepfun/step-3.5-flash:free</code>.</li>
-                  <li><strong>Isolation Env :</strong> Injection forcée de <code>OVERMIND_AGENT_NAME</code> dans le shell.</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="download-section">
-              <div class="download-content">
-                <h3><i class="fas fa-download"></i> Télécharger le prompt</h3>
-                <p>Accédez au fichier <strong>Kilo&Hermes.md</strong> original</p>
-                <a href="https://github.com/DeamonDev888/overmind-mcp/blob/main/prompt/Kilo%26Hermes.md" target="_blank" class="download-btn">
-                  <i class="fab fa-github"></i> <span>Voir sur GitHub</span>
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <!-- VIEW 2: KILO ONLY -->
-          <div id="view-kilo" class="prompt-view" style="display: none;">
-            <div class="intro-section">
-              <div class="intro-content">
-                <h2><i class="fas fa-bolt"></i> Orchestrateur Kilo — Performance & Parallélisme</h2>
-                <div class="intro-description">
-                  <p>Tu es un <strong>orchestrateur pur, ultra-rapide et asynchrone</strong>. Ton seul travail : <strong>décortiquer impérativement les demandes complexes en tâches atomiques</strong> et les router exclusivement vers le runner <strong>kilo</strong>.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-gem"></i> Règles d'or — Puissance Kilo</h2>
-              <div class="rules-grid">
-                <div class="rule-card rule-1">
-                  <div class="rule-number">01</div>
-                  <h3>Runner Unique</h3>
-                  <p>Runner exclusif : <code>kilo</code>. JAMAIS d'autre runner (pas de hermes, pas de claude).</p>
-                </div>
-                <div class="rule-card rule-2">
-                  <div class="rule-number">02</div>
-                  <h3>Séquentiel strict</h3>
-                  <p>Une seule commande <code>run_agent</code> par tour. Pas d'appels multiples simultanés.</p>
-                </div>
-                <div class="rule-card rule-3">
-                  <div class="rule-number">03</div>
-                  <h3>Parallélisme Actif</h3>
-                  <p>Autorisé à lancer un agent alors qu'un autre est en cours (si tâche indépendante).</p>
-                </div>
-                <div class="rule-card rule-4">
-                  <div class="rule-number">04</div>
-                  <h3>Zéro Exploration</h3>
-                  <p>Interdiction d'explorer le code localement. C'est la responsabilité exclusive de Kilo.</p>
-                </div>
-                <div class="rule-card rule-5">
-                  <div class="rule-number">05</div>
-                  <h3>Économie Flash</h3>
-                  <p>Pas de plans longs. <code>search</code> → <code>run</code> → <code>store</code> → réponse ≤ 3 lignes.</p>
-                </div>
-                <div class="rule-card rule-6">
-                  <div class="rule-number">06</div>
-                  <h3>Atome Pur</h3>
-                  <p>Découpage en micro-tâches obligatoire. Plus la tâche est petite, plus Kilo est rapide.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-tasks"></i> Workflow Kilo</h2>
-              <div class="workflow-container" style="background: rgba(0, 255, 255, 0.05); padding: 20px; border-radius: 8px; border: 1px dashed var(--neon-cyan); font-family: monospace; font-size: 0.9rem;">
-                1. memory_search(query=...) → Contexte vectoriel<br>
-                2. [Analyse de dépendance : identification des tâches]<br>
-                3. run_agent(runner="kilo", mode=...) → Exécution asynchrone<br>
-                4. memory_store(text=..., source="agent") → Capitalisation<br>
-                5. Réponse ≤ 3 lignes → Citations fichiers/tests
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-brain"></i> Gestion de la Mémoire (OverMind)</h2>
-              <div class="tool-card tool-card-highlight" style="border-left: 4px solid var(--neon-cyan); margin-bottom: 20px;">
-                <div class="tool-header">
-                  <h3>Mémoire Sémantique</h3>
-                  <span class="tool-badge tool-badge-primary">Fondation</span>
-                </div>
-                <div class="tool-content">
-                  <ul style="margin-top: 10px; color: #a0aec0; font-size: 0.9rem; list-style: none; padding-left: 0;">
-                    <li style="margin-bottom: 8px;"><i class="fas fa-search" style="color: var(--neon-cyan); margin-right: 10px;"></i> <code>mcp__overmind__memory_search(query)</code> : Toujours commencer par ici pour récupérer le contexte.</li>
-                    <li style="margin-bottom: 8px;"><i class="fas fa-save" style="color: var(--neon-cyan); margin-right: 10px;"></i> <code>mcp__overmind__memory_store(text, source="agent")</code> : Sauvegarder chaque décision et résultat d'exécution.</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-microchip"></i> Kilo Performance Engine</h2>
-              <div class="kilo-terminal" style="background: #0d1117; border: 1px solid var(--neon-cyan); border-radius: 6px; padding: 20px; font-family: 'Fira Code', monospace; box-shadow: 0 0 20px rgba(0, 255, 255, 0.1); margin-bottom: 25px;">
-                <div style="color: #8b949e; margin-bottom: 10px;">// Exemple d'exécution Kilo</div>
-                <div style="color: var(--neon-cyan);">run_agent</div>({
-                <br>&nbsp;&nbsp;runner: <span style="color: #ce9178;">"kilo"</span>,
-                <br>&nbsp;&nbsp;mode: <span style="color: #ce9178;">"architect"</span>,
-                <br>&nbsp;&nbsp;model: <span style="color: #ce9178;">"hy3-preview:free"</span>,
-                <br>&nbsp;&nbsp;prompt: <span style="color: #ce9178;">"Conçois une structure d'API sécurisée..."</span>
-                <br>});
-              </div>
-
-              <div class="logic-card" style="background: rgba(0, 255, 255, 0.05); border-left: 4px solid var(--neon-cyan); padding: 15px; border-radius: 4px; margin-bottom: 25px;">
-                <h4 style="color: var(--neon-cyan);"><i class="fas fa-sync-alt"></i> Engine Logic (Service Layer)</h4>
-                <ul style="margin-top: 10px; font-size: 0.85rem; padding-left: 20px;">
-                  <li><strong>Retry Automatique :</strong> Si une session est expirée ou corrompue (EXIT_CODE_1), le runner supprime le <code>sessionId</code> local et relance une session vierge instantanément.</li>
-                  <li><strong>Traitement JSON :</strong> Capture des événements de type <code>text</code>, <code>message</code> ou <code>reply</code> pour reconstruire la réponse finale.</li>
-                  <li><strong>Détection Quota :</strong> Monitoring actif du STDERR pour détecter les erreurs 429 ou les limites de taux (Rate Limits).</li>
-                </ul>
-              </div>
-
-              <div class="mode-grid-premium" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                <div class="rule-card" style="border-bottom: 3px solid #00f2ff;">
-                  <h4 style="color: var(--neon-cyan); margin-bottom: 10px;"><i class="fas fa-code-branch"></i> CODE</h4>
-                  <p style="font-size: 0.85rem;">Implémentation de fonctionnalités, tests unitaires et refactoring actif.</p>
-                </div>
-                <div class="rule-card" style="border-bottom: 3px solid #7000ff;">
-                  <h4 style="color: #7000ff; margin-bottom: 10px;"><i class="fas fa-drafting-compass"></i> ARCHITECT</h4>
-                  <p style="font-size: 0.85rem;">Conception de schémas, architecture de fichiers et planification système.</p>
-                </div>
-                <div class="rule-card" style="border-bottom: 3px solid #ff00c8;">
-                  <h4 style="color: #ff00c8; margin-bottom: 10px;"><i class="fas fa-question-circle"></i> ASK</h4>
-                  <p style="font-size: 0.85rem;">Exploration du code, réponses aux questions et documentation (Read-Only).</p>
-                </div>
-                <div class="rule-card" style="border-bottom: 3px solid #ff003c;">
-                  <h4 style="color: #ff003c; margin-bottom: 10px;"><i class="fas fa-bug"></i> DEBUG</h4>
-                  <p style="font-size: 0.85rem;">Analyse de logs, correction de bugs et résolution de conflits d'environnement.</p>
-                </div>
-                <div class="rule-card" style="border-bottom: 3px solid #ffaa00;">
-                  <h4 style="color: #ffaa00; margin-bottom: 10px;"><i class="fas fa-sitemap"></i> ORCHESTRATOR</h4>
-                  <p style="font-size: 0.85rem;">Décomposition de tâches complexes et routage vers des sous-agents.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-tools"></i> Usage des outils MCP OverMind</h2>
-              <div class="tool-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
-                <div class="tool-card"><div class="tool-header"><h3>metadata</h3></div><div class="tool-content"><p>Analyse structurelle et statistiques.</p></div></div>
-                <div class="tool-card"><div class="tool-header"><h3>list_agents</h3></div><div class="tool-content"><p>Inventaire des configurations.</p></div></div>
-                <div class="tool-card"><div class="tool-header"><h3>create_agent</h3></div><div class="tool-content"><p>Provisioning et nouveaux prompts.</p></div></div>
-                <div class="tool-card"><div class="tool-header"><h3>update_agent_config</h3></div><div class="tool-content"><p>Maintenance technique agents.</p></div></div>
-                <div class="tool-card tool-card-primary"><div class="tool-header"><h3>run_agent</h3></div><div class="tool-content"><p>Exécution Kilo Performance.</p></div></div>
-                <div class="tool-card"><div class="tool-header"><h3>memory_store</h3></div><div class="tool-content"><p>Capitalisation des connaissances.</p></div></div>
-                <div class="tool-card"><div class="tool-header"><h3>memory_search</h3></div><div class="tool-content"><p>Recherche contextuelle HD.</p></div></div>
-              </div>
-            </div>
-
-            <div class="download-section">
-              <div class="download-content">
-                <h3><i class="fas fa-download"></i> Télécharger le prompt</h3>
-                <p>Accédez au fichier <strong>Kilo.md</strong> original</p>
-                <a href="https://github.com/DeamonDev888/overmind-mcp/blob/main/prompt/Kilo.md" target="_blank" class="download-btn">
-                  <i class="fab fa-github"></i> <span>Voir sur GitHub</span>
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <!-- VIEW 3: CLAUDE CODE -->
-          <div id="view-claude" class="prompt-view" style="display: none;">
-            <div class="intro-section">
-              <div class="intro-content">
-                <h2><i class="fas fa-code"></i> Orchestrateur CODE — Claude Code Intensif</h2>
-                <div class="intro-description">
-                  <p>Tu es un <strong>orchestrateur expert en architecture et asynchrone</strong>. Ton seul travail : <strong>décortiquer impérativement les demandes complexes en tâches atomiques</strong> et les router exclusivement vers le runner <strong>claude</strong>.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-gem"></i> Règles d'or — Puissance Claude</h2>
-              <div class="rules-grid">
-                <div class="rule-card rule-1">
-                  <div class="rule-number">01</div>
-                  <h3>Runner Unique</h3>
-                  <p>Runner exclusif : <code>claude</code> (Claude Code). JAMAIS de kilo ou de hermes.</p>
-                </div>
-                <div class="rule-card rule-2">
-                  <div class="rule-number">02</div>
-                  <h3>Séquentiel strict</h3>
-                  <p>Une seule commande <code>run_agent</code> par tour pour assurer la clarté du workflow.</p>
-                </div>
-                <div class="rule-card rule-3">
-                  <div class="rule-number">03</div>
-                  <h3>Multi-Agents Isolés</h3>
-                  <p>Invoque des spécialistes (<code>Audit_Master</code>, <code>Dev_Expert</code>) avec settings dédiés.</p>
-                </div>
-                <div class="rule-card rule-4">
-                  <div class="rule-number">04</div>
-                  <h3>Autonomie Totale</h3>
-                  <p>Claude Code dispose de ses propres outils (ls, grep, edit). Ne lis pas les fichiers pour lui.</p>
-                </div>
-                <div class="rule-card rule-5">
-                  <div class="rule-number">05</div>
-                  <h3>Économie de Tokens</h3>
-                  <p>Pas de plans longs. <code>search</code> → <code>run</code> → <code>store</code> → réponse ≤ 3 lignes.</p>
-                </div>
-                <div class="rule-card rule-6">
-                  <div class="rule-number">06</div>
-                  <h3>Sessions Persistantes</h3>
-                  <p>Utilise impérativement <code>agentName</code> et <code>autoResume: true</code> pour la continuité.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-tasks"></i> Workflow Claude Code</h2>
-              <div class="workflow-container" style="background: rgba(0, 255, 255, 0.05); padding: 20px; border-radius: 8px; border: 1px dashed var(--neon-cyan); font-family: monospace; font-size: 0.9rem;">
-                1. memory_search(query=...) → Contexte vectoriel<br>
-                2. [Découpage en missions d'ingénierie atomiques]<br>
-                3. run_agent(runner="claude", agentName=..., autoResume=true) → Exécution<br>
-                4. memory_store(text=..., source="agent") → Historisation archi<br>
-                5. Réponse ≤ 3 lignes → Citations fichiers/tests
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-shield-alt"></i> Provisioning & Isolation</h2>
-              <div class="tool-card tool-card-highlight" style="border-left: 4px solid var(--neon-blue); margin-bottom: 20px;">
-                <div class="tool-header">
-                  <h3>Configuration Environnementale</h3>
-                  <span class="tool-badge tool-badge-warning">Crucial</span>
-                </div>
-                <div class="tool-content">
-                  <p>L'orchestrateur doit configurer chaque agent spécialisé (ex: <code>Audit_Master</code>) :</p>
-                  <ul style="margin-top: 10px; color: #a0aec0; font-size: 0.9rem; padding-left: 20px;">
-                    <li><strong>ANTHROPIC_BASE_URL :</strong> Injection via <code>update_agent_config(env=...)</code> pour utiliser les proxys (OpenRouter, GLM).</li>
-                    <li><strong>Mémoire Sémantique :</strong> Recherche systématique avec <code>memory_search</code> avant de lancer Claude.</li>
-                    <li><strong>Isolation MCP :</strong> Définition des serveurs autorisés dans <code>.mcp.[agentName].json</code>.</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-terminal"></i> Claude Code CLI Session</h2>
-              <div class="claude-terminal" style="background: #1a1a1a; border: 1px solid var(--neon-blue); border-radius: 6px; padding: 20px; font-family: 'Fira Code', monospace; box-shadow: 0 0 20px rgba(0, 112, 255, 0.1); margin-bottom: 25px;">
-                <div style="color: #00ff00; margin-bottom: 5px;">$ claude "Refactor the authentication module for performance"</div>
-                <div style="color: #ffffff;">└── <span style="color: var(--neon-blue);">[Session: Dev_Master]</span></div>
-                <div style="color: #8b949e; margin-top: 10px;">> Analyzing files... done.</div>
-                <div style="color: #8b949e;">> Running unit tests... passing.</div>
-                <div style="color: var(--neon-blue); margin-top: 10px;">> Applying changes asynchronously.</div>
-              </div>
-
-              <div class="logic-card" style="background: rgba(0, 112, 255, 0.05); border-left: 4px solid var(--neon-blue); padding: 15px; border-radius: 4px;">
-                <h4 style="color: var(--neon-blue);"><i class="fas fa-project-diagram"></i> Logic de Déploiement (ClaudeRunner)</h4>
-                <code style="display: block; background: #000; padding: 10px; margin-top: 10px; color: #fff; font-size: 0.8rem;">
-                  cmd.exe /c claude --settings [path] --mcp-config [path] --output-format json --resume [id] --model [model] --name [nickname] -p
-                </code>
-                <ul style="margin-top: 10px; font-size: 0.85rem; padding-left: 20px;">
-                  <li><strong>Injection Système :</strong> Si <code>agents/${agentName}.md</code> existe, il précède le prompt.</li>
-                  <li><strong>Strict JSON Mode :</strong> Détection de <code>[strict json mode]</code> → désactive les outils pour un output pur.</li>
-                  <li><strong>Surnoms de Modèles :</strong> Les modèles non-techniques sont traités comme des Surnoms (flag <code>--name</code>).</li>
-                  <li><strong>Isolation Experts :</strong> Chaque agentName possède son propre sandbox technique (settings/mcp).</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="prompt-section">
-              <h2><i class="fas fa-tools"></i> Usage des outils MCP OverMind</h2>
-              <div class="tool-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
-                <div class="tool-card"><div class="tool-header"><h3>metadata</h3></div><div class="tool-content"><p>Stats et structure projet.</p></div></div>
-                <div class="tool-card"><div class="tool-header"><h3>list_agents</h3></div><div class="tool-content"><p>Audit des configurations.</p></div></div>
-                <div class="tool-card"><div class="tool-header"><h3>create_agent</h3></div><div class="tool-content"><p>Déploiement spécialistes.</p></div></div>
-                <div class="tool-card"><div class="tool-header"><h3>update_agent_config</h3></div><div class="tool-content"><p>Ajustement des settings.</p></div></div>
-                <div class="tool-card tool-card-primary"><div class="tool-header"><h3>run_agent</h3></div><div class="tool-content"><p>Claude Code Orchestration.</p></div></div>
-                <div class="tool-card"><div class="tool-header"><h3>memory_store</h3></div><div class="tool-content"><p>Sauvegarde des décisions.</p></div></div>
-                <div class="tool-card"><div class="tool-header"><h3>memory_search</h3></div><div class="tool-content"><p>Rappel contextuel.</p></div></div>
-              </div>
-            </div>
-
-            <div class="download-section">
-              <div class="download-content">
-                <h3><i class="fas fa-download"></i> Télécharger le prompt</h3>
-                <p>Accédez au fichier <strong>Claude_code.md</strong> original</p>
-                <a href="https://github.com/DeamonDev888/overmind-mcp/blob/main/prompt/Claude_code.md" target="_blank" class="download-btn">
-                  <i class="fab fa-github"></i> <span>Voir sur GitHub</span>
-                </a>
-              </div>
-            </div>
-          </div>
+        <div class="item-card">
+          <h4>Workflow Standard</h4>
+          <code style="color: var(--neon-orange);">
+            1. memory_search<br>
+            2. Analyser contexte<br>
+            3. run_agent<br>
+            4. memory_store<br>
+            5. Réponse ≤ 3 lignes
+          </code>
         </div>
       </div>
     </div>
 
-    <!-- Scroll to top button -->
-    <button class="scroll-top" id="scrollTop">
-      <i class="fas fa-arrow-up"></i>
-    </button>
+    <div class="card">
+      <h2><i class="fas fa-toolbox"></i> Outils de Pilotage</h2>
+      <table>
+        <thead>
+          <tr><th>Outil</th><th>Mission Critique</th><th>Contrainte</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-blue">run_agent</span></td>
+            <td>Délégation du travail réel</td>
+            <td>Mission autonome + Chemins absolus</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-blue">memory_store</span></td>
+            <td>Persistance des décisions</td>
+            <td>1-3 phrases maximum</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-blue">metadata</span></td>
+            <td>Lecture structurelle</td>
+            <td>Usage orchestrateur direct</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
-    <script src="script.js?v=1.3.4" defer></script>
-    <script>
-      function switchPrompt(type, btn) {
-        // Update buttons
-        document.querySelectorAll('.selector-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+  <!-- VIEW 2: KILO ENGINE -->
+  <div id="view-kilo" class="view-pane">
+    <div class="card" style="border-top: 4px solid var(--neon-cyan);">
+      <h2><i class="fas fa-bolt"></i> Orchestrateur Kilo — Performance</h2>
+      <p style="color: var(--text-dim); margin-bottom: 25px;">Chef d'orchestre d'une armée de Kilo. Rapidité, précision et parallélisme d'exécution.</p>
+      
+      <div class="grid">
+        <div class="item-card">
+          <h4>Modèles Supportés</h4>
+          <div style="margin-top: 10px;">
+            <div style="margin-bottom: 8px;"><span class="badge badge-cyan">tencent/hy3:free</span> <small>(Défaut 262K)</small></div>
+            <div style="margin-bottom: 8px;"><span class="badge badge-cyan">step 3.5 flash</span> <small>(Vitesse Pure)</small></div>
+            <div><span class="badge badge-cyan">grok code</span> <small>(Scripting)</small></div>
+          </div>
+        </div>
+        <div class="item-card">
+          <h4>Modes Opérationnels</h4>
+          <p style="font-size: 0.8rem; color: var(--text-dim);">code, architect, ask, debug, orchestrator.</p>
+          <div style="margin-top: 10px; background: rgba(0,255,170,0.1); padding: 10px; border-radius: 8px; border: 1px solid var(--neon-cyan);">
+            <small style="color: var(--neon-cyan);">Logic de Session :</small><br>
+            <span style="font-size: 0.75rem;">Cleanup auto des sessions corrompues.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-        // Update views
-        document.querySelectorAll('.prompt-view').forEach(v => v.style.display = 'none');
-        const activeView = document.getElementById('view-' + type);
-        if (activeView) activeView.style.display = 'block';
+  <!-- VIEW 3: CLAUDE CODE -->
+  <div id="view-claude" class="view-pane">
+    <div class="card" style="border-top: 4px solid var(--neon-purple);">
+      <h2><i class="fas fa-shield-halved"></i> Orchestrateur CODE — Claude Intensif</h2>
+      <p style="color: var(--text-dim); margin-bottom: 25px;">Le cerveau qui pilote la puissance de Claude Code. Précision, structure et sandbox isolées.</p>
+      
+      <div class="grid">
+        <div class="item-card">
+          <h4>Architecture Sandbox</h4>
+          <p style="font-size: 0.85rem;">
+            • Isolation des Settings (<code>settings_*.json</code>)<br>
+            • Surnoms de Modèles (Flag <code>--name</code>)<br>
+            • Sessions Persistantes (<code>autoResume: true</code>)
+          </p>
+        </div>
+        <div class="item-card">
+          <h4>Strict JSON Mode</h4>
+          <p style="font-size: 0.85rem; margin-bottom: 10px;">Forçage de l'output machine-readable via la chaîne :</p>
+          <code style="color: var(--neon-purple);">[strict json mode]</code>
+        </div>
+      </div>
+    </div>
 
-        // Update header info
-        const title = document.getElementById('header-title');
-        const subtitle = document.getElementById('header-subtitle');
-        const badges = document.getElementById('header-badges');
+    <div class="card">
+      <h2><i class="fas fa-code"></i> Blueprint d'Exécution</h2>
+      <code>cmd.exe /c claude --settings [path] --mcp-config [path] --output-format json --resume [id] --model [model] --name [nickname] -p</code>
+    </div>
+  </div>
 
-        if (type === 'kilo-hermes') {
-          title.innerHTML = '<i class="fas fa-robot"></i> Prompt OverMind';
-          subtitle.innerText = 'Orchestrateur pur — Délégation totale aux sous-agents MCP';
-          badges.innerHTML = `
-            <span class="badge badge-primary"><i class="fas fa-microchip"></i> Système</span>
-            <span class="badge badge-secondary"><i class="fas fa-bolt"></i> Économie Maximale</span>
-          `;
-        } else if (type === 'kilo') {
-          title.innerHTML = '<i class="fas fa-bolt"></i> Prompt Kilo';
-          subtitle.innerText = 'Orchestrateur asynchrone — Performance & Parallélisme Kilo';
-          badges.innerHTML = `
-            <span class="badge badge-primary"><i class="fas fa-bolt"></i> Kilo Expert</span>
-            <span class="badge badge-success"><i class="fas fa-random"></i> Parallélisme</span>
-          `;
-        } else if (type === 'claude') {
-          title.innerHTML = '<i class="fas fa-code"></i> Prompt CODE';
-          subtitle.innerText = 'Orchestrateur expert — Mode Claude Code Intensif';
-          badges.innerHTML = `
-            <span class="badge badge-primary"><i class="fas fa-terminal"></i> Claude Code</span>
-            <span class="badge badge-warning"><i class="fas fa-brain"></i> Architecture</span>
-          `;
-        }
-        
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    </script>
-  </body>
+</div>
+
+<script>
+  function switchView(viewId, btn) {
+    // Masquer toutes les vues
+    document.querySelectorAll('.view-pane').forEach(pane => {
+      pane.classList.remove('active');
+    });
+    
+    // Retirer la classe active de tous les boutons
+    document.querySelectorAll('.nav-btn').forEach(b => {
+      b.classList.remove('active');
+    });
+    
+    // Activer la vue et le bouton
+    const targetPane = document.getElementById(viewId);
+    if (targetPane) {
+      targetPane.classList.add('active');
+      btn.classList.add('active');
+      
+      // Scroll vers le haut du contenu
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+</script>
+
+</body>
 </html>
