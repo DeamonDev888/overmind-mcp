@@ -57,8 +57,22 @@ export class AgentManager {
       try {
         const settingsContent = await fs.readFile(settingsPath, 'utf-8');
         const settings = JSON.parse(settingsContent);
-        const model = settings.env?.ANTHROPIC_MODEL || 'settings-default';
+        const model = settings.env?.ANTHROPIC_MODEL || settings.model || 'settings-default';
+        const runner = settings.runner || 'claude';
         const servers = settings.enabledMcpjsonServers || [];
+
+        // Inférence du provider
+        let provider = settings.provider || settings.env?.PROVIDER || 'auto';
+        if (provider === 'auto') {
+          if (settings.env?.MISTRAL_API_KEY) provider = 'mistral';
+          else if (settings.env?.OPENAI_API_KEY) provider = 'openai';
+          else if (settings.env?.NVIDIA_API_KEY || settings.env?.NVAPI_KEY) provider = 'nvidia';
+          else if (settings.env?.GEMINI_API_KEY) provider = 'google';
+          else if (model.includes('mistral') || model.includes('codestral') || model.includes('devstral')) provider = 'mistral';
+          else if (model.includes('gpt-')) provider = 'openai';
+          else if (model.includes('gemini')) provider = 'google';
+          else if (model.includes('claude')) provider = 'anthropic';
+        }
 
         const serverStatus = servers.map((s: string) => {
           if (availableServers.includes(s)) return s;
@@ -75,7 +89,9 @@ export class AgentManager {
             : `${s} (⚠️ Absent de mcp.json)`;
         });
 
-        info += `\n  - Modèle : ${model}`;
+        info += `\n  - Runner  : ${runner}`;
+        info += `\n  - Model   : ${model}`;
+        info += `\n  - Provider: ${provider}`;
         info += `\n  - Serveurs MCP : ${servers.length > 0 ? serverStatus.join(', ') : 'Aucun'}`;
       } catch (_e) {
         info += `\n  - Config : ⚠️ Manquante ou invalide (${settingsPath})`;

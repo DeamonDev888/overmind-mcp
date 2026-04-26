@@ -12,6 +12,7 @@ export interface RunAgentOptions {
   cwd?: string;
   configPath?: string;
   silent?: boolean;
+  model?: string;
 }
 
 export interface RunAgentResult {
@@ -22,7 +23,7 @@ export interface RunAgentResult {
 }
 
 export class GeminiRunner {
-  private config: typeof CONFIG.CLAUDE; 
+  private config: typeof CONFIG.CLAUDE;
   private timeoutMs: number;
 
   constructor() {
@@ -34,7 +35,7 @@ export class GeminiRunner {
     const { prompt, agentName, autoResume } = options;
     let { sessionId } = options;
     const { PATHS } = this.config;
-    
+
     // Initial custom env
     const agentCustomEnv: Record<string, string | undefined> = {
       ...process.env,
@@ -56,49 +57,62 @@ export class GeminiRunner {
         const settingsDir = path.dirname(PATHS.SETTINGS);
         let agentPromptPath = resolveConfigPath(
           path.join(settingsDir, 'agents', `${agentName}.md`),
-          options.configPath
+          options.configPath,
         );
-        
+
         if (!fs.existsSync(agentPromptPath)) {
           agentPromptPath = resolveConfigPath(
             path.join(path.dirname(settingsDir), 'agents', `${agentName}.md`),
-            options.configPath
+            options.configPath,
           );
         }
         if (fs.existsSync(agentPromptPath)) {
           const systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
           finalPrompt = `${systemPrompt}\n\n[USER QUERY]:\n${prompt}`;
         }
-      } catch (_e) {
-        // Silent failing
+      } catch {
+        // Ignored
       }
     }
 
     // --- OAuth Sync & Centralization (Recopie) ---
     const userHome = process.env.USERPROFILE || process.env.HOME || '';
     const globalGeminiPath = path.join(userHome, '.gemini');
-    
+
     // Dossier centralisé Overmind explicite
-    const overmindGeminiPath = path.resolve(process.cwd(), '.overmind', 'gemini', agentName ? `agent_${agentName}` : 'central');
+    const overmindGeminiPath = path.resolve(
+      process.cwd(),
+      '.overmind',
+      'gemini',
+      agentName ? `agent_${agentName}` : 'central',
+    );
     const overmindGeminiSubPath = path.join(overmindGeminiPath, '.gemini');
-    
+
     // S'assurer que les dossiers existent
     if (!fs.existsSync(overmindGeminiSubPath)) {
       fs.mkdirSync(overmindGeminiSubPath, { recursive: true });
     }
 
-    const filesToSync = ['settings.json', 'oauth_creds.json', 'google_accounts.json', 'projects.json', 'state.json'];
-    
+    const filesToSync = [
+      'settings.json',
+      'oauth_creds.json',
+      'google_accounts.json',
+      'projects.json',
+      'state.json',
+    ];
+
     for (const file of filesToSync) {
       const globalFile = path.join(globalGeminiPath, file);
       const localFile = path.join(overmindGeminiSubPath, file);
-      
+
       if (fs.existsSync(globalFile)) {
         try {
           fs.copyFileSync(globalFile, localFile);
-          if (!options.silent) console.error(`[GeminiRunner] OAuth synchronisé: ${file} vers ${localFile}`);
+          if (!options.silent)
+            console.error(`[GeminiRunner] OAuth synchronisé: ${file} vers ${localFile}`);
         } catch (err) {
-          if (!options.silent) console.error(`[GeminiRunner] Échec synchronisation ${file}: ${err}`);
+          if (!options.silent)
+            console.error(`[GeminiRunner] Échec synchronisation ${file}: ${err}`);
         }
       }
     }
@@ -112,12 +126,12 @@ export class GeminiRunner {
       const settingsDir = path.dirname(PATHS.SETTINGS);
       const agentSettingsPath = resolveConfigPath(
         path.join(settingsDir, `settings_${agentName}.json`),
-        options.configPath
+        options.configPath,
       );
-      
+
       if (fs.existsSync(agentSettingsPath)) {
         const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
-        
+
         if (settings.env) {
           Object.assign(agentCustomEnv, settings.env);
         }
@@ -127,7 +141,10 @@ export class GeminiRunner {
           const fullMcp = JSON.parse(fs.readFileSync(originalMcpPath, 'utf8'));
           let mcpToUse = fullMcp;
 
-          if (settings.enableAllProjectMcpServers === false && Array.isArray(settings.enabledMcpjsonServers)) {
+          if (
+            settings.enableAllProjectMcpServers === false &&
+            Array.isArray(settings.enabledMcpjsonServers)
+          ) {
             const filteredMcp: { mcpServers: Record<string, unknown> } = { mcpServers: {} };
             for (const serverName of settings.enabledMcpjsonServers) {
               if (fullMcp.mcpServers && fullMcp.mcpServers[serverName]) {
@@ -136,7 +153,7 @@ export class GeminiRunner {
             }
             mcpToUse = filteredMcp;
           }
-          
+
           fs.writeFileSync(mcpPath, JSON.stringify(mcpToUse, null, 2));
           if (!options.silent) console.error(`[GeminiRunner] MCP synchronisé: ${mcpPath}`);
         }
@@ -151,8 +168,15 @@ export class GeminiRunner {
     // On Windows, calling gemini.cmd via shell spawn can split multiline prompts.
     // We bypass gemini.cmd by calling the underlying gemini.js directly with node.
     const userHomeNpm = path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming', 'npm');
-    const geminiJsPath = path.join(userHomeNpm, 'node_modules', '@google', 'gemini-cli', 'bundle', 'gemini.js');
-    
+    const geminiJsPath = path.join(
+      userHomeNpm,
+      'node_modules',
+      '@google',
+      'gemini-cli',
+      'bundle',
+      'gemini.js',
+    );
+
     let useNodeDirectly = false;
     if (isWin && fs.existsSync(geminiJsPath)) {
       command = 'node';
@@ -171,6 +195,14 @@ export class GeminiRunner {
     }
 
     return new Promise((resolve) => {
+      let resolved = false;
+      const safeResolve = (value: RunAgentResult) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(value);
+        }
+      };
+
       const child: ChildProcess = spawn(command, argsSpawn, {
         cwd: options.cwd || process.cwd(),
         shell: useNodeDirectly ? false : isWin,
@@ -184,17 +216,31 @@ export class GeminiRunner {
       child.stdout?.on('data', (data) => { stdout += data.toString(); });
       child.stderr?.on('data', (data) => { stderr += data.toString(); });
 
+      const timeout = setTimeout(() => {
+        child.kill();
+        setTimeout(() => {
+          if (!child.killed) child.kill('SIGKILL');
+        }, 5000);
+        safeResolve({ result: '', error: 'TIMEOUT', rawOutput: stdout + stderr });
+      }, this.timeoutMs);
+
+      child.on('error', (err: Error) => {
+        clearTimeout(timeout);
+        safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
+      });
+
       child.on('close', async (code: number | null) => {
+        clearTimeout(timeout);
+
         if (code !== 0 && !stdout) {
-          return resolve({ 
+          return safeResolve({ 
             result: '', 
-            error: code === 41 ? '🔑 Erreur Auth/API Key (OAuth/GCloud)' : `EXIT_CODE_${code}\n${stderr}`, 
+            error: code === 41 ? '🔑 Erreur Auth/API Key (OAuth/GCloud)' : `EXIT_CODE_${code}`, 
             rawOutput: stderr 
           });
         }
 
         try {
-          // Robust JSON extraction from stdout
           let jsonOutput: Record<string, unknown> | null = null;
           const trimmedStdout = stdout.trim();
           
@@ -206,8 +252,8 @@ export class GeminiRunner {
             if (firstBrace !== -1 && lastBrace !== -1) {
               try {
                 jsonOutput = JSON.parse(trimmedStdout.substring(firstBrace, lastBrace + 1));
-              } catch (__) {
-                // Ignore parsing errors
+              } catch {
+                // Ignore parsing errors for partial extraction
               }
             }
           }
@@ -220,29 +266,25 @@ export class GeminiRunner {
               await saveSessionId(agentName, newSessionId, options.configPath);
             }
             
-            return resolve({
+            return safeResolve({
               result: resultText,
               sessionId: newSessionId,
               rawOutput: stdout,
             });
           }
 
-          resolve({
+          safeResolve({
             result: stdout.trim(),
             sessionId: sessionId,
             rawOutput: stdout,
           });
-        } catch (_e) {
-          resolve({
+        } catch {
+          safeResolve({
             result: stdout.trim(),
             sessionId: sessionId,
             rawOutput: stdout,
           });
         }
-      });
-
-      child.on('error', (err: Error) => {
-        resolve({ result: '', error: err.message, rawOutput: '' });
       });
 
       if (child.stdin) {
