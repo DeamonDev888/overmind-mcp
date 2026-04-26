@@ -32,7 +32,7 @@ export class NousHermesRunner {
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
     const { prompt, agentName, autoResume, silent } = options;
     let { sessionId } = options;
-    
+
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
       const lastId = await getLastSessionId(agentName, options.configPath);
@@ -59,77 +59,113 @@ export class NousHermesRunner {
       ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
     };
 
-    // --- Isolation / Settings ---
-    // Note: Hermes uses its own config system, but we can pass env vars if needed.
+    // --- Isolation / Settings / Prompt ---
+    let systemPrompt = '';
     if (agentName) {
       try {
         const settingsDir = path.dirname(CONFIG.CLAUDE.PATHS.SETTINGS);
         const agentSettingsPath = resolveConfigPath(
           path.join(settingsDir, `settings_${agentName}.json`),
-          options.configPath
+          options.configPath,
         );
-        
-        if (fs.existsSync(agentSettingsPath)) {
-          const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
-          if (settings.env) {
-            Object.assign(agentCustomEnv, settings.env);
+
+        if (!fs.existsSync(agentSettingsPath)) {
+          // Lister les agents disponibles pour aider au debugging
+          let availableAgents: string[] = [];
+          try {
+            const files = fs.readdirSync(settingsDir);
+            availableAgents = files
+              .filter((f) => f.startsWith('settings_') && f.endsWith('.json'))
+              .map((f) => f.replace('settings_', '').replace('.json', ''));
+          } catch (_e) {
+            /* ignore */
           }
+
+          return {
+            result: '',
+            error: `INVALID_AGENT: Agent Hermes "${agentName}" non trouvé.
+              Veuillez utiliser 'create_agent' au préalable.
+              Fichier attendu: ${agentSettingsPath}
+              ${availableAgents.length > 0 ? `Agents disponibles: ${availableAgents.join(', ')}` : 'Aucun agent disponible'}
+            `
+              .replace(/\s+/g, ' ')
+              .trim(),
+          };
         }
-      } catch (_e) {
-        // Silent failing
+
+        const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+        if (settings.env) {
+          // Fusion intelligente : préserver les clés critiques (API keys)
+          const criticalKeys = ['OPENROUTER_API_KEY', 'NVIDIA_API_KEY', 'NVIDIA_API_BASE', 'OVERMIND_EMBEDDING_KEY'];
+          const envCopy = { ...settings.env };
+          for (const key of criticalKeys) {
+            if (agentCustomEnv[key] && !envCopy[key]) {
+              envCopy[key] = agentCustomEnv[key];
+            }
+          }
+          Object.assign(agentCustomEnv, envCopy);
+        }
+
+        // --- Load System Prompt (agents/agentName.md) ---
+        const agentPromptPath = resolveConfigPath(
+          path.join(path.dirname(settingsDir), 'agents', `${agentName}.md`),
+          options.configPath,
+        );
+
+        if (fs.existsSync(agentPromptPath)) {
+          systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message?.includes('INVALID_AGENT')) throw e;
+        // Silent failing for others
       }
     }
 
     // --- CLI Arguments ---
-    // Based on research: hermes chat -q "prompt"
-    // We'll try to find a way to pass session if possible, otherwise we rely on internal hermes history.
-    const isWin = process.platform === 'win32';
-    // Use the absolute path discovered earlier for reliability on Windows
-    const command = isWin 
-      ? 'C:\\Users\\Deamon\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\hermes.exe' 
-      : 'hermes';
+    const finalPrompt = systemPrompt ? `${systemPrompt}\n\n[USER QUERY]:\n${prompt}` : prompt;
 
-    if (!silent) {
-      console.error(`[NousHermesRunner] 🚀 Starting Hermes Agent...`);
-    }
+    // Nettoyer les sauts de ligne pour l'argument CLI (-q ne supporte pas les \n)
+    // Hermes CLI avec shell:false peut échouer si l'argument contient des \n
+    const cliPrompt = finalPrompt.replace(/\n+/g, ' ').trim();
 
-    if (prompt.length > 3000 && !silent) {
-      console.error(`[NousHermesRunner] ⚠️ Prompt très long (${prompt.length} chars). Risque de TIMEOUT NIM.`);
-    }
+    const cleanArgs = ['chat', '-q', cliPrompt, '--ignore-user-config', '--source', 'tool', '-Q'];
 
-    // We remove the manual quotes here because shell: false handles it correctly via the array
-    const cleanArgs = ['chat', '-q', prompt, '--ignore-user-config', '--source', 'tool'];
-    
     // --- Model & Provider selection ---
-    const DEFAULT_MODEL = 'deepseek-ai/deepseek-v4-pro';
+    const DEFAULT_MODEL = 'tencent/hy3-preview:free'; // Modèle OpenRouter gratuit
     const model = options.model || DEFAULT_MODEL;
-    
-    // Automatic provider selection based on model
+
     const isNvidiaModel = model.includes('deepseek') || model.includes('nvidia');
     const hasNvidiaKey = !!(agentCustomEnv.NVIDIA_API_KEY || agentCustomEnv.NVAPI_KEY);
 
     cleanArgs.push('--model', model);
 
-    if (isNvidiaModel) {
-      if (hasNvidiaKey) {
-        if (!silent) console.error(`[NousHermesRunner] 🎯 Using NVIDIA NIM (High Performance) for ${model}`);
-        cleanArgs.push('--provider', 'nvidia');
-      } else {
-        if (!silent) {
-          console.error(`[NousHermesRunner] ⚠️ NVIDIA_API_KEY missing. Falling back to OpenRouter for ${model}...`);
-        }
-        cleanArgs.push('--provider', 'openrouter');
-      }
+    if (isNvidiaModel && hasNvidiaKey) {
+      if (!silent) console.error(`[NousHermesRunner] 🎯 Using NVIDIA NIM for ${model}`);
+      cleanArgs.push('--provider', 'nvidia');
     } else {
-      // Fallback for non-nvidia models (like gemini or claude via openrouter)
+      // Fallback OpenRouter pour tout le reste ou si clé NIM manquante
+      if (!silent) console.error(`[NousHermesRunner] 🌐 Using OpenRouter for ${model}`);
       cleanArgs.push('--provider', 'openrouter');
     }
 
+    // --- OS Specific Spawn ---
+    const isWin = process.platform === 'win32';
+    const hermesExe =
+      'C:\\Users\\Deamon\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\hermes.exe';
+
+    const spawnCommand = isWin ? hermesExe : 'hermes';
+
+    if (!silent) {
+      console.error(
+        `[NousHermesRunner] 🚀 Starting Hermes Agent: ${spawnCommand} ${cleanArgs.join(' ')}`,
+      );
+    }
+
     return new Promise((resolve) => {
-      const child: ChildProcess = spawn(command, cleanArgs, {
+      const child: ChildProcess = spawn(spawnCommand, cleanArgs, {
         cwd: options.cwd || process.cwd(),
-        shell: false,
-        windowsHide: true, // Désormais sûr grâce au patch de cli.py
+        shell: false, // FALSE: évite le découpage incorrect des arguments avec espaces sur Windows
+        windowsHide: true,
         env: agentCustomEnv as NodeJS.ProcessEnv,
       });
 
@@ -161,17 +197,17 @@ export class NousHermesRunner {
         clearTimeout(timeout);
 
         if (code !== 0 && !stdout) {
-          return resolve({ 
-            result: '', 
-            error: `EXIT_CODE_${code}`, 
-            rawOutput: stderr || stdout 
+          return resolve({
+            result: '',
+            error: `EXIT_CODE_${code}`,
+            rawOutput: stderr || stdout,
           });
         }
 
         // --- Session ID extraction ---
         // If hermes outputs a session ID in its output, we should extract it here.
         // For now, we'll return the sessionId we had.
-        
+
         resolve({
           result: stdout.trim(),
           sessionId: sessionId,
