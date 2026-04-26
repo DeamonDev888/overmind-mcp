@@ -337,14 +337,35 @@
             </div>
 
             <div class="prompt-section">
-              <h2><i class="fas fa-tools"></i> Outils OverMind — usage précis</h2>
-              <div class="tool-card">
-                <div class="tool-header">
-                  <h3><code>run_agent</code> — <strong>kilo</strong> (Standard) | <strong>hermes</strong> (Expert)</h3>
-                  <span class="tool-badge tool-badge-success">Duo Optimisé</span>
+              <h2><i class="fas fa-tools"></i> Usage des outils MCP OverMind</h2>
+              <div class="tool-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                <div class="tool-card">
+                  <div class="tool-header"><h3>metadata</h3></div>
+                  <div class="tool-content"><p>Analyse la structure du projet, les fichiers de config et les statistiques de code.</p></div>
                 </div>
-                <div class="tool-content">
-                  <p>Utilise <strong>kilo</strong> (<code>hy3-preview:free</code>) par défaut. <strong>Attention :</strong> Hermes nécessite un provisioning via <code>create_agent</code> avant usage.</p>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>list_agents</h3></div>
+                  <div class="tool-content"><p>Liste tous les agents disponibles et leur configuration actuelle.</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>create_agent</h3></div>
+                  <div class="tool-content"><p>Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>update_agent_config</h3></div>
+                  <div class="tool-content"><p>Modifie la config technique (Runner, Modèle, Serveurs MCP, Env) d'un agent.</p></div>
+                </div>
+                <div class="tool-card tool-card-primary">
+                  <div class="tool-header"><h3>run_agent</h3></div>
+                  <div class="tool-content"><p>Exécute une commande via le runner spécifié (kilo, hermes, claude, etc.).</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>memory_store</h3></div>
+                  <div class="tool-content"><p>Mémorise durablement une connaissance, décision ou pattern d'orchestration.</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>memory_search</h3></div>
+                  <div class="tool-content"><p>Recherche sémantique + full-text dans la mémoire OverMind.</p></div>
                 </div>
               </div>
             </div>
@@ -419,15 +440,51 @@
             </div>
 
             <div class="prompt-section">
-              <h2><i class="fas fa-tools"></i> Outils Spécifiques Kilo</h2>
-              <div class="tool-card">
+              <h2><i class="fas fa-brain"></i> Gestion de la Mémoire (OverMind)</h2>
+              <div class="tool-card tool-card-highlight" style="border-left: 4px solid var(--neon-cyan); margin-bottom: 20px;">
                 <div class="tool-header">
-                  <h3><code>run_agent</code> — Runner <strong>kilo</strong></h3>
-                  <span class="tool-badge tool-badge-success">Standard Gratuits</span>
+                  <h3>Mémoire Sémantique</h3>
+                  <span class="tool-badge tool-badge-primary">Fondation</span>
                 </div>
                 <div class="tool-content">
-                  <p style="margin-bottom: 10px;">Modes supportés : <code>code</code>, <code>architect</code>, <code>ask</code>, <code>debug</code>.</p>
-                  <p>Modèles : <code>hy3-preview:free</code> (Défaut MoE) ou <code>step 3.5 flash</code>.</p>
+                  <ul style="margin-top: 10px; color: #a0aec0; font-size: 0.9rem; list-style: none; padding-left: 0;">
+                    <li style="margin-bottom: 8px;"><i class="fas fa-search" style="color: var(--neon-cyan); margin-right: 10px;"></i> <code>mcp__overmind__memory_search(query)</code> : Toujours commencer par ici pour récupérer le contexte.</li>
+                    <li style="margin-bottom: 8px;"><i class="fas fa-save" style="color: var(--neon-cyan); margin-right: 10px;"></i> <code>mcp__overmind__memory_store(text, source="agent")</code> : Sauvegarder chaque décision et résultat d'exécution.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="prompt-section">
+              <h2><i class="fas fa-tools"></i> Usage des outils MCP OverMind</h2>
+              <div class="tool-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                <div class="tool-card">
+                  <div class="tool-header"><h3>metadata</h3></div>
+                  <div class="tool-content"><p>Analyse la structure du projet, les fichiers de config et les statistiques de code.</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>list_agents</h3></div>
+                  <div class="tool-content"><p>Liste tous les agents disponibles et leur configuration actuelle.</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>create_agent</h3></div>
+                  <div class="tool-content"><p>Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>update_agent_config</h3></div>
+                  <div class="tool-content"><p>Modifie la config technique (Runner, Modèle, Serveurs MCP, Env) d'un agent.</p></div>
+                </div>
+                <div class="tool-card tool-card-primary">
+                  <div class="tool-header"><h3>run_agent</h3></div>
+                  <div class="tool-content"><p>Exécute une commande via le runner spécifié (kilo uniquement).</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>memory_store</h3></div>
+                  <div class="tool-content"><p>Mémorise durablement une connaissance, décision ou pattern d'orchestration.</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>memory_search</h3></div>
+                  <div class="tool-content"><p>Recherche sémantique + full-text dans la mémoire OverMind.</p></div>
                 </div>
               </div>
             </div>
@@ -502,28 +559,53 @@
             </div>
 
             <div class="prompt-section">
-              <h2><i class="fas fa-tools"></i> Outils & Provisioning Claude</h2>
+              <h2><i class="fas fa-shield-alt"></i> Provisioning & Isolation</h2>
               <div class="tool-card tool-card-highlight" style="border-left: 4px solid var(--neon-blue); margin-bottom: 20px;">
                 <div class="tool-header">
-                  <h3>Provisioning & Configuration</h3>
-                  <span class="tool-badge tool-badge-warning">Étape Critique</span>
+                  <h3>Configuration Environnementale</h3>
+                  <span class="tool-badge tool-badge-warning">Crucial</span>
                 </div>
                 <div class="tool-content">
-                  <p>Avant l'exécution, l'orchestrateur provisionne l'environnement :</p>
-                  <ul style="margin-top: 10px; color: #a0aec0; font-size: 0.9rem;">
-                    <li><strong>Proxys :</strong> <code>ANTHROPIC_BASE_URL</code> (OpenRouter/GLM/MiniMax).</li>
-                    <li><strong>Isolation :</strong> Filtrage des serveurs via <code>.mcp.[agent].json</code>.</li>
-                    <li><strong>Blueprint :</strong> Usage de <code>config_example</code> pour les settings.</li>
+                  <p>L'orchestrateur doit configurer chaque agent spécialisé (ex: <code>Audit_Master</code>) :</p>
+                  <ul style="margin-top: 10px; color: #a0aec0; font-size: 0.9rem; padding-left: 20px;">
+                    <li><strong>ANTHROPIC_BASE_URL :</strong> Injection via <code>update_agent_config(env=...)</code> pour utiliser les proxys (OpenRouter, GLM).</li>
+                    <li><strong>Mémoire Sémantique :</strong> Recherche systématique avec <code>memory_search</code> avant de lancer Claude.</li>
+                    <li><strong>Isolation MCP :</strong> Définition des serveurs autorisés dans <code>.mcp.[agentName].json</code>.</li>
                   </ul>
                 </div>
               </div>
-              <div class="tool-card tool-card-primary">
-                <div class="tool-header">
-                  <h3><code>run_agent</code> — Runner <strong>claude</strong></h3>
-                  <span class="tool-badge tool-badge-primary">Claude Code CLI</span>
+            </div>
+
+            <div class="prompt-section">
+              <h2><i class="fas fa-tools"></i> Usage des outils MCP OverMind</h2>
+              <div class="tool-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                <div class="tool-card">
+                  <div class="tool-header"><h3>metadata</h3></div>
+                  <div class="tool-content"><p>Analyse la structure du projet, les fichiers de config et les statistiques de code.</p></div>
                 </div>
-                <div class="tool-content">
-                  <p>Pilote le CLI Claude Code avec support natif des outils de modification de fichiers et de test.</p>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>list_agents</h3></div>
+                  <div class="tool-content"><p>Liste tous les agents disponibles et leur configuration actuelle.</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>create_agent</h3></div>
+                  <div class="tool-content"><p>Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>update_agent_config</h3></div>
+                  <div class="tool-content"><p>Modifie la config technique (Runner, Modèle, Serveurs MCP, Env) d'un agent.</p></div>
+                </div>
+                <div class="tool-card tool-card-primary">
+                  <div class="tool-header"><h3>run_agent</h3></div>
+                  <div class="tool-content"><p>Exécute une commande via le runner spécifié (claude uniquement).</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>memory_store</h3></div>
+                  <div class="tool-content"><p>Mémorise durablement une connaissance, décision ou pattern d'orchestration.</p></div>
+                </div>
+                <div class="tool-card">
+                  <div class="tool-header"><h3>memory_search</h3></div>
+                  <div class="tool-content"><p>Recherche sémantique + full-text dans la mémoire OverMind.</p></div>
                 </div>
               </div>
             </div>
