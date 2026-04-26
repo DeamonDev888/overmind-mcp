@@ -380,6 +380,18 @@
                 <br>&nbsp;&nbsp;prompt: <span style="color: #ce9178;">"Vérifie la sécurité de ce script..."</span>
                 <br>});
               </div>
+              
+              <div class="logic-card" style="background: rgba(0, 255, 255, 0.05); border-left: 4px solid var(--neon-cyan); padding: 15px; border-radius: 4px;">
+                <h4 style="color: var(--neon-cyan);"><i class="fas fa-cogs"></i> Pipeline de Commande Réel</h4>
+                <code style="display: block; background: #000; padding: 10px; margin-top: 10px; color: #fff; font-size: 0.8rem;">
+                  kilo run "[prompt]" --agent [mode] --model [selectedModel] --auto --format json --dir .
+                </code>
+                <ul style="margin-top: 10px; font-size: 0.85rem; padding-left: 20px;">
+                  <li><strong>Auto-Resume :</strong> Utilise <code>getLastSessionId(agentName)</code> pour charger l'historique.</li>
+                  <li><strong>Mapping Modèles :</strong> Traduit "step 3.5 flash" → <code>kilo/stepfun/step-3.5-flash:free</code>.</li>
+                  <li><strong>Isolation Env :</strong> Injection forcée de <code>OVERMIND_AGENT_NAME</code> dans le shell.</li>
+                </ul>
+              </div>
             </div>
 
             <div class="download-section">
@@ -477,6 +489,15 @@
                 <br>&nbsp;&nbsp;model: <span style="color: #ce9178;">"hy3-preview:free"</span>,
                 <br>&nbsp;&nbsp;prompt: <span style="color: #ce9178;">"Conçois une structure d'API sécurisée..."</span>
                 <br>});
+              </div>
+
+              <div class="logic-card" style="background: rgba(0, 255, 255, 0.05); border-left: 4px solid var(--neon-cyan); padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <h4 style="color: var(--neon-cyan);"><i class="fas fa-sync-alt"></i> Engine Logic (Service Layer)</h4>
+                <ul style="margin-top: 10px; font-size: 0.85rem; padding-left: 20px;">
+                  <li><strong>Retry Automatique :</strong> Si une session est expirée ou corrompue (EXIT_CODE_1), le runner supprime le <code>sessionId</code> local et relance une session vierge instantanément.</li>
+                  <li><strong>Traitement JSON :</strong> Capture des événements de type <code>text</code>, <code>message</code> ou <code>reply</code> pour reconstruire la réponse finale.</li>
+                  <li><strong>Détection Quota :</strong> Monitoring actif du STDERR pour détecter les erreurs 429 ou les limites de taux (Rate Limits).</li>
+                </ul>
               </div>
 
               <div class="mode-grid-premium" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
@@ -607,6 +628,18 @@
                 <div style="color: #8b949e; margin-top: 10px;">> Analyzing files... done.</div>
                 <div style="color: #8b949e;">> Running unit tests... passing.</div>
                 <div style="color: var(--neon-blue); margin-top: 10px;">> Applying changes asynchronously.</div>
+              </div>
+
+              <div class="logic-card" style="background: rgba(0, 112, 255, 0.05); border-left: 4px solid var(--neon-blue); padding: 15px; border-radius: 4px;">
+                <h4 style="color: var(--neon-blue);"><i class="fas fa-project-diagram"></i> Logic de Déploiement (ClaudeRunner)</h4>
+                <code style="display: block; background: #000; padding: 10px; margin-top: 10px; color: #fff; font-size: 0.8rem;">
+                  cmd.exe /c claude --settings [path] --mcp-config [path] --output-format json --resume [id] --model [model] --name [nickname] -p
+                </code>
+                <ul style="margin-top: 10px; font-size: 0.85rem; padding-left: 20px;">
+                  <li><strong>Injection Système :</strong> Si <code>agents/${agentName}.md</code> existe, il précède automatiquement le prompt utilisateur.</li>
+                  <li><strong>Strict Mode :</strong> Si <code>[strict json mode]</code> est détecté → <code>--tools none</code> forcé.</li>
+                  <li><strong>Fallback Surnom :</strong> Sépare le surnom de l'agent de l'ID technique du modèle pour garantir l'acceptation par l'API.</li>
+                </ul>
               </div>
             </div>
 
