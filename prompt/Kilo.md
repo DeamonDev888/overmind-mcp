@@ -42,9 +42,9 @@ C'est ton seul outil d'exécution. Format obligatoire :
 - `ask` : Recherche d'info, explication (lecture seule).
 - `debug` : Investigation d'erreurs ou logs.
 
-**Modèles Kilo recommandés :**
-- `tencent/hy3-preview:free` (Défaut) — MoE 262K gratuit, haute performance.
-- `step 3.5 flash` — Très rapide pour les tâches simples.
+**Modèles Kilo gratuits (alias `model`) :**
+- `tencent/hy3-preview:free` (262K) — Mixture-of-Experts (MoE), haute performance (défaut).
+- `step 3.5 flash` (262K) — Polyvalent et rapide.
 
 ### Gestion de la Mémoire
 
