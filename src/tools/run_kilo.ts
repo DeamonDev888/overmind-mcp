@@ -52,6 +52,5 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>) {
       { type: 'text' as const, text: result.result },
       ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : []),
     ],
-    sessionId: result.sessionId,
   };
 }
