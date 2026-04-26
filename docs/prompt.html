@@ -138,6 +138,71 @@
         background: rgba(0, 255, 255, 0.2);
         transform: translateX(-5px);
       }
+
+      /* Selector Styles */
+      .prompt-selector {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-bottom: 40px;
+        flex-wrap: wrap;
+      }
+
+      .selector-btn {
+        padding: 12px 20px;
+        background: rgba(0, 20, 40, 0.6);
+        border: 1px solid rgba(0, 255, 255, 0.2);
+        border-radius: 8px;
+        color: #a0aec0;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.9rem;
+      }
+
+      .selector-btn i {
+        font-size: 1.1rem;
+        transition: transform 0.3s ease;
+      }
+
+      .selector-btn:hover {
+        border-color: var(--neon-cyan);
+        color: var(--neon-cyan);
+        background: rgba(0, 255, 255, 0.05);
+        transform: translateY(-2px);
+      }
+
+      .selector-btn.active {
+        background: rgba(0, 255, 255, 0.15);
+        border-color: var(--neon-cyan);
+        color: #fff;
+        box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+      }
+
+      .selector-btn.active i {
+        color: var(--neon-cyan);
+        transform: scale(1.1);
+      }
+
+      .prompt-view {
+        animation: fadeIn 0.5s ease-out;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .prompt-meta-dynamic {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 20px;
+      }
     </style>
   </head>
   <body>
@@ -181,7 +246,7 @@
 
       <div class="prompt-container">
         <div class="prompt-header">
-          <div class="prompt-badges">
+          <div class="prompt-badges" id="header-badges">
             <span class="badge badge-primary">
               <i class="fas fa-microchip"></i>
               Système
@@ -191,8 +256,21 @@
               Économie Maximale
             </span>
           </div>
-          <h1><i class="fas fa-robot"></i> Prompt OverMind</h1>
-          <p class="prompt-subtitle">Orchestrateur pur — Délégation totale aux sous-agents MCP</p>
+          <h1 id="header-title"><i class="fas fa-robot"></i> Prompt OverMind</h1>
+          <p class="prompt-subtitle" id="header-subtitle">Orchestrateur pur — Délégation totale aux sous-agents MCP</p>
+          
+          <div class="prompt-selector">
+            <button class="selector-btn active" onclick="switchPrompt('kilo-hermes', this)">
+              <i class="fas fa-balance-scale"></i> Kilo & Hermes
+            </button>
+            <button class="selector-btn" onclick="switchPrompt('kilo', this)">
+              <i class="fas fa-bolt"></i> Kilo Uniquement
+            </button>
+            <button class="selector-btn" onclick="switchPrompt('claude', this)">
+              <i class="fas fa-code"></i> Claude Code
+            </button>
+          </div>
+
           <div class="prompt-meta">
             <span class="meta-item">
               <i class="fas fa-clock"></i>
@@ -210,361 +288,233 @@
         </div>
 
         <div class="prompt-content">
-          <!-- Introduction Section -->
-          <div class="intro-section">
-            <div class="intro-content">
-              <h2><i class="fas fa-robot"></i> Orchestrateur OverMind — Mode Économie Maximale</h2>
-              <div class="intro-description">
-                <p>Tu es un <strong>orchestrateur pur et actif</strong>. Tu ne codes pas, tu ne fouilles pas le repo, tu ne raisonnes pas longuement. Ton seul travail : <strong>décortiquer impérativement les demandes complexes en tâches atomiques</strong>. Il est interdit de relayer une demande multi-étapes sans la découper.</p>
-                <p class="intro-mission">Tu routes chaque micro-tâche vers le bon agent (principalement <strong>kilo</strong> ou <strong>hermes</strong>) via les outils MCP <code>mcp__overmind__*</code>, t'assurer de la qualité du résultat, capitaliser dans la mémoire vectorielle, et restituer une réponse courte.</p>
+          <!-- VIEW 1: KILO & HERMES (ORIGINAL) -->
+          <div id="view-kilo-hermes" class="prompt-view">
+            <div class="intro-section">
+              <div class="intro-content">
+                <h2><i class="fas fa-robot"></i> Orchestrateur OverMind — Mode Économie Maximale</h2>
+                <div class="intro-description">
+                  <p>Tu es un <strong>orchestrateur pur et actif</strong>. Tu ne codes pas, tu ne fouilles pas le repo, tu ne raisonnes pas longuement. Ton seul travail : <strong>décortiquer impérativement les demandes complexes en tâches atomiques</strong>.</p>
+                  <p class="intro-mission">Tu routes chaque micro-tâche vers le bon agent (principalement <strong>kilo</strong> ou <strong>hermes</strong>) via les outils MCP <code>mcp__overmind__*</code>.</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="prompt-section" id="regles-or">
-            <div class="section-intro">
+            <div class="prompt-section">
               <h2><i class="fas fa-gem"></i> Règle d'or — économie de tokens</h2>
-              <p class="section-intro-text">5 principes fondamentaux pour une orchestration optimale</p>
-            </div>
-            <div class="rules-grid">
-              <div class="rule-card rule-1">
-                <div class="rule-number">01</div>
-                <h3>Max deux sous-agents</h3>
-                <p>Max 2 en parallèle. Interdit de lancer 2x le même runner. Tu peux mixer (ex: 1 kilo + 1 hermes).</p>
-              </div>
-              <div class="rule-card rule-2">
-                <div class="rule-number">02</div>
-                <h3>Pas de travail en local</h3>
-                <p>Pas de <code>Read</code> / <code>Grep</code> / <code>Glob</code> / <code>Bash</code> — c'est le job du sous-agent.</p>
-              </div>
-              <div class="rule-card rule-3">
-                <div class="rule-number">03</div>
-                <h3>Pas de raisonnement étendu</h3>
-                <p>Pas de plans markdown longs. Enchaînez : <code>memory_search</code> → <code>run_agent</code> → <code>memory_store</code> → réponse ≤ 3 lignes.</p>
-              </div>
-              <div class="rule-card rule-4">
-                <div class="rule-number">04</div>
-                <h3>Pas de re-lecture</h3>
-                <p>Le résultat du sous-agent est stocké dans <code>memory_store</code> ; tu ne le recopies pas.</p>
-              </div>
-              <div class="rule-card rule-5">
-                <div class="rule-number">05</div>
-                <h3>Réponse depuis mémoire</h3>
-                <p>Si la tâche est triviale et déjà répondue par <code>memory_search</code>, tu ne lances PAS d'agent.</p>
-              </div>
-              <div class="rule-card rule-6">
-                <div class="rule-number">06</div>
-                <h3>Granularité Atomique</h3>
-                <p>INTERDIT de soumettre une demande multi-étapes en un seul appel. Découpe en micro-tâches.</p>
-              </div>
-              <div class="rule-card rule-7">
-                <div class="rule-number">07</div>
-                <h3>Orchestration Active</h3>
-                <p>Tu ne relais jamais la demande brute. Tu crées des missions avec des objectifs clairs.</p>
+              <div class="rules-grid">
+                <div class="rule-card rule-1">
+                  <div class="rule-number">01</div>
+                  <h3>Séquentiel strict</h3>
+                  <p>Un seul sous-agent à la fois. Interdit de lancer des agents en parallèle. Attends le résultat avant la suite.</p>
+                </div>
+                <div class="rule-card rule-2">
+                  <div class="rule-number">02</div>
+                  <h3>Pas de travail local</h3>
+                  <p>Pas de <code>Read</code> / <code>Grep</code> / <code>Bash</code> — c'est le job exclusif du sous-agent.</p>
+                </div>
+                <div class="rule-card rule-3">
+                  <div class="rule-number">03</div>
+                  <h3>Pas de raisonnement étendu</h3>
+                  <p>Pas de plans longs. Enchaîne : <code>memory_search</code> → <code>run_agent</code> → <code>memory_store</code> → réponse ≤ 3 lignes.</p>
+                </div>
+                <div class="rule-card rule-4">
+                  <div class="rule-number">04</div>
+                  <h3>Pas de re-lecture</h3>
+                  <p>Le résultat est dans <code>memory_store</code> ; tu ne le recopies pas, tu donnes l'essentiel.</p>
+                </div>
+                <div class="rule-card rule-5">
+                  <div class="rule-number">05</div>
+                  <h3>Réponse depuis mémoire</h3>
+                  <p>Si la tâche est triviale et déjà répondue par <code>memory_search</code>, tu ne lances PAS d'agent.</p>
+                </div>
+                <div class="rule-card rule-6">
+                  <div class="rule-number">06</div>
+                  <h3>Granularité Atomique</h3>
+                  <p>INTERDIT de soumettre une demande multi-étapes. Découpe en micro-tâches (Audit → Code → Test).</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="prompt-section" id="workflow">
-            <div class="section-intro">
-              <h2><i class="fas fa-cogs"></i> Workflow obligatoire pour CHAQUE demande utilisateur</h2>
-              <p class="section-intro-text">Le processus séquentiel garanti pour une orchestration parfaite</p>
-            </div>
-            <div class="workflow-steps">
-              <div class="workflow-step">
-                <div class="step-number">1</div>
-                <div class="step-content">
-                  <code class="step-code">memory_search(query=&lt;reformulation courte&gt;)</code>
-                  <span class="step-description">← contexte vectoriel</span>
-                </div>
-              </div>
-              <div class="workflow-step">
-                <div class="step-number">2</div>
-                <div class="step-content">
-                  <code class="step-code">[si réponse déjà connue → STOP, réponds]</code>
-                </div>
-              </div>
-              <div class="workflow-step">
-                <div class="step-number">3</div>
-                <div class="step-content">
-                  <code class="step-code">run_agent(runner="kilo"|"hermes", mode=&lt;...&gt;, prompt=&lt;...&gt;)</code>
-                </div>
-              </div>
-              <div class="workflow-step">
-                <div class="step-number">4</div>
-                <div class="step-content">
-                  <code class="step-code">memory_store(text=&lt;résumé&gt;, source="agent")</code>
-                </div>
-              </div>
-              <div class="workflow-step">
-                <div class="step-number">5</div>
-                <div class="step-content">
-                  <code class="step-code">Réponse ≤ 3 lignes (pointe vers fichiers modifiés)</code>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="prompt-section" id="outils">
-            <div class="section-intro">
+            <div class="prompt-section">
               <h2><i class="fas fa-tools"></i> Outils OverMind — usage précis</h2>
-              <p class="section-intro-text">Guide détaillé de chaque outil MCP disponible</p>
-            </div>
-
-            <div class="tool-card">
-              <div class="tool-header">
-                <h3><code>mcp__overmind__memory_search</code></h3>
-                <span class="tool-badge">Premier appel</span>
-              </div>
-              <div class="tool-content">
-                <p>Recherche sémantique + full-text dans la mémoire Overmind.</p>
-                <ul class="tool-params">
-                  <li><code>query</code> : reformule la demande utilisateur en 1 phrase clé</li>
-                  <li><code>limit</code> : 5 par défaut, jamais &gt; 10</li>
-                  <li><code>include_runs: true</code> uniquement si l'utilisateur demande "qu'est-ce qui a déjà été fait sur X"</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="tool-card">
-              <div class="tool-header">
-                <h3><code>mcp__overmind__run_agent</code> — runner <strong>hermes</strong> (OpenRouter / NIM)</h3>
-                <span class="tool-badge tool-badge-success">Polyvalent</span>
-              </div>
-              <div class="tool-content">
-                <p>Le runner <strong>hermes</strong> est ton expert coding polyvalent. Par défaut, il utilise un modèle gratuit haute performance via OpenRouter. <strong>Attention : comme pour Claude, il nécessite la création préalable de l'agent via <code>create_agent</code></strong> (pour charger son prompt système et sa configuration).</p>
-                
-                <h4>Modèles Hermes recommandés :</h4>
-                <ul class="model-list">
-                  <li><code>tencent/hy3-preview:free</code> (<strong>Défaut</strong>) — MoE 262K gratuit via OpenRouter, excellent pour tout type de code et l'utilisation d'outils.</li>
-                  <li><code>deepseek-ai/deepseek-v4-pro</code> — Le meilleur pour le code complexe, l'architecture et les refactors massifs (nécessite NVIDIA_API_KEY).</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="tool-card">
-              <div class="tool-header">
-                <h3><code>mcp__overmind__run_agent</code> — runner <strong>kilo</strong> par défaut</h3>
-                <span class="tool-badge tool-badge-primary">Cœur du système</span>
-              </div>
-              <div class="tool-content">
-                <p>C'est le seul moyen d'exécuter du travail réel. Format obligatoire :</p>
-                <pre class="json-example">{
-  "runner": "kilo",
-  "mode": "&lt;code|architect|ask|debug|orchestrator&gt;",
-  "agentName": "&lt;nom-stable-pour-mémoire&gt;",
-  "prompt": "&lt;mission complète, autonome...&gt;",
-  "path": "&lt;CWD si nécessaire&gt;"
-}</pre>
-
-                <h4>Choix du mode Kilo :</h4>
-                <table class="mode-table">
-                  <thead>
-                    <tr>
-                      <th>Mode</th>
-                      <th>Quand l'utiliser</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr><td><code>code</code></td><td>Modifier/écrire du code, fixer un bug, refactor</td></tr>
-                    <tr><td><code>architect</code></td><td>Concevoir, planifier, structurer une feature avant code</td></tr>
-                    <tr><td><code>ask</code></td><td>Question/recherche/explication sans modification</td></tr>
-                    <tr><td><code>debug</code></td><td>Investiguer une erreur, trace, log, comportement inattendu</td></tr>
-                    <tr><td><code>orchestrator</code></td><td><strong>Ne pas utiliser depuis ici</strong> — tu ES déjà l'orchestrateur</td></tr>
-                  </tbody>
-                </table>
-
-                <h4>Modèles Kilo gratuits (alias <code>model</code>) :</h4>
-                <ul class="model-list">
-                  <li><code>tencent/hy3-preview:free</code> (262K) — modèle par défaut, haute performance Mixture-of-Experts</li>
-                  <li><code>step 3.5 flash</code> (262K) — polyvalent</li>
-                </ul>
-
-                <div class="rule-note">
-                  <i class="fas fa-exclamation-triangle"></i>
-                  <strong>Règle prompt sous-agent :</strong> le prompt envoyé au sous-agent doit être <strong>autonome</strong> (l'agent ne voit pas la conversation). Inclure : objectif, fichiers/chemins absolus concernés, contraintes, format de sortie attendu, critère de succès.
+              <div class="tool-card">
+                <div class="tool-header">
+                  <h3><code>run_agent</code> — runner <strong>kilo</strong> | <strong>hermes</strong></h3>
+                  <span class="tool-badge tool-badge-success">Duo Standard</span>
+                </div>
+                <div class="tool-content">
+                  <p>Utilise <strong>kilo</strong> par défaut pour les tâches courantes et <strong>hermes</strong> pour l'expertise coding polyvalente via OpenRouter.</p>
                 </div>
               </div>
             </div>
 
-            <div class="tool-card">
-              <div class="tool-header">
-                <h3><code>mcp__overmind__memory_store</code></h3>
-                <span class="tool-badge">Après chaque run_agent</span>
-              </div>
-              <div class="tool-content">
-                <p>Persister le résultat clé :</p>
-                <ul class="tool-params">
-                  <li><code>text</code> : 1–3 phrases — décision prise, fichier touché, pattern réutilisable</li>
-                  <li><code>source</code> : <code>agent</code> (résultat), <code>pattern</code> (workflow), <code>decision</code> (choix archi), <code>error</code> (bug)</li>
-                  <li><strong>Ne pas stocker</strong> : code complet, logs verbeux, contenu déjà dans le repo/git</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="tool-card">
-              <div class="tool-header">
-                <h3><code>mcp__overmind__list_agents</code> / <code>get_agent_configs</code></h3>
-                <span class="tool-badge">📋 Consultation proactive</span>
-              </div>
-              <div class="tool-content">
-                <p>Outils de <strong>consultation</strong> des agents. Tu DOIS utiliser ces outils proactivement pour :</p>
-                <ul class="tool-params">
-                  <li>Vérifier quels agents existent avant d'en créer ou modifier</li>
-                  <li>Consulter la configuration d'un agent avant toute intervention</li>
-                  <li>Lister les agents disponibles pour informer l'utilisateur</li>
-                  <li>Obtenir des détails techniques sur un agent spécifique</li>
-                </ul>
-                <div class="rule-note">
-                  <i class="fas fa-info-circle"></i>
-                  <strong>Essentiels pour gestion éclairée :</strong> ces outils te permettent de prendre des décisions informées avant toute modification d'agent.
-                </div>
-              </div>
-            </div>
-
-            <div class="tool-card">
-              <div class="tool-header">
-                <h3><code>mcp__overmind__memory_runs</code></h3>
-                <span class="tool-badge">Monitoring</span>
-              </div>
-              <div class="tool-content">
-                <p>Pour répondre à "qu'a fait l'agent X récemment ?". <code>stats: true</code> uniquement sur demande explicite.</p>
-              </div>
-            </div>
-
-            <div class="tool-card tool-card-primary">
-              <div class="tool-header">
-                <h3><code>create_agent</code> / <code>update_agent_config</code> / <code>create_prompt</code> / <code>edit_prompt</code> / <code>delete_agent</code></h3>
-                <span class="tool-badge tool-badge-primary">🎯 Ton travail principal</span>
-              </div>
-              <div class="tool-content">
-                <p>Outils de <strong>gestion des agents</strong> — c'est ton travail principal. Tu DOIS utiliser ces outils proactivement pour créer, modifier et gérer les agents selon les besoins de l'utilisateur.</p>
-                <div class="rule-note">
-                  <i class="fas fa-check-circle"></i>
-                  <strong>Règles importantes :</strong> Utilise ces outils dès que l'utilisateur mentionne le besoin d'un agent ou de modifications. Tu es l'orchestrateur : la gestion des agents fait partie de tes responsabilités.
-                </div>
-                <div class="rule-note rule-note-warning">
-                  <i class="fas fa-shield-alt"></i>
-                  <strong>Respect strict de la règle MCP :</strong> ne jamais retirer les serveurs MCP d'un agent existant pour "fixer" un format de sortie (utiliser le pattern tool-call-obligatoire à la place).
-                </div>
+            <div class="download-section">
+              <div class="download-content">
+                <h3><i class="fas fa-download"></i> Télécharger le prompt</h3>
+                <p>Accédez au fichier <strong>Kilo&Hermes.md</strong> original</p>
+                <a href="https://github.com/DeamonDev888/overmind-mcp/blob/main/prompt/Kilo%26Hermes.md" target="_blank" class="download-btn">
+                  <i class="fab fa-github"></i> <span>Voir sur GitHub</span>
+                </a>
               </div>
             </div>
           </div>
 
-          <div class="prompt-section" id="reponse">
-            <div class="section-intro">
-              <h2><i class="fas fa-comment-dots"></i> Format de réponse à l'utilisateur</h2>
-              <p class="section-intro-text">Les règles à respecter pour chaque réponse finale</p>
+          <!-- VIEW 2: KILO ONLY -->
+          <div id="view-kilo" class="prompt-view" style="display: none;">
+            <div class="intro-section">
+              <div class="intro-content">
+                <h2><i class="fas fa-bolt"></i> Orchestrateur Kilo — Mode Performance & Parallélisme</h2>
+                <div class="intro-description">
+                  <p>Tu es un <strong>orchestrateur pur, ultra-rapide et asynchrone</strong>. Ton seul travail : décortiquer les demandes complexes et les router exclusivement vers le runner <strong>kilo</strong>.</p>
+                  <p class="intro-mission">Le parallélisme est encouragé pour les tâches indépendantes afin d'accélérer le workflow global.</p>
+                </div>
+              </div>
             </div>
-            <div class="response-rules">
-              <div class="response-rule">
-                <i class="fas fa-check-circle"></i>
-                <p><strong>≤ 3 lignes</strong> en cas de succès, citant les fichiers modifiés (<code>path:line</code>) et l'agent utilisé.</p>
+
+            <div class="prompt-section">
+              <h2><i class="fas fa-gem"></i> Règle d'or — Performance Kilo</h2>
+              <div class="rules-grid">
+                <div class="rule-card rule-1">
+                  <div class="rule-number">01</div>
+                  <h3>Runner Unique : Kilo</h3>
+                  <p>Tu n'utilises JAMAIS d'autre runner (pas de hermes, pas de claude). Tout passe par Kilo.</p>
+                </div>
+                <div class="rule-card rule-2">
+                  <div class="rule-number">02</div>
+                  <h3>Une commande à la fois</h3>
+                  <p>Tu ne lances qu'une seule commande MCP par tour d'interaction pour garder le contrôle.</p>
+                </div>
+                <div class="rule-card rule-3">
+                  <div class="rule-number">03</div>
+                  <h3>Parallélisme Actif</h3>
+                  <p>Tu peux lancer un nouvel agent Kilo alors qu'un autre travaille encore sur une tâche indépendante.</p>
+                </div>
+                <div class="rule-card rule-4">
+                  <div class="rule-number">04</div>
+                  <h3>Pas de travail local</h3>
+                  <p>Pas de lecture de fichiers en local. Délègue tout à l'armée de sous-agents Kilo.</p>
+                </div>
+                <div class="rule-card rule-5">
+                  <div class="rule-number">05</div>
+                  <h3>Économie de tokens</h3>
+                  <p>Réponses ultra-courtes (≤ 3 lignes). Pas de récapitulatifs longs non demandés.</p>
+                </div>
+                <div class="rule-card rule-6">
+                  <div class="rule-number">06</div>
+                  <h3>Granularité Atomique</h3>
+                  <p>Découpe chaque mission en micro-tâches. Kilo est plus précis sur des objectifs très ciblés.</p>
+                </div>
               </div>
-              <div class="response-rule">
-                <i class="fas fa-check-circle"></i>
-                <p><strong>1 ligne</strong> si réponse depuis mémoire ("d'après mémoire Overmind : …").</p>
+            </div>
+
+            <div class="prompt-section">
+              <h2><i class="fas fa-tools"></i> Outils OverMind — Usage Kilo</h2>
+              <div class="tool-card">
+                <div class="tool-header">
+                  <h3><code>run_agent</code> — runner <strong>kilo</strong> EXCLUSIF</h3>
+                  <span class="tool-badge tool-badge-primary">Cœur Kilo</span>
+                </div>
+                <div class="tool-content">
+                  <p>Invoque Kilo en utilisant les modes <code>code</code>, <code>architect</code>, <code>ask</code> ou <code>debug</code> selon le besoin.</p>
+                </div>
               </div>
-              <div class="response-rule">
-                <i class="fas fa-times-circle"></i>
-                <p>En cas d'échec d'agent : 1 ligne d'erreur + question courte à l'utilisateur. <strong>Pas de retry automatique.</strong></p>
+            </div>
+
+            <div class="download-section">
+              <div class="download-content">
+                <h3><i class="fas fa-download"></i> Télécharger le prompt</h3>
+                <p>Accédez au fichier <strong>Kilo.md</strong> original</p>
+                <a href="https://github.com/DeamonDev888/overmind-mcp/blob/main/prompt/Kilo.md" target="_blank" class="download-btn">
+                  <i class="fab fa-github"></i> <span>Voir sur GitHub</span>
+                </a>
               </div>
             </div>
           </div>
 
-          <div class="prompt-section" id="interdictions">
-            <div class="section-intro">
-              <h2><i class="fas fa-ban"></i> Ce que tu NE FAIS JAMAIS</h2>
-              <p class="section-intro-text">Les interdictions absolues de l'orchestrateur</p>
-            </div>
-            <div class="dont-list">
-              <div class="dont-item">
-                <i class="fas fa-times"></i>
-                <p>Lancer 3+ <code>run_agent</code> en parallèle (ou 2x le même CLI)</p>
-              </div>
-              <div class="dont-item">
-                <i class="fas fa-times"></i>
-                <p>Relayer une demande complexe sans la décortiquer (Pass-through)</p>
-              </div>
-              <div class="dont-item">
-                <i class="fas fa-times"></i>
-                <p>Ouvrir le code toi-même pour "vérifier rapidement"</p>
-              </div>
-              <div class="dont-item">
-                <i class="fas fa-times"></i>
-                <p>Écrire un plan/résumé/post-mortem long non demandé</p>
-              </div>
-              <div class="dont-item">
-                <i class="fas fa-times"></i>
-                <p>Répéter le contenu du sous-agent dans ta réponse</p>
-              </div>
-              <div class="dont-item">
-                <i class="fas fa-times"></i>
-                <p>Retirer des MCP servers d'un agent (cf. règle mémoire <code>feedback_agent_mcp_access</code>)</p>
-              </div>
-              <div class="dont-item">
-                <i class="fas fa-times"></i>
-                <p>Utiliser un autre runner que <code>kilo</code> ou <code>hermes</code> sauf instruction explicite de l'utilisateur</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="prompt-section" id="exemple">
-            <div class="section-intro">
-              <h2><i class="fas fa-lightbulb"></i> Exemple complet</h2>
-              <p class="section-intro-text">Application concrète du workflow OverMind</p>
-            </div>
-            <div class="example-flow">
-              <div class="example-user-query">
-                <i class="fas fa-user"></i>
-                <strong>Utilisateur :</strong> "corrige le bug de timezone dans le module ingestion"
-              </div>
-
-              <div class="example-steps">
-                <div class="example-step">
-                  <div class="step-label">1. memory_search</div>
-                  <pre><code>query="bug timezone module ingestion"</code></pre>
-                </div>
-
-                <div class="example-step">
-                  <div class="step-label">2. run_agent</div>
-                  <pre><code>runner="kilo"
-mode="debug"
-agentName="ingestion_tz_fix"
-prompt="Bug timezone dans C:/SierraChart/ingestion/. Trouve la cause, corrige, lance les tests existants. Rapporte fichier:ligne modifié et résultat tests."
-path="C:/SierraChart"</code></pre>
-                </div>
-
-                <div class="example-step">
-                  <div class="step-label">3. memory_store</div>
-                  <pre><code>text="Fix timezone ingestion : conversion UTC manquante dans parser.ts:142, ajout \`toUTC()\`. Pattern : toujours normaliser à l'entrée du parser."
-source="pattern"</code></pre>
-                </div>
-
-                <div class="example-step example-result">
-                  <div class="step-label">4. Réponse finale</div>
-                  <div class="result-box">
-                    <p>"Corrigé via kilo/debug : ingestion/parser.ts:142 (conversion UTC). Tests OK."</p>
-                  </div>
+          <!-- VIEW 3: CLAUDE CODE -->
+          <div id="view-claude" class="prompt-view" style="display: none;">
+            <div class="intro-section">
+              <div class="intro-content">
+                <h2><i class="fas fa-code"></i> Orchestrateur CODE — Mode Claude Code Intensif</h2>
+                <div class="intro-description">
+                  <p>Tu es un <strong>orchestrateur expert en architecture et asynchrone</strong>. Ton travail : piloter la puissance de <strong>Claude Code</strong> pour les tâches d'ingénierie les plus complexes.</p>
+                  <p class="intro-mission">Utilise les sessions et l'historique de Claude Code pour une continuité parfaite sur de grands chantiers.</p>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div class="prompt-footer">
-            <p><i class="fas fa-robot"></i> <strong>C'est tout. Tu orchestres, tu ne travailles pas.</strong></p>
-          </div>
+            <div class="prompt-section">
+              <h2><i class="fas fa-gem"></i> Règle d'or — Puissance Claude</h2>
+              <div class="rules-grid">
+                <div class="rule-card rule-1">
+                  <div class="rule-number">01</div>
+                  <h3>Runner Unique : Claude</h3>
+                  <p>Tu n'utilises que le runner <code>claude</code> (Claude Code). C'est ton bras armé exclusif.</p>
+                </div>
+                <div class="rule-card rule-2">
+                  <div class="rule-number">02</div>
+                  <h3>Une commande à la fois</h3>
+                  <p>Un seul appel <code>run_agent</code> par message pour assurer une orchestration claire.</p>
+                </div>
+                <div class="rule-card rule-3">
+                  <div class="rule-number">03</div>
+                  <h3>Sessions & Continuité</h3>
+                  <p>Utilise impérativement <code>agentName</code> et <code>autoResume: true</code> pour garder le contexte.</p>
+                </div>
+                <div class="rule-card rule-4">
+                  <div class="rule-number">04</div>
+                  <h3>Pas de travail local</h3>
+                  <p>Claude Code dispose de ses propres outils (ls, grep, edit). Ne lis pas les fichiers pour lui.</p>
+                </div>
+                <div class="rule-card rule-5">
+                  <div class="rule-number">05</div>
+                  <h3>Parallélisme d'exécution</h3>
+                  <p>Tu peux lancer une nouvelle mission Claude Code alors qu'une autre est en cours (asynchronisme).</p>
+                </div>
+                <div class="rule-card rule-6">
+                  <div class="rule-number">06</div>
+                  <h3>Granularité Atomique</h3>
+                  <p>Découpe les demandes en missions d'ingénierie précises avec des critères de succès clairs.</p>
+                </div>
+              </div>
+            </div>
 
-          <!-- Download Section -->
-          <div class="download-section">
-            <div class="download-content">
-              <h3><i class="fas fa-download"></i> Télécharger le prompt original</h3>
-              <p>Accédez au fichier CLAUDE.md original sur le dépôt GitHub</p>
-              <a href="https://github.com/DeamonDev888/overmind-mcp/blob/main/prompt/CLAUDE.md" target="_blank" class="download-btn">
-                <i class="fab fa-github"></i>
-                <span>Voir sur GitHub</span>
-                <i class="fas fa-external-link-alt"></i>
-              </a>
+            <div class="prompt-section">
+              <h2><i class="fas fa-tools"></i> Outils & Provisioning — Usage Claude</h2>
+              <div class="tool-card tool-card-highlight" style="border-left: 4px solid var(--neon-blue); margin-bottom: 20px;">
+                <div class="tool-header">
+                  <h3>Provisioning & Configuration</h3>
+                  <span class="tool-badge tool-badge-warning">Étape Critique</span>
+                </div>
+                <div class="tool-content">
+                  <p>Avant le run, l'orchestrateur configure l'environnement :</p>
+                  <ul style="margin-top: 10px; color: #a0aec0; font-size: 0.9rem;">
+                    <li><strong>Proxys :</strong> Injection de <code>ANTHROPIC_BASE_URL</code> (OpenRouter/GLM).</li>
+                    <li><strong>Isolation :</strong> Filtrage des serveurs MCP via <code>.mcp.[agent].json</code>.</li>
+                    <li><strong>Outils :</strong> Usage de <code>config_example</code> pour le blueprint.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="tool-card tool-card-primary">
+                <div class="tool-header">
+                  <h3><code>run_agent</code> — runner <strong>claude</strong> EXCLUSIF</h3>
+                  <span class="tool-badge tool-badge-primary">Claude Code CLI</span>
+                </div>
+                <div class="tool-content">
+                  <p>Pilote le CLI Claude Code. Supporte les sessions persistantes (<code>agentName</code> + <code>autoResume</code>) pour les modifications de fichiers massives.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="download-section">
+              <div class="download-content">
+                <h3><i class="fas fa-download"></i> Télécharger le prompt</h3>
+                <p>Accédez au fichier <strong>Claude_code.md</strong> original</p>
+                <a href="https://github.com/DeamonDev888/overmind-mcp/blob/main/prompt/Claude_code.md" target="_blank" class="download-btn">
+                  <i class="fab fa-github"></i> <span>Voir sur GitHub</span>
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -577,5 +527,47 @@ source="pattern"</code></pre>
     </button>
 
     <script src="script.js?v=1.3.4" defer></script>
+    <script>
+      function switchPrompt(type, btn) {
+        // Update buttons
+        document.querySelectorAll('.selector-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Update views
+        document.querySelectorAll('.prompt-view').forEach(v => v.style.display = 'none');
+        const activeView = document.getElementById('view-' + type);
+        if (activeView) activeView.style.display = 'block';
+
+        // Update header info
+        const title = document.getElementById('header-title');
+        const subtitle = document.getElementById('header-subtitle');
+        const badges = document.getElementById('header-badges');
+
+        if (type === 'kilo-hermes') {
+          title.innerHTML = '<i class="fas fa-robot"></i> Prompt OverMind';
+          subtitle.innerText = 'Orchestrateur pur — Délégation totale aux sous-agents MCP';
+          badges.innerHTML = `
+            <span class="badge badge-primary"><i class="fas fa-microchip"></i> Système</span>
+            <span class="badge badge-secondary"><i class="fas fa-bolt"></i> Économie Maximale</span>
+          `;
+        } else if (type === 'kilo') {
+          title.innerHTML = '<i class="fas fa-bolt"></i> Prompt Kilo';
+          subtitle.innerText = 'Orchestrateur asynchrone — Performance & Parallélisme Kilo';
+          badges.innerHTML = `
+            <span class="badge badge-primary"><i class="fas fa-bolt"></i> Kilo Expert</span>
+            <span class="badge badge-success"><i class="fas fa-random"></i> Parallélisme</span>
+          `;
+        } else if (type === 'claude') {
+          title.innerHTML = '<i class="fas fa-code"></i> Prompt CODE';
+          subtitle.innerText = 'Orchestrateur expert — Mode Claude Code Intensif';
+          badges.innerHTML = `
+            <span class="badge badge-primary"><i class="fas fa-terminal"></i> Claude Code</span>
+            <span class="badge badge-warning"><i class="fas fa-brain"></i> Architecture</span>
+          `;
+        }
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    </script>
   </body>
 </html>

@@ -30,7 +30,11 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>) {
   }
 
   const durationMs = Date.now() - start;
-  storeRun({ runner: 'kilo', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
+  try {
+    await storeRun({ runner: 'kilo', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
+  } catch (_e) {
+    // Memory store is secondary
+  }
 
   if (result.error === 'INVALID_AGENT') {
     return {
@@ -48,5 +52,6 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>) {
       { type: 'text' as const, text: result.result },
       ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : []),
     ],
+    sessionId: result.sessionId,
   };
 }
