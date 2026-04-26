@@ -1,14 +1,5 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Prompt OverMind | Orchestrateur Multi-Agents IA</title>
-    <meta
-      name="description"
-      content="Prompt système de l'orchestrateur OverMind - Mode Économie Maximale"
-    />
-    <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
@@ -289,9 +280,80 @@
 
         <div class="prompt-content">
           <!-- VIEW 1: KILO & HERMES (ORIGINAL) -->
-          <div id="view-kilo-hermes" class="prompt-view">
-            <div class="intro-section">
-              <div class="intro-content">
+          <div id="view-kilo-hermes" class="view-content active">
+      <div class="prompt-section">
+        <h2><i class="fas fa-network-wired"></i> Neural Orchestration Flow</h2>
+        <div class="svg-diagram">
+          <svg width="100%" height="200" viewBox="0 0 800 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Nodes -->
+            <rect x="50" y="70" width="120" height="60" rx="10" fill="var(--card-bg)" stroke="var(--neon-blue)" stroke-width="2"/>
+            <text x="110" y="105" text-anchor="middle" fill="#fff" font-size="14">USER QUERY</text>
+            
+            <path d="M170 100H250" stroke="var(--neon-blue)" stroke-dasharray="5 5">
+              <animate attributeName="stroke-dashoffset" from="50" to="0" dur="2s" repeatCount="indefinite" />
+            </path>
+            
+            <circle cx="300" cy="100" r="40" fill="var(--card-bg)" stroke="var(--neon-purple)" stroke-width="3"/>
+            <text x="300" y="105" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">OVERMIND</text>
+            
+            <!-- Branches -->
+            <path d="M340 100C400 100 400 50 450 50" stroke="var(--neon-cyan)" stroke-width="2"/>
+            <path d="M340 100C400 100 400 150 450 150" stroke="var(--neon-cyan)" stroke-width="2"/>
+            
+            <rect x="450" y="20" width="100" height="60" rx="8" fill="var(--card-bg)" stroke="var(--neon-cyan)"/>
+            <text x="500" y="55" text-anchor="middle" fill="var(--neon-cyan)" font-size="12">KILO (CODE)</text>
+            
+            <rect x="450" y="120" width="100" height="60" rx="8" fill="var(--card-bg)" stroke="var(--neon-cyan)"/>
+            <text x="500" y="155" text-anchor="middle" fill="var(--neon-cyan)" font-size="12">KILO (DOCS)</text>
+          </svg>
+        </div>
+        
+        <div class="logic-grid">
+          <div class="logic-card">
+            <h4><i class="fas fa-brain"></i> Intelligence Collective</h4>
+            <p style="font-size: 0.9rem; color: var(--text-dim); margin-top: 10px;">L'orchestrateur décompose chaque requête en <strong>tâches atomiques</strong>. Aucun agent n'exécute de commande complexe sans découpage préalable.</p>
+            <div style="margin-top: 15px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;">
+              <div style="font-size: 0.7rem; color: var(--neon-purple);">STRATÉGIE ACTIVE:</div>
+              <div style="font-size: 0.8rem; font-family: monospace;">DECOMPOSE -> MAP -> EXECUTE -> STORE</div>
+            </div>
+          </div>
+          <div class="logic-card">
+            <h4><i class="fas fa-bolt"></i> Muscles (Execution)</h4>
+            <p style="font-size: 0.9rem; color: var(--text-dim); margin-top: 10px;">Kilo gère le parallélisme massif. Plusieurs agents peuvent travailler sur des branches différentes en simultané.</p>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+              <span style="background: var(--neon-cyan); color: #000; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: bold;">PARALLEL: ON</span>
+              <span style="background: var(--neon-blue); color: #000; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: bold;">SANDBOX: HIGH</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="prompt-section">
+        <h2><i class="fas fa-list-check"></i> Règles de l'Orchestrateur (Vérifiées)</h2>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem;">
+          <tr style="border-bottom: 1px solid var(--glass-border); color: var(--neon-blue);">
+            <th style="padding: 15px; text-align: left;">RÈGLE</th>
+            <th style="padding: 15px; text-align: left;">CONTRAINTE</th>
+            <th style="padding: 15px; text-align: left;">IMPACT</th>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--glass-border);">
+            <td style="padding: 15px;"><i class="fas fa-microchip"></i> Runner Kilo</td>
+            <td style="padding: 15px;">Exclusivité sur Kilo & Hermes</td>
+            <td style="padding: 15px; color: var(--neon-cyan);">Vitesse Max</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--glass-border);">
+            <td style="padding: 15px;"><i class="fas fa-eye-slash"></i> Pas de lecture</td>
+            <td style="padding: 15px;">Interdiction de <code>view_file</code></td>
+            <td style="padding: 15px; color: var(--neon-cyan);">Économie Tokens</td>
+          </tr>
+          <tr>
+            <td style="padding: 15px;"><i class="fas fa-memory"></i> Mémoire Store</td>
+            <td style="padding: 15px;">Archivage après chaque action</td>
+            <td style="padding: 15px; color: var(--neon-cyan);">Context Aware</td>
+          </tr>
+        </table>
+      </div>
+    </div>          <div class="intro-content">
                 <h2><i class="fas fa-robot"></i> Orchestrateur OverMind — Mode Économie Maximale</h2>
                 <div class="intro-description">
                   <p>Tu es un <strong>orchestrateur pur et actif</strong>. Tu ne codes pas, tu ne fouilles pas le repo, tu ne raisonnes pas longuement. Ton seul travail : <strong>décortiquer impérativement les demandes complexes en tâches atomiques</strong>.</p>
@@ -379,6 +441,18 @@
                 <br>&nbsp;&nbsp;mode: <span style="color: #ce9178;">"code"</span>,
                 <br>&nbsp;&nbsp;prompt: <span style="color: #ce9178;">"Vérifie la sécurité de ce script..."</span>
                 <br>});
+              </div>
+              
+              <div class="logic-card" style="background: rgba(0, 255, 255, 0.05); border-left: 4px solid var(--neon-cyan); padding: 15px; border-radius: 4px;">
+                <h4 style="color: var(--neon-cyan);"><i class="fas fa-cogs"></i> Pipeline de Commande Réel</h4>
+                <code style="display: block; background: #000; padding: 10px; margin-top: 10px; color: #fff; font-size: 0.8rem;">
+                  kilo run "[prompt]" --agent [mode] --model [selectedModel] --auto --format json --dir .
+                </code>
+                <ul style="margin-top: 10px; font-size: 0.85rem; padding-left: 20px;">
+                  <li><strong>Auto-Resume :</strong> Utilise <code>getLastSessionId(agentName)</code> pour charger l'historique.</li>
+                  <li><strong>Mapping Modèles :</strong> Traduit "step 3.5 flash" → <code>kilo/stepfun/step-3.5-flash:free</code>.</li>
+                  <li><strong>Isolation Env :</strong> Injection forcée de <code>OVERMIND_AGENT_NAME</code> dans le shell.</li>
+                </ul>
               </div>
             </div>
 
@@ -479,6 +553,15 @@
                 <br>});
               </div>
 
+              <div class="logic-card" style="background: rgba(0, 255, 255, 0.05); border-left: 4px solid var(--neon-cyan); padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <h4 style="color: var(--neon-cyan);"><i class="fas fa-sync-alt"></i> Engine Logic (Service Layer)</h4>
+                <ul style="margin-top: 10px; font-size: 0.85rem; padding-left: 20px;">
+                  <li><strong>Retry Automatique :</strong> Si une session est expirée ou corrompue (EXIT_CODE_1), le runner supprime le <code>sessionId</code> local et relance une session vierge instantanément.</li>
+                  <li><strong>Traitement JSON :</strong> Capture des événements de type <code>text</code>, <code>message</code> ou <code>reply</code> pour reconstruire la réponse finale.</li>
+                  <li><strong>Détection Quota :</strong> Monitoring actif du STDERR pour détecter les erreurs 429 ou les limites de taux (Rate Limits).</li>
+                </ul>
+              </div>
+
               <div class="mode-grid-premium" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                 <div class="rule-card" style="border-bottom: 3px solid #00f2ff;">
                   <h4 style="color: var(--neon-cyan); margin-bottom: 10px;"><i class="fas fa-code-branch"></i> CODE</h4>
@@ -495,6 +578,10 @@
                 <div class="rule-card" style="border-bottom: 3px solid #ff003c;">
                   <h4 style="color: #ff003c; margin-bottom: 10px;"><i class="fas fa-bug"></i> DEBUG</h4>
                   <p style="font-size: 0.85rem;">Analyse de logs, correction de bugs et résolution de conflits d'environnement.</p>
+                </div>
+                <div class="rule-card" style="border-bottom: 3px solid #ffaa00;">
+                  <h4 style="color: #ffaa00; margin-bottom: 10px;"><i class="fas fa-sitemap"></i> ORCHESTRATOR</h4>
+                  <p style="font-size: 0.85rem;">Décomposition de tâches complexes et routage vers des sous-agents.</p>
                 </div>
               </div>
             </div>
@@ -607,6 +694,19 @@
                 <div style="color: #8b949e; margin-top: 10px;">> Analyzing files... done.</div>
                 <div style="color: #8b949e;">> Running unit tests... passing.</div>
                 <div style="color: var(--neon-blue); margin-top: 10px;">> Applying changes asynchronously.</div>
+              </div>
+
+              <div class="logic-card" style="background: rgba(0, 112, 255, 0.05); border-left: 4px solid var(--neon-blue); padding: 15px; border-radius: 4px;">
+                <h4 style="color: var(--neon-blue);"><i class="fas fa-project-diagram"></i> Logic de Déploiement (ClaudeRunner)</h4>
+                <code style="display: block; background: #000; padding: 10px; margin-top: 10px; color: #fff; font-size: 0.8rem;">
+                  cmd.exe /c claude --settings [path] --mcp-config [path] --output-format json --resume [id] --model [model] --name [nickname] -p
+                </code>
+                <ul style="margin-top: 10px; font-size: 0.85rem; padding-left: 20px;">
+                  <li><strong>Injection Système :</strong> Si <code>agents/${agentName}.md</code> existe, il précède le prompt.</li>
+                  <li><strong>Strict JSON Mode :</strong> Détection de <code>[strict json mode]</code> → désactive les outils pour un output pur.</li>
+                  <li><strong>Surnoms de Modèles :</strong> Les modèles non-techniques sont traités comme des Surnoms (flag <code>--name</code>).</li>
+                  <li><strong>Isolation Experts :</strong> Chaque agentName possède son propre sandbox technique (settings/mcp).</li>
+                </ul>
               </div>
             </div>
 
