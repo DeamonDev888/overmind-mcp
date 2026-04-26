@@ -328,16 +328,16 @@
 
             <div class="tool-card">
               <div class="tool-header">
-                <h3><code>mcp__overmind__run_agent</code> — runner <strong>hermes</strong> (NVIDIA NIM)</h3>
-                <span class="tool-badge tool-badge-success">Expert Coding</span>
+                <h3><code>mcp__overmind__run_agent</code> — runner <strong>hermes</strong> (OpenRouter / NIM)</h3>
+                <span class="tool-badge tool-badge-success">Polyvalent</span>
               </div>
               <div class="tool-content">
-                <p>Le runner <strong>hermes</strong> est ton expert coding de pointe, propulsé par NVIDIA NIM. Utilise-le pour les tâches complexes nécessitant un raisonnement profond ou une exécution rapide via DeepSeek V4.</p>
+                <p>Le runner <strong>hermes</strong> est ton expert coding polyvalent. Par défaut, il utilise un modèle gratuit haute performance via OpenRouter. <strong>Attention : comme pour Claude, il nécessite la création préalable de l'agent via <code>create_agent</code></strong> (pour charger son prompt système et sa configuration).</p>
                 
-                <h4>Modèles Hermes (Priorité NVIDIA) :</h4>
+                <h4>Modèles Hermes recommandés :</h4>
                 <ul class="model-list">
-                  <li><code>deepseek-ai/deepseek-v4-pro</code> (MoE haute performance) — Le meilleur pour le code complexe, l'architecture et les refactors massifs.</li>
-                  <li><code>deepseek-ai/deepseek-v4-flash</code> (Optimisé rapidité) — Idéal pour les corrections rapides, les explications de code et l'utilisation d'outils (agents).</li>
+                  <li><code>tencent/hy3-preview:free</code> (<strong>Défaut</strong>) — MoE 262K gratuit via OpenRouter, excellent pour tout type de code et l'utilisation d'outils.</li>
+                  <li><code>deepseek-ai/deepseek-v4-pro</code> — Le meilleur pour le code complexe, l'architecture et les refactors massifs (nécessite NVIDIA_API_KEY).</li>
                 </ul>
               </div>
             </div>
