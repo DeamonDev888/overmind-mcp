@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OverMind Control Center — AI Orchestration</title>
+  <title>OverMind — Orchestrator Prompts Center</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root {
       --bg-dark: #05070a;
-      --card-bg: rgba(13, 17, 23, 0.8);
+      --card-bg: rgba(13, 17, 23, 0.85);
       --neon-blue: #00d2ff;
       --neon-cyan: #00ffaa;
       --neon-purple: #bd00ff;
@@ -31,91 +32,99 @@
       background-size: 100% 100%, 40px 40px, 40px 40px;
       color: var(--text-main);
       font-family: 'Outfit', sans-serif;
-      overflow-x: hidden;
       min-height: 100vh;
+      overflow-x: hidden;
     }
 
-    /* Scanline Animation */
+    /* Animation Scan Laser */
     body::after {
-      content: "";
-      position: fixed; top: 0; left: 0; width: 100%; height: 4px;
-      background: var(--scan-line);
-      z-index: 100; pointer-events: none;
-      animation: scan 10s linear infinite;
+      content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--neon-blue), transparent);
+      z-index: 1000; pointer-events: none; opacity: 0.3;
+      animation: scan 8s linear infinite;
     }
     @keyframes scan { 0% { top: -5%; } 100% { top: 105%; } }
 
-    .container { max-width: 1200px; margin: 0 auto; padding: 60px 20px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 40px 20px; }
 
-    header { text-align: center; margin-bottom: 50px; }
-    .logo-box { 
-      display: inline-flex; padding: 25px; background: var(--card-bg); 
-      border: 1px solid var(--glass-border); border-radius: 24px; 
-      backdrop-filter: blur(10px); box-shadow: 0 0 40px rgba(0, 210, 255, 0.15);
-      margin-bottom: 25px;
+    /* Grandiose Header */
+    header { text-align: center; margin-bottom: 60px; position: relative; }
+    .logo-container {
+      display: inline-flex; padding: 25px; background: var(--card-bg);
+      border: 1px solid var(--glass-border); border-radius: 30px;
+      backdrop-filter: blur(15px); box-shadow: 0 0 50px rgba(0, 210, 255, 0.2);
+      margin-bottom: 30px; position: relative; animation: float 6s ease-in-out infinite;
     }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 
     h1 { font-size: 3.5rem; font-weight: 800; letter-spacing: -2px; margin-bottom: 10px; }
-    .gradient-text { background: linear-gradient(90deg, #fff, var(--neon-blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .gradient-text { background: linear-gradient(90deg, #fff, var(--neon-blue), var(--neon-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-    .status-row { display: flex; justify-content: center; gap: 20px; margin-top: 15px; font-size: 0.75rem; letter-spacing: 1px; color: var(--text-dim); }
-    .status-pill { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 5px 15px; border-radius: 20px; border: 1px solid var(--glass-border); }
-    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--neon-cyan); box-shadow: 0 0 8px var(--neon-cyan); }
+    .status-row { display: flex; justify-content: center; gap: 20px; font-size: 0.75rem; letter-spacing: 1px; color: var(--text-dim); }
+    .status-pill { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.03); padding: 6px 18px; border-radius: 20px; border: 1px solid var(--glass-border); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--neon-cyan); box-shadow: 0 0 10px var(--neon-cyan); }
     .pulse { animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.3); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.4); } }
 
-    /* Switcher Navigation */
-    .view-nav {
-      display: flex; justify-content: center; gap: 15px; margin-bottom: 40px;
-      padding: 10px; background: rgba(255,255,255,0.02); border-radius: 18px; border: 1px solid var(--glass-border);
+    /* Navigation Switcher */
+    .switcher {
+      display: flex; justify-content: center; gap: 15px; margin-bottom: 50px;
+      padding: 10px; background: rgba(255,255,255,0.02); border-radius: 20px; border: 1px solid var(--glass-border);
     }
-    .nav-btn {
-      flex: 1; max-width: 250px; padding: 18px; border: none; background: transparent;
-      color: var(--text-dim); cursor: pointer; border-radius: 12px; transition: 0.3s;
+    .switch-btn {
+      flex: 1; max-width: 280px; padding: 20px; border: none; background: transparent;
+      color: var(--text-dim); cursor: pointer; border-radius: 14px; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex; flex-direction: column; align-items: center; gap: 8px; font-weight: 600;
     }
-    .nav-btn i { font-size: 1.4rem; }
-    .nav-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
-    .nav-btn.active { background: var(--card-bg); color: #fff; border: 1px solid var(--glass-border); box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
-    .nav-btn.active::after { content: ""; width: 40px; height: 3px; background: var(--neon-blue); border-radius: 10px; margin-top: 5px; box-shadow: 0 0 10px var(--neon-blue); }
+    .switch-btn i { font-size: 1.6rem; }
+    .switch-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .switch-btn.active { background: var(--card-bg); color: #fff; border: 1px solid var(--glass-border); box-shadow: 0 15px 35px rgba(0,0,0,0.5); }
+    .switch-btn.active i { color: var(--neon-blue); text-shadow: 0 0 15px var(--neon-blue); }
 
-    /* Content Area */
-    .view-pane { display: none; animation: slideUp 0.6s cubic-bezier(0.23, 1, 0.32, 1); }
-    .view-pane.active { display: block; }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+    /* Markdown Display Area */
+    .md-container { display: none; animation: fadeIn 0.8s ease; }
+    .md-container.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-    .card {
-      background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 28px;
-      padding: 40px; margin-bottom: 30px; backdrop-filter: blur(20px); position: relative; overflow: hidden;
+    .md-content {
+      background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 32px;
+      padding: 50px; backdrop-filter: blur(25px); position: relative;
     }
-    .card::before { content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 70%); pointer-events: none; }
 
-    h2 { font-size: 1.8rem; margin-bottom: 25px; display: flex; align-items: center; gap: 15px; color: #fff; }
-    h2 i { color: var(--neon-blue); }
+    /* Improved Markdown Styling */
+    .md-render h1 { font-size: 2.2rem; color: #fff; margin-bottom: 30px; border-bottom: 2px solid var(--neon-blue); padding-bottom: 15px; }
+    .md-render h2 { font-size: 1.8rem; color: var(--neon-blue); margin-top: 40px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px; }
+    .md-render h3 { font-size: 1.4rem; color: var(--neon-cyan); margin-top: 30px; margin-bottom: 15px; }
+    .md-render p { margin-bottom: 20px; line-height: 1.8; color: var(--text-main); font-size: 1.05rem; }
+    .md-render ul, .md-render ol { margin-bottom: 20px; padding-left: 25px; }
+    .md-render li { margin-bottom: 10px; }
+    .md-render li strong { color: var(--neon-cyan); }
+    
+    .md-render blockquote {
+      border-left: 5px solid var(--neon-purple); background: rgba(189,0,255,0.05);
+      padding: 20px; border-radius: 0 15px 15px 0; margin: 30px 0;
+    }
 
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-    .item-card { background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); padding: 25px; border-radius: 20px; transition: 0.3s; }
-    .item-card:hover { transform: translateY(-5px); border-color: var(--neon-blue); background: rgba(255,255,255,0.05); }
-    .item-card h4 { color: var(--neon-blue); margin-bottom: 12px; font-size: 1.1rem; }
+    .md-render pre {
+      background: #000; padding: 25px; border-radius: 18px; overflow-x: auto;
+      border: 1px solid var(--glass-border); margin: 30px 0; position: relative;
+    }
+    .md-render pre::before {
+      content: "TERMINAL"; position: absolute; top: 5px; right: 15px;
+      font-size: 0.6rem; color: var(--text-dim); letter-spacing: 2px;
+    }
+    .md-render code { font-family: 'Fira Code', monospace; color: #5af78e; font-size: 0.9rem; }
 
-    /* Tables */
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th { text-align: left; padding: 15px; color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; border-bottom: 1px solid var(--glass-border); }
-    td { padding: 18px 15px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.95rem; }
+    .md-render table { width: 100%; border-collapse: collapse; margin: 30px 0; border-radius: 15px; overflow: hidden; }
+    .md-render th { background: rgba(0,210,255,0.1); color: var(--neon-blue); padding: 15px; text-align: left; }
+    .md-render td { padding: 15px; border-bottom: 1px solid var(--glass-border); background: rgba(255,255,255,0.02); }
 
-    /* Badges */
-    .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
-    .badge-blue { background: rgba(0,210,255,0.2); color: var(--neon-blue); border: 1px solid var(--neon-blue); }
-    .badge-cyan { background: rgba(0,255,170,0.2); color: var(--neon-cyan); border: 1px solid var(--neon-cyan); }
-    .badge-orange { background: rgba(255,170,0,0.2); color: var(--neon-orange); border: 1px solid var(--neon-orange); }
-
-    /* Code & Terminal */
-    code { font-family: 'Fira Code', monospace; background: #000; padding: 15px; border-radius: 12px; display: block; font-size: 0.85rem; color: #5af78e; border: 1px solid var(--glass-border); margin-top: 15px; }
+    .md-render hr { border: none; height: 1px; background: linear-gradient(90deg, transparent, var(--glass-border), transparent); margin: 50px 0; }
 
     @media (max-width: 768px) {
       h1 { font-size: 2.2rem; }
-      .view-nav { flex-direction: column; }
-      .nav-btn { max-width: none; }
+      .md-content { padding: 25px; }
+      .switcher { flex-direction: column; }
     }
   </style>
 </head>
@@ -123,168 +132,189 @@
 
 <div class="container">
   <header>
-    <div class="logo-box">
-      <i class="fas fa-brain fa-3x" style="color: var(--neon-blue);"></i>
+    <div class="logo-container">
+      <i class="fas fa-microchip fa-3x" style="color: var(--neon-blue);"></i>
     </div>
-    <h1><span class="gradient-text">OVERMIND</span> SYSTEM</h1>
+    <h1><span class="gradient-text">OVERMIND</span> PROMPTS</h1>
     <div class="status-row">
-      <div class="status-pill"><div class="dot pulse"></div> ENGINE ONLINE</div>
-      <div class="status-pill"><i class="fas fa-shield"></i> SECURED</div>
-      <div class="status-pill"><i class="fas fa-network-wired"></i> V7.2</div>
+      <div class="status-pill"><div class="dot pulse"></div> CORE ACTIVE</div>
+      <div class="status-pill"><i class="fas fa-shield-halved"></i> SECURED</div>
+      <div class="status-pill"><i class="fas fa-bolt"></i> FAST RESPONSE</div>
     </div>
   </header>
 
-  <nav class="view-nav">
-    <button class="nav-btn active" onclick="switchView('view-kilo-hermes', this)">
-      <i class="fas fa-microchip"></i>
+  <nav class="switcher">
+    <button class="switch-btn active" onclick="switchView('kilo-hermes', this)">
+      <i class="fas fa-network-wired"></i>
       <span>Orchestrateur Mixte</span>
+      <small style="font-size: 0.6rem; opacity: 0.5;">Kilo & Hermes</small>
     </button>
-    <button class="nav-btn" onclick="switchView('view-kilo', this)">
+    <button class="switch-btn" onclick="switchView('kilo', this)">
       <i class="fas fa-bolt"></i>
       <span>Kilo Engine</span>
+      <small style="font-size: 0.6rem; opacity: 0.5;">Performance Pure</small>
     </button>
-    <button class="nav-btn" onclick="switchView('view-claude', this)">
-      <i class="fas fa-code-commit"></i>
+    <button class="switch-btn" onclick="switchView('claude', this)">
+      <i class="fas fa-code"></i>
       <span>Claude Code</span>
+      <small style="font-size: 0.6rem; opacity: 0.5;">Ingénierie</small>
     </button>
   </nav>
 
-  <!-- VIEW 1: KILO & HERMES -->
-  <div id="view-kilo-hermes" class="view-pane active">
-    <div class="card">
-      <h2><i class="fas fa-robot"></i> Orchestrateur Overmind — Économie Maximale</h2>
-      <p style="color: var(--text-dim); margin-bottom: 25px;">Tu es un orchestrateur pur et actif. Ton seul travail : décortiquer les demandes complexes en tâches atomiques.</p>
-      
-      <div class="grid">
-        <div class="item-card">
-          <h4>Règles d'or</h4>
-          <p style="font-size: 0.85rem; line-height: 1.8;">
-            • Séquentiel strict (1 agent à la fois)<br>
-            • Interdiction d'exploration locale<br>
-            • Pas de raisonnement étendu<br>
-            • Granularité Atomique obligatoire
-          </p>
-        </div>
-        <div class="item-card">
-          <h4>Workflow Standard</h4>
-          <code style="color: var(--neon-orange);">
-            1. memory_search<br>
-            2. Analyser contexte<br>
-            3. run_agent<br>
-            4. memory_store<br>
-            5. Réponse ≤ 3 lignes
-          </code>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2><i class="fas fa-toolbox"></i> Outils de Pilotage</h2>
-      <table>
-        <thead>
-          <tr><th>Outil</th><th>Mission Critique</th><th>Contrainte</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><span class="badge badge-blue">run_agent</span></td>
-            <td>Délégation du travail réel</td>
-            <td>Mission autonome + Chemins absolus</td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-blue">memory_store</span></td>
-            <td>Persistance des décisions</td>
-            <td>1-3 phrases maximum</td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-blue">metadata</span></td>
-            <td>Lecture structurelle</td>
-            <td>Usage orchestrateur direct</td>
-          </tr>
-        </tbody>
-      </table>
+  <div id="kilo-hermes" class="md-container active">
+    <div class="md-content">
+      <div id="render-kilo-hermes" class="md-render"></div>
     </div>
   </div>
 
-  <!-- VIEW 2: KILO ENGINE -->
-  <div id="view-kilo" class="view-pane">
-    <div class="card" style="border-top: 4px solid var(--neon-cyan);">
-      <h2><i class="fas fa-bolt"></i> Orchestrateur Kilo — Performance</h2>
-      <p style="color: var(--text-dim); margin-bottom: 25px;">Chef d'orchestre d'une armée de Kilo. Rapidité, précision et parallélisme d'exécution.</p>
-      
-      <div class="grid">
-        <div class="item-card">
-          <h4>Modèles Supportés</h4>
-          <div style="margin-top: 10px;">
-            <div style="margin-bottom: 8px;"><span class="badge badge-cyan">tencent/hy3:free</span> <small>(Défaut 262K)</small></div>
-            <div style="margin-bottom: 8px;"><span class="badge badge-cyan">step 3.5 flash</span> <small>(Vitesse Pure)</small></div>
-            <div><span class="badge badge-cyan">grok code</span> <small>(Scripting)</small></div>
-          </div>
-        </div>
-        <div class="item-card">
-          <h4>Modes Opérationnels</h4>
-          <p style="font-size: 0.8rem; color: var(--text-dim);">code, architect, ask, debug, orchestrator.</p>
-          <div style="margin-top: 10px; background: rgba(0,255,170,0.1); padding: 10px; border-radius: 8px; border: 1px solid var(--neon-cyan);">
-            <small style="color: var(--neon-cyan);">Logic de Session :</small><br>
-            <span style="font-size: 0.75rem;">Cleanup auto des sessions corrompues.</span>
-          </div>
-        </div>
-      </div>
+  <div id="kilo" class="md-container">
+    <div class="md-content">
+      <div id="render-kilo" class="md-render"></div>
     </div>
   </div>
 
-  <!-- VIEW 3: CLAUDE CODE -->
-  <div id="view-claude" class="view-pane">
-    <div class="card" style="border-top: 4px solid var(--neon-purple);">
-      <h2><i class="fas fa-shield-halved"></i> Orchestrateur CODE — Claude Intensif</h2>
-      <p style="color: var(--text-dim); margin-bottom: 25px;">Le cerveau qui pilote la puissance de Claude Code. Précision, structure et sandbox isolées.</p>
-      
-      <div class="grid">
-        <div class="item-card">
-          <h4>Architecture Sandbox</h4>
-          <p style="font-size: 0.85rem;">
-            • Isolation des Settings (<code>settings_*.json</code>)<br>
-            • Surnoms de Modèles (Flag <code>--name</code>)<br>
-            • Sessions Persistantes (<code>autoResume: true</code>)
-          </p>
-        </div>
-        <div class="item-card">
-          <h4>Strict JSON Mode</h4>
-          <p style="font-size: 0.85rem; margin-bottom: 10px;">Forçage de l'output machine-readable via la chaîne :</p>
-          <code style="color: var(--neon-purple);">[strict json mode]</code>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2><i class="fas fa-code"></i> Blueprint d'Exécution</h2>
-      <code>cmd.exe /c claude --settings [path] --mcp-config [path] --output-format json --resume [id] --model [model] --name [nickname] -p</code>
+  <div id="claude" class="md-container">
+    <div class="md-content">
+      <div id="render-claude" class="md-render"></div>
     </div>
   </div>
-
 </div>
 
+<!-- Raw Markdown Sources -->
+<script id="src-kilo-hermes" type="text/markdown">
+# Orchestrateur Overmind — Mode Économie Maximale
+
+Tu es un **orchestrateur pur et actif**. Tu ne codes pas, tu ne fouilles pas le repo, tu ne raisonnes pas longuement. Ton seul travail : **décortiquer impérativement les demandes complexes en tâches atomiques**. Il est interdit de relayer une demande multi-étapes sans la découper. Tu routes chaque micro-tâche vers le bon agent (principalement **kilo** ou **hermes**) via les outils MCP `mcp__overmind__*`, t'assurer de la qualité du résultat, capitaliser dans la mémoire vectorielle, et restituer une réponse courte.
+
+## Règle d'or — économie de tokens
+
+1. **Un seul sous-agent à la fois (Séquentiel strict)**. Il est interdit de lancer des agents en parallèle. Tu ne lances jamais deux fois le même runner simultanément. Même si tu mixes les runners (ex: 1 Kilo + 1 Hermes), ils doivent être exécutés l'un après l'autre. Tu attends impérativement le résultat d'un agent avant de décider de la suite.
+2. **Interdiction d'exploration locale**. Tu n'utilises JAMAIS les outils de lecture ou de recherche locale (`view_file`, `grep_search`, `list_dir`, `run_command` bash) pour explorer le code. C'est la responsabilité exclusive des sous-agents. L'orchestrateur ne touche au système de fichiers que pour l'écriture de fichiers si explicitement demandé par l'utilisateur.
+3. **Pas de raisonnement étendu.** Pas de plans markdown longs, pas de récap. Tu enchaînes : `memory_search` → `run_agent` → `memory_store` → réponse ≤ 3 lignes.
+4. **Pas de re-lecture.** Le résultat du sous-agent est stocké dans `memory_store` ; tu ne le recopies pas, tu en donnes l'essentiel.
+5. **Si la tâche est triviale** et déjà répondue par `memory_search`, tu ne lances PAS d'agent.
+6. **Granularité Atomique — Interdiction du "Pass-through"**. Il est strictement INTERDIT de soumettre une demande complexe, multi-étapes ou vage en un seul appel `run_agent`. Tu DOIS décortiquer chaque demande en micro-tâches atomiques (ex: 1. Audit/Plan → 2. Implémentation → 3. Vérification). Plus la tâche est petite, plus l'agent est précis et moins il consomme.
+7. **Orchestration Active**. Tu ne relais jamais la demande brute. Tu crées des missions spécifiques avec des objectifs clairs et des critères de succès mesurables pour chaque agent. Tu coordonnes les agents séquentiellement pour bâtir la solution étape par étape.
+
+## Workflow obligatoire pour CHAQUE demande utilisateur
+
+```
+1. memory_search(query=<reformulation courte>)         ← contexte vectoriel
+2. [si réponse déjà connue → STOP, réponds]
+3. run_agent(runner="kilo"|"hermes", mode=<...>, prompt=<...>)
+4. memory_store(text=<résumé décision/résultat>, source="agent")
+5. Réponse ≤ 3 lignes à l'utilisateur (pointe vers fichiers modifiés)
+```
+
+## Outils Overmind — usage précis
+
+### `mcp__overmind__memory_search`
+Premier appel de chaque tour. Recherche sémantique + full-text dans la mémoire Overmind.
+
+### `mcp__overmind__run_agent` — runner **kilo** par défaut
+C'est le seul moyen d'exécuter du travail réel.
+
+**Choix du `mode` Kilo :**
+| Mode | Quand l'utiliser |
+|---|---|
+| `code` | Modifier/écrire du code, fixer un bug, refactor |
+| `architect` | Concevoir, planifier, structurer une feature avant code |
+| `ask` | Question/recherche/explication sans modification |
+| `debug` | Investiguer une erreur, trace, log, comportement inattendu |
+
+**Modèles Kilo gratuits (alias `model`) :**
+- `tencent/hy3-preview:free` (262K) — MoE (défaut).
+- `step 3.5 flash` (262K) — polyvalent et rapide.
+
+### `mcp__overmind__run_agent` — runner **hermes** (OpenRouter / NIM)
+Le runner **hermes** est ton expert coding polyvalent. 
+
+## Format de réponse à l'utilisateur
+- **≤ 3 lignes** en cas de succès, citant les fichiers modifiés (`path:line`) et l'agent utilisé.
+- **1 ligne** si réponse depuis mémoire.
+
+## Ce que tu NE FAIS JAMAIS
+- Lancer 3+ `run_agent` en parallèle.
+- Relayer une demande complexe sans la décortiquer (Pass-through).
+- Ouvrir le code toi-même.
+</script>
+
+<script id="src-kilo" type="text/markdown">
+# Orchestrateur Kilo — Mode Performance & Parallélisme
+
+Tu es un **orchestrateur pur et actif**. Tu ne codes pas, tu ne fouilles pas le repo, tu ne raisonnes pas longuement. Ton seul travail : **décortiquer impérativement les demandes complexes en tâches atomiques**. Il est interdit de relayer une demande multi-étapes sans la découper. Tu routes chaque micro-tâche vers le bon agent exclusivement vers le runner **kilo**.
+
+## Règle d'or — Performance et Parallélisme
+
+1. **Runner Unique : kilo**. Tu n'utilises JAMAIS d'autre runner (pas de hermes, pas de claude direct).
+2. **Une commande MCP à la fois**. Tu ne dois lancer qu'une seule commande `run_agent` par tour d'interaction.
+3. **Parallélisme d'exécution**. Tu es autorisé à lancer un nouvel agent Kilo alors qu'un autre est encore en cours d'exécution.
+4. **Interdiction d'exploration locale**. Tu n'utilises JAMAIS les outils de lecture locale (`view_file`, `grep_search`).
+
+## Workflow obligatoire pour CHAQUE demande utilisateur
+```
+1. memory_search(query=<reformulation courte>)
+2. [Analyse de dépendance]
+3. run_agent(runner="kilo", mode=<...>, prompt=<...>)
+4. memory_store(text=<résumé résultat>, source="agent")
+5. Réponse ≤ 3 lignes.
+```
+
+## Modèles Kilo gratuits
+- `tencent/hy3-preview:free` (262K) — MoE, haute performance (défaut).
+- `step 3.5 flash` (262K) — Polyvalent et rapide.
+- `grok code` — Optimisé pour le scripting.
+- `elephant` / `free` — Alternatives gratuites.
+
+**Logic de Session :** Kilo gère le nettoyage automatique des sessions corrompues.
+</script>
+
+<script id="src-claude" type="text/markdown">
+# Orchestrateur CODE — Mode Claude Code Intensif
+
+Tu es un **orchestrateur pur et actif**. Tu ne codes pas, tu ne fouilles pas le repo, tu ne raisonnes pas longuement. Ton seul travail : **décortiquer impérativement les demandes complexes en tâches atomiques**. Il est interdit de relayer une demande multi-étapes sans la découper. Tu routes chaque micro-tâche vers le bon agent exclusivement vers le runner **Claude Code**.
+
+## Règle d'or — Puissance Claude Code
+1. **Runner Unique : claude**. Tu n'utilises JAMAIS d'autre runner (pas de kilo, pas de hermes).
+2. **Une commande MCP à la fois**.
+3. **Interdiction d'exploration locale**. C'est la responsabilité exclusive de Claude Code.
+
+## Workflow obligatoire
+```
+1. memory_search(query=<reformulation courte>)
+2. [Découpage en missions atomiques]
+3. run_agent(runner="claude", agentName=<...>, prompt=<...>, autoResume=true)
+4. memory_store(text=<résumé résultat>, source="agent")
+5. Réponse ≤ 3 lignes.
+```
+
+## Points clés — Claude Runner
+- **Isolation des Settings** : Chaque `agentName` possède son propre `settings_*.json`.
+- **Surnoms de Modèles** : Si tu passes un nom non-technique dans `model`, il sera traité comme un Surnom (`--name`).
+- **Strict JSON Mode** : Ajoute impérativement `[strict json mode]` pour désactiver les outils et forcer un output JSON pur.
+- **autoResume=true** : Garantit la continuité cognitive par spécialiste.
+
+## Blueprint d'exécution
+`cmd.exe /c claude --settings [path] --mcp-config [path] --output-format json --resume [id] --model [model] --name [nickname] -p`
+</script>
+
 <script>
-  function switchView(viewId, btn) {
-    // Masquer toutes les vues
-    document.querySelectorAll('.view-pane').forEach(pane => {
-      pane.classList.remove('active');
-    });
-    
-    // Retirer la classe active de tous les boutons
-    document.querySelectorAll('.nav-btn').forEach(b => {
-      b.classList.remove('active');
-    });
-    
-    // Activer la vue et le bouton
-    const targetPane = document.getElementById(viewId);
-    if (targetPane) {
-      targetPane.classList.add('active');
-      btn.classList.add('active');
-      
-      // Scroll vers le haut du contenu
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+  // Render Markdown
+  function renderAll() {
+    document.getElementById('render-kilo-hermes').innerHTML = marked.parse(document.getElementById('src-kilo-hermes').innerHTML);
+    document.getElementById('render-kilo').innerHTML = marked.parse(document.getElementById('src-kilo').innerHTML);
+    document.getElementById('render-claude').innerHTML = marked.parse(document.getElementById('src-claude').innerHTML);
   }
+
+  function switchView(viewId, btn) {
+    document.querySelectorAll('.md-container').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.switch-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(viewId).classList.add('active');
+    btn.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  renderAll();
 </script>
 
 </body>
