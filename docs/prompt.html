@@ -370,6 +370,18 @@
               </div>
             </div>
 
+            <div class="prompt-section">
+              <h2><i class="fas fa-microchip"></i> Kilo & Hermes Engine</h2>
+              <div class="kilo-terminal" style="background: #0d1117; border: 1px solid var(--neon-cyan); border-radius: 6px; padding: 20px; font-family: 'Fira Code', monospace; box-shadow: 0 0 20px rgba(0, 255, 255, 0.1); margin-bottom: 25px;">
+                <div style="color: #8b949e; margin-bottom: 10px;">// Orchestration Standard</div>
+                <div style="color: var(--neon-cyan);">run_agent</div>({
+                <br>&nbsp;&nbsp;runner: <span style="color: #ce9178;">"kilo"</span>,
+                <br>&nbsp;&nbsp;mode: <span style="color: #ce9178;">"code"</span>,
+                <br>&nbsp;&nbsp;prompt: <span style="color: #ce9178;">"Vérifie la sécurité de ce script..."</span>
+                <br>});
+              </div>
+            </div>
+
             <div class="download-section">
               <div class="download-content">
                 <h3><i class="fas fa-download"></i> Télécharger le prompt</h3>
@@ -456,36 +468,47 @@
             </div>
 
             <div class="prompt-section">
+              <h2><i class="fas fa-microchip"></i> Kilo Performance Engine</h2>
+              <div class="kilo-terminal" style="background: #0d1117; border: 1px solid var(--neon-cyan); border-radius: 6px; padding: 20px; font-family: 'Fira Code', monospace; box-shadow: 0 0 20px rgba(0, 255, 255, 0.1); margin-bottom: 25px;">
+                <div style="color: #8b949e; margin-bottom: 10px;">// Exemple d'exécution Kilo</div>
+                <div style="color: var(--neon-cyan);">run_agent</div>({
+                <br>&nbsp;&nbsp;runner: <span style="color: #ce9178;">"kilo"</span>,
+                <br>&nbsp;&nbsp;mode: <span style="color: #ce9178;">"architect"</span>,
+                <br>&nbsp;&nbsp;model: <span style="color: #ce9178;">"hy3-preview:free"</span>,
+                <br>&nbsp;&nbsp;prompt: <span style="color: #ce9178;">"Conçois une structure d'API sécurisée..."</span>
+                <br>});
+              </div>
+
+              <div class="mode-grid-premium" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div class="rule-card" style="border-bottom: 3px solid #00f2ff;">
+                  <h4 style="color: var(--neon-cyan); margin-bottom: 10px;"><i class="fas fa-code-branch"></i> CODE</h4>
+                  <p style="font-size: 0.85rem;">Implémentation de fonctionnalités, tests unitaires et refactoring actif.</p>
+                </div>
+                <div class="rule-card" style="border-bottom: 3px solid #7000ff;">
+                  <h4 style="color: #7000ff; margin-bottom: 10px;"><i class="fas fa-drafting-compass"></i> ARCHITECT</h4>
+                  <p style="font-size: 0.85rem;">Conception de schémas, architecture de fichiers et planification système.</p>
+                </div>
+                <div class="rule-card" style="border-bottom: 3px solid #ff00c8;">
+                  <h4 style="color: #ff00c8; margin-bottom: 10px;"><i class="fas fa-question-circle"></i> ASK</h4>
+                  <p style="font-size: 0.85rem;">Exploration du code, réponses aux questions et documentation (Read-Only).</p>
+                </div>
+                <div class="rule-card" style="border-bottom: 3px solid #ff003c;">
+                  <h4 style="color: #ff003c; margin-bottom: 10px;"><i class="fas fa-bug"></i> DEBUG</h4>
+                  <p style="font-size: 0.85rem;">Analyse de logs, correction de bugs et résolution de conflits d'environnement.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="prompt-section">
               <h2><i class="fas fa-tools"></i> Usage des outils MCP OverMind</h2>
               <div class="tool-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
-                <div class="tool-card">
-                  <div class="tool-header"><h3>metadata</h3></div>
-                  <div class="tool-content"><p>Analyse la structure du projet, les fichiers de config et les statistiques de code.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>list_agents</h3></div>
-                  <div class="tool-content"><p>Liste tous les agents disponibles et leur configuration actuelle.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>create_agent</h3></div>
-                  <div class="tool-content"><p>Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>update_agent_config</h3></div>
-                  <div class="tool-content"><p>Modifie la config technique (Runner, Modèle, Serveurs MCP, Env) d'un agent.</p></div>
-                </div>
-                <div class="tool-card tool-card-primary">
-                  <div class="tool-header"><h3>run_agent</h3></div>
-                  <div class="tool-content"><p>Exécute une commande via le runner spécifié (kilo uniquement).</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>memory_store</h3></div>
-                  <div class="tool-content"><p>Mémorise durablement une connaissance, décision ou pattern d'orchestration.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>memory_search</h3></div>
-                  <div class="tool-content"><p>Recherche sémantique + full-text dans la mémoire OverMind.</p></div>
-                </div>
+                <div class="tool-card"><div class="tool-header"><h3>metadata</h3></div><div class="tool-content"><p>Analyse structurelle et statistiques.</p></div></div>
+                <div class="tool-card"><div class="tool-header"><h3>list_agents</h3></div><div class="tool-content"><p>Inventaire des configurations.</p></div></div>
+                <div class="tool-card"><div class="tool-header"><h3>create_agent</h3></div><div class="tool-content"><p>Provisioning et nouveaux prompts.</p></div></div>
+                <div class="tool-card"><div class="tool-header"><h3>update_agent_config</h3></div><div class="tool-content"><p>Maintenance technique agents.</p></div></div>
+                <div class="tool-card tool-card-primary"><div class="tool-header"><h3>run_agent</h3></div><div class="tool-content"><p>Exécution Kilo Performance.</p></div></div>
+                <div class="tool-card"><div class="tool-header"><h3>memory_store</h3></div><div class="tool-content"><p>Capitalisation des connaissances.</p></div></div>
+                <div class="tool-card"><div class="tool-header"><h3>memory_search</h3></div><div class="tool-content"><p>Recherche contextuelle HD.</p></div></div>
               </div>
             </div>
 
@@ -577,36 +600,26 @@
             </div>
 
             <div class="prompt-section">
+              <h2><i class="fas fa-terminal"></i> Claude Code CLI Session</h2>
+              <div class="claude-terminal" style="background: #1a1a1a; border: 1px solid var(--neon-blue); border-radius: 6px; padding: 20px; font-family: 'Fira Code', monospace; box-shadow: 0 0 20px rgba(0, 112, 255, 0.1); margin-bottom: 25px;">
+                <div style="color: #00ff00; margin-bottom: 5px;">$ claude "Refactor the authentication module for performance"</div>
+                <div style="color: #ffffff;">└── <span style="color: var(--neon-blue);">[Session: Dev_Master]</span></div>
+                <div style="color: #8b949e; margin-top: 10px;">> Analyzing files... done.</div>
+                <div style="color: #8b949e;">> Running unit tests... passing.</div>
+                <div style="color: var(--neon-blue); margin-top: 10px;">> Applying changes asynchronously.</div>
+              </div>
+            </div>
+
+            <div class="prompt-section">
               <h2><i class="fas fa-tools"></i> Usage des outils MCP OverMind</h2>
               <div class="tool-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
-                <div class="tool-card">
-                  <div class="tool-header"><h3>metadata</h3></div>
-                  <div class="tool-content"><p>Analyse la structure du projet, les fichiers de config et les statistiques de code.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>list_agents</h3></div>
-                  <div class="tool-content"><p>Liste tous les agents disponibles et leur configuration actuelle.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>create_agent</h3></div>
-                  <div class="tool-content"><p>Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>update_agent_config</h3></div>
-                  <div class="tool-content"><p>Modifie la config technique (Runner, Modèle, Serveurs MCP, Env) d'un agent.</p></div>
-                </div>
-                <div class="tool-card tool-card-primary">
-                  <div class="tool-header"><h3>run_agent</h3></div>
-                  <div class="tool-content"><p>Exécute une commande via le runner spécifié (claude uniquement).</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>memory_store</h3></div>
-                  <div class="tool-content"><p>Mémorise durablement une connaissance, décision ou pattern d'orchestration.</p></div>
-                </div>
-                <div class="tool-card">
-                  <div class="tool-header"><h3>memory_search</h3></div>
-                  <div class="tool-content"><p>Recherche sémantique + full-text dans la mémoire OverMind.</p></div>
-                </div>
+                <div class="tool-card"><div class="tool-header"><h3>metadata</h3></div><div class="tool-content"><p>Stats et structure projet.</p></div></div>
+                <div class="tool-card"><div class="tool-header"><h3>list_agents</h3></div><div class="tool-content"><p>Audit des configurations.</p></div></div>
+                <div class="tool-card"><div class="tool-header"><h3>create_agent</h3></div><div class="tool-content"><p>Déploiement spécialistes.</p></div></div>
+                <div class="tool-card"><div class="tool-header"><h3>update_agent_config</h3></div><div class="tool-content"><p>Ajustement des settings.</p></div></div>
+                <div class="tool-card tool-card-primary"><div class="tool-header"><h3>run_agent</h3></div><div class="tool-content"><p>Claude Code Orchestration.</p></div></div>
+                <div class="tool-card"><div class="tool-header"><h3>memory_store</h3></div><div class="tool-content"><p>Sauvegarde des décisions.</p></div></div>
+                <div class="tool-card"><div class="tool-header"><h3>memory_search</h3></div><div class="tool-content"><p>Rappel contextuel.</p></div></div>
               </div>
             </div>
 
