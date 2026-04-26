@@ -77,7 +77,7 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
 
   // Auto-instrument: record every run in OverMind memory
   try {
-    storeRun({
+    await storeRun({
       runner: 'claude',
       agentName,
       prompt,
@@ -87,8 +87,8 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
       success: !result.error,
       sessionId: result.sessionId,
     });
-  } catch {
-    /* silent */
+  } catch (_e) {
+    // Memory store is secondary, don't crash if it fails
   }
 
   if (result.error === 'INVALID_AGENT') {
@@ -107,5 +107,6 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
       { type: 'text' as const, text: result.result },
       ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : []),
     ],
+    sessionId: result.sessionId,
   };
 }
