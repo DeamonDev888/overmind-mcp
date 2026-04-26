@@ -8,85 +8,75 @@ import { runClineAgent } from './run_cline.js';
 import { runOpenCodeAgent } from './run_opencode.js';
 import { runHermesAgent } from './run_hermes.js';
 
-// Schéma unifié pour tous les runners
+// Schema unified for all runners
 export const runAgentSchema = z.object({
   runner: z
     .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
-    .describe('Type de runner à utiliser'),
-  prompt: z.string().describe("Le prompt à envoyer à l'agent"),
-  sessionId: z.string().optional(),
-  agentName: z.string().optional().describe("Nom de l'agent (pour logging/monitoring et persistance)"),
+    .describe('Type de runner a utiliser'),
+  prompt: z.string().describe("Le prompt a envoyer a l'agent"),
+  sessionId: z.string().optional().describe('Session ID'),
+  agentName: z.string().optional().describe("Nom de l'agent"),
   autoResume: z
     .boolean()
     .optional()
     .default(false)
-    .describe(
-      'CORE: --output-format json, si true (et agentName fourni), reprend automatiquement la dernière conversation de cet agent',
-    ),
-  // Options spécifiques à certains runners
+    .describe('Auto resume session'),
   mode: z
     .enum(['code', 'architect', 'ask', 'debug', 'orchestrator', 'plan', 'act'])
     .optional()
-    .describe(
-      'Mode spécifique pour Kilo (code, architect, ask, debug, orchestrator) ou Cline (plan, act)',
-    ),
+    .describe('Mode specifique'),
   path: z
     .string()
     .optional()
-    .describe("Le répertoire de travail (CWD) où l'agent sera lancé (par défaut: dossier Overmind)"),
+    .describe("Working directory"),
   config: z
     .string()
     .optional()
-    .describe("Le répertoire racine de l'Overmind (contenant .claude/, .mcp.json, etc.) (par défaut: dossier Overmind)"),
+    .describe("Config directory"),
   silent: z
     .boolean()
     .optional()
     .default(false)
-    .describe('Désactive les logs de debug sur stderr'),
+    .describe('Silent mode'),
   model: z
     .string()
     .optional()
-    .describe("Modèle spécifique à utiliser (ex: tencent/hy3-preview pour hermes)"),
+    .describe("Model name"),
 }).passthrough();
 
 import { verifyInstallation } from '../lib/InstallHelper.js';
 
-/**
- * ORCHESTRATEUR CENTRAL
- * Redirige l'exécution vers le module spécifique approprié.
- */
 export async function runAgent(args: z.infer<typeof runAgentSchema>) {
   const { runner, ...params } = args;
 
-  // --- VÉRIFICATION DE L'INSTALLATION ---
   const check = await verifyInstallation(runner);
   if (!check.ok) {
     return {
-      content: [{ type: 'text' as const, text: check.message || `CLI non installé.` }],
+      content: [{ type: 'text' as const, text: check.message || `CLI non installe.` }],
       isError: true,
     };
   }
 
   switch (runner) {
     case 'claude':
-      return runClaudeAgent(params as Parameters<typeof runClaudeAgent>[0]);
+      return runClaudeAgent(params as any);
     case 'gemini':
-      return runGeminiAgent(params as Parameters<typeof runGeminiAgent>[0]);
+      return runGeminiAgent(params as any);
     case 'kilo':
-      return runKiloAgent(params as Parameters<typeof runKiloAgent>[0]);
+      return runKiloAgent(params as any);
     case 'qwencli':
-      return runQwenCLIAgent(params as Parameters<typeof runQwenCLIAgent>[0]);
+      return runQwenCLIAgent(params as any);
     case 'openclaw':
-      return runOpenClawAgent(params as Parameters<typeof runOpenClawAgent>[0]);
+      return runOpenClawAgent(params as any);
     case 'cline':
-      return runClineAgent(params as Parameters<typeof runClineAgent>[0]);
+      return runClineAgent(params as any);
     case 'opencode':
-      return runOpenCodeAgent(params as Parameters<typeof runOpenCodeAgent>[0]);
+      return runOpenCodeAgent(params as any);
     case 'hermes':
-      return runHermesAgent(params as Parameters<typeof runHermesAgent>[0]);
+      return runHermesAgent(params as any);
     default:
       return {
-        content: [{ type: 'text' as const, text: `❌ Runner inconnu: ${runner}` }],
+        content: [{ type: 'text' as const, text: `Runner inconnu: ${runner}` }],
         isError: true,
       };
   }
