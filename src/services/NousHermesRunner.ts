@@ -115,8 +115,8 @@ export class NousHermesRunner {
         if (fs.existsSync(agentPromptPath)) {
           systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
         }
-      } catch (e: any) {
-        if (e.message?.includes('INVALID_AGENT')) throw e;
+      } catch (e) {
+        if (e instanceof Error && e.message?.includes('INVALID_AGENT')) throw e;
         // Silent failing for others
       }
     }
