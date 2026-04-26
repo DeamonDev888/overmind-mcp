@@ -34,14 +34,14 @@ export function createServer(name: string = 'OverMind-MCP') {
     description: `Exécute une commande sur un agent IA via le runner spécifié.
 
 **Runners disponibles:**
-- claude: Claude Code (claude -p)
-- gemini: Gemini CLI
-- kilo: Kilocode (modes: code, architect, ask, debug, orchestrator)
-- qwencli: Qwen Code CLI (qwen -p)
-- openclaw: OpenClaw (openclaw message send)
-- cline: Cline (modes: plan, act)
-- opencode: OpenCode (opencode run)
-- hermes: Nous Hermes Agent (hermes chat -q)
+ - claude: Claude Code (Nécessite 'create_agent' au préalable)
+ - gemini: Gemini CLI
+ - kilo: Kilocode (modes: code, architect, ask, debug, orchestrator)
+ - qwencli: Qwen Code CLI (qwen -p)
+ - openclaw: OpenClaw (openclaw message send)
+ - cline: Cline (modes: plan, act)
+ - opencode: OpenCode (opencode run)
+ - hermes: Nous Hermes Agent (Limité à ~1000 tokens pour stabilité)
 
 **Modèles Kilo (Alias Gratuits):**
 | Nom Amical | ID Technique | Description |

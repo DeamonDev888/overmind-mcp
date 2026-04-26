@@ -93,6 +93,10 @@ export class NousHermesRunner {
       console.error(`[NousHermesRunner] 🚀 Starting Hermes Agent...`);
     }
 
+    if (prompt.length > 3000 && !silent) {
+      console.error(`[NousHermesRunner] ⚠️ Prompt très long (${prompt.length} chars). Risque de TIMEOUT NIM.`);
+    }
+
     // We remove the manual quotes here because shell: false handles it correctly via the array
     const cleanArgs = ['chat', '-q', prompt, '--ignore-user-config', '--source', 'tool'];
     
