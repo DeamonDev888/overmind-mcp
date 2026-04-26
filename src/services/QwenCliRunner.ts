@@ -27,7 +27,7 @@ export class QwenCLIRunner {
 
   constructor() {
     this.config = CONFIG.CLAUDE;
-    this.timeoutMs = CONFIG.TIMEOUT_MS || 30000;
+    this.timeoutMs = CONFIG.TIMEOUT_MS || 900000;
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {

@@ -124,7 +124,7 @@ export class KiloRunner {
       argsSpawn.push('--agent', mode);
     }
 
-    if (sessionId) argsSpawn.push('--session', sessionId);
+    // if (sessionId) argsSpawn.push('--session', sessionId);
     if (selectedModel) argsSpawn.push('--model', selectedModel);
 
     // Required for non-interactive execution
@@ -144,7 +144,7 @@ export class KiloRunner {
         );
         process.stderr.write(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m\n`);
         if (mode) process.stderr.write(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m\n`);
-        if (sessionId) process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
+        // if (sessionId) process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
 
         process.stderr.write(`\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m\n`);
       }

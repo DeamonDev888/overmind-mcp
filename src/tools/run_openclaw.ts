@@ -33,5 +33,5 @@ export async function runOpenClawAgent(args: z.infer<typeof runOpenClawSchema>) 
   storeRun({ runner: 'openclaw', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
 
   if (result.error) return { content: [{ type: 'text' as const, text: `❌ Erreur OpenClaw: ${result.error}` }], isError: true };
-  return { content: [{ type: 'text' as const, text: result.result }, ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : [])], sessionId: result.sessionId };
+  return { content: [{ type: 'text' as const, text: result.result }, ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : [])] };
 }

@@ -6,10 +6,7 @@ import { deleteSessionId } from '../lib/sessions.js';
 
 export const runClaudeSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent Claude"),
-  sessionId: z
-    .string()
-    .optional()
-    .describe('ID de session pour continuer une conversation (manuel)'),
+  sessionId: z.string().optional(),
   agentName: z
     .string()
     .optional()
@@ -24,7 +21,7 @@ export const runClaudeSchema = z.object({
   path: z.string().optional().describe("Répertoire de travail"),
   config: z.string().optional().describe("Répertoire racine Overmind"),
   silent: z.boolean().optional().default(false).describe("Mode silencieux"),
-});
+}).passthrough();
 
 export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
@@ -110,6 +107,5 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
       { type: 'text' as const, text: result.result },
       ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : []),
     ],
-    sessionId: result.sessionId,
   };
 }
