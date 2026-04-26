@@ -41,7 +41,7 @@ export function createServer(name: string = 'OverMind-MCP') {
  - openclaw: OpenClaw (openclaw message send)
  - cline: Cline (modes: plan, act)
  - opencode: OpenCode (opencode run)
- - hermes: Nous Hermes Agent (Limité à ~1000 tokens pour stabilité)
+ - hermes: Nous Hermes Agent (Nécessite 'create_agent' au préalable)
 
 **Modèles Kilo (Alias Gratuits):**
 | Nom Amical | ID Technique | Description |
