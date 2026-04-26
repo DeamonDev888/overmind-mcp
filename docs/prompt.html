@@ -517,6 +517,10 @@
                   <h4 style="color: #ff003c; margin-bottom: 10px;"><i class="fas fa-bug"></i> DEBUG</h4>
                   <p style="font-size: 0.85rem;">Analyse de logs, correction de bugs et résolution de conflits d'environnement.</p>
                 </div>
+                <div class="rule-card" style="border-bottom: 3px solid #ffaa00;">
+                  <h4 style="color: #ffaa00; margin-bottom: 10px;"><i class="fas fa-sitemap"></i> ORCHESTRATOR</h4>
+                  <p style="font-size: 0.85rem;">Décomposition de tâches complexes et routage vers des sous-agents.</p>
+                </div>
               </div>
             </div>
 
@@ -636,9 +640,10 @@
                   cmd.exe /c claude --settings [path] --mcp-config [path] --output-format json --resume [id] --model [model] --name [nickname] -p
                 </code>
                 <ul style="margin-top: 10px; font-size: 0.85rem; padding-left: 20px;">
-                  <li><strong>Injection Système :</strong> Si <code>agents/${agentName}.md</code> existe, il précède automatiquement le prompt utilisateur.</li>
-                  <li><strong>Strict Mode :</strong> Si <code>[strict json mode]</code> est détecté → <code>--tools none</code> forcé.</li>
-                  <li><strong>Fallback Surnom :</strong> Sépare le surnom de l'agent de l'ID technique du modèle pour garantir l'acceptation par l'API.</li>
+                  <li><strong>Injection Système :</strong> Si <code>agents/${agentName}.md</code> existe, il précède le prompt.</li>
+                  <li><strong>Strict JSON Mode :</strong> Détection de <code>[strict json mode]</code> → désactive les outils pour un output pur.</li>
+                  <li><strong>Surnoms de Modèles :</strong> Les modèles non-techniques sont traités comme des Surnoms (flag <code>--name</code>).</li>
+                  <li><strong>Isolation Experts :</strong> Chaque agentName possède son propre sandbox technique (settings/mcp).</li>
                 </ul>
               </div>
             </div>

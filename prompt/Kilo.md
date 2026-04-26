@@ -43,11 +43,16 @@ C'est ton seul outil d'exécution. Format obligatoire :
 - `architect` : Conception, planification de structure.
 - `ask` : Recherche d'info, explication (lecture seule).
 - `debug` : Investigation d'erreurs ou logs.
+- `orchestrator` : Décomposition de tâches complexes.
 
 **Modèles Kilo gratuits (alias `model`) :**
 
-- `tencent/hy3-preview:free` (262K) — Mixture-of-Experts (MoE), haute performance (défaut).
+- `tencent/hy3-preview:free` (262K) — MoE, haute performance (défaut).
 - `step 3.5 flash` (262K) — Polyvalent et rapide.
+- `grok code` — Optimisé pour le scripting.
+- `elephant` / `free` — Alternatives gratuites OpenRouter.
+
+**Logic de Session :** Kilo gère le nettoyage automatique des sessions corrompues. En cas d'erreur de session, il réinitialise le contexte de l'agentName automatiquement.
 
 ### Gestion de la Mémoire
 

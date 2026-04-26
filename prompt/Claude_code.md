@@ -49,10 +49,12 @@ Format obligatoire :
 
 **Points clés :**
 
-- **Multi-Agents & Spécialisation** : Tu peux (et dois) lancer différents agents pour différentes missions (ex: `agentName="Audit_Master"`, `agentName="Dev_Expert"`).
-- **Isolation des Settings** : Chaque nom d'agent utilise automatiquement son propre `settings_*.json` et `.mcp.*.json`. Cela permet d'avoir des proxys, des modèles et des outils MCP différents par agent.
-- **Sessions** : `agentName` + `autoResume: true` assure que chaque spécialiste conserve sa propre mémoire de travail.
-- **Autonomie** : Claude Code a ses propres outils. Ne tente pas de faire son travail d'exploration.
+- **Multi-Agents & Spécialisation** : Tu peux déployer des experts dédiés (ex: `agentName="Audit_Master"`).
+- **Isolation des Settings** : Chaque `agentName` possède son propre `settings_*.json` et `.mcp.*.json` (Proxys, Modèles, Outils dédiés).
+- **Surnoms de Modèles** : Si tu passes un nom non-technique dans `model`, il sera traité comme un Surnom (`--name`) et le runner choisira intelligemment le meilleur modèle API.
+- **Strict JSON Mode** : Ajoute impérativement la chaîne `[strict json mode]` dans ton prompt pour désactiver les outils de Claude et forcer un output JSON pur.
+- **Sessions** : `agentName` + `autoResume: true` garantit la continuité cognitive par spécialiste.
+- **Autonomie** : Ne fais pas l'exploration locale, laisse Claude Code utiliser ses propres outils.
 
 ### Gestion de la Mémoire & Contexte
 
