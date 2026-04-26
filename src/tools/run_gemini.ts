@@ -30,7 +30,11 @@ export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
   }
 
   const durationMs = Date.now() - start;
-  storeRun({ runner: 'gemini', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
+  try {
+    await storeRun({ runner: 'gemini', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
+  } catch (_e) {
+    // Memory store is secondary
+  }
 
   if (result.error === 'INVALID_AGENT') {
     return {
@@ -48,5 +52,6 @@ export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
       { type: 'text' as const, text: result.result },
       ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : []),
     ],
+    sessionId: result.sessionId,
   };
 }
