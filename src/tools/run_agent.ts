@@ -59,21 +59,21 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>) {
 
   switch (runner) {
     case 'claude':
-      return runClaudeAgent(params as any);
+      return runClaudeAgent(params as Parameters<typeof runClaudeAgent>[0]);
     case 'gemini':
-      return runGeminiAgent(params as any);
+      return runGeminiAgent(params as Parameters<typeof runGeminiAgent>[0]);
     case 'kilo':
-      return runKiloAgent(params as any);
+      return runKiloAgent(params as Parameters<typeof runKiloAgent>[0]);
     case 'qwencli':
-      return runQwenCLIAgent(params as any);
+      return runQwenCLIAgent(params as Parameters<typeof runQwenCLIAgent>[0]);
     case 'openclaw':
-      return runOpenClawAgent(params as any);
+      return runOpenClawAgent(params as Parameters<typeof runOpenClawAgent>[0]);
     case 'cline':
-      return runClineAgent(params as any);
+      return runClineAgent(params as Parameters<typeof runClineAgent>[0]);
     case 'opencode':
-      return runOpenCodeAgent(params as any);
+      return runOpenCodeAgent(params as Parameters<typeof runOpenCodeAgent>[0]);
     case 'hermes':
-      return runHermesAgent(params as any);
+      return runHermesAgent(params as Parameters<typeof runHermesAgent>[0]);
     default:
       return {
         content: [{ type: 'text' as const, text: `Runner inconnu: ${runner}` }],
