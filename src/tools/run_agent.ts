@@ -41,7 +41,7 @@ export const runAgentSchema = z.object({
   model: z
     .string()
     .optional()
-    .describe("Nom du modèle. Pour Kilo (gratuits) : 'tencent/hy3-preview:free' (MoE haute performance, défaut) ou 'step 3.5 flash' (polyvalent)."),
+    .describe("Nom du modèle. Pour Hermes : priorité OpenAI ou NVIDIA. Pour Kilo (gratuits) : 'tencent/hy3-preview:free' ou 'step 3.5 flash'."),
 }).passthrough();
 
 import { verifyInstallation } from '../lib/InstallHelper.js';
