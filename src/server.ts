@@ -43,13 +43,13 @@ export function createServer(name: string = 'OverMind-MCP') {
  - opencode: OpenCode (opencode run)
  - hermes: Nous Hermes Agent (Nécessite 'create_agent' au préalable)
 
-**Modèles Kilo (Alias Gratuits):**
-| Nom Amical | ID Technique | Description |
+**Modèles recommandés :**
+| Fournisseur | Modèle recommandé | Usage |
 | :--- | :--- | :--- |
-| **step 3.5 flash** | stepfun/step-3.5-flash:free | Modèle StepFun gratuit (262K context) |
-| **grok code** | x-ai/grok-code-fast-1:optimized:free | Grok Optimized gratuit (256K context) |
-| **elephant** | openrouter/elephant-alpha | Elephant Alpha gratuit (262K context) |
-| **free** | kilo-auto/free | Modèle Kilo Auto gratuit (204K context) |
+| **Mistral** | **Devstral 2** (\`codestral-latest\`) | Expert Coding & Développement |
+| **Mistral** | **Mistral Large 3** (\`mistral-large-latest\`) | Raisonnement & Architecture |
+| **Kilo** | **step 3.5 flash** | Polyvalent (262K context) |
+| **Kilo** | **free** | Modèle par défaut gratuit |
 
 **Parameters:**
 - runner: Type de runner (claude, gemini, etc.)

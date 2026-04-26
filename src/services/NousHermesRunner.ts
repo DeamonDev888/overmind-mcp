@@ -58,8 +58,26 @@ export class NousHermesRunner {
       NVIDIA_API_BASE: process.env.NVIDIA_API_BASE || 'https://integrate.api.nvidia.com/v1',
       ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
     };
+    const debugLogs: string[] = [];
 
     // --- Isolation / Settings / Prompt ---
+    const overmindHermesPath = path.resolve(process.cwd(), '.overmind', 'hermes', agentName ? `agent_${agentName}` : 'central');
+    const overmindHermesSubPath = path.join(overmindHermesPath, '.hermes');
+    
+    if (!fs.existsSync(overmindHermesSubPath)) {
+      fs.mkdirSync(overmindHermesSubPath, { recursive: true });
+    }
+
+    // On définit l'environnement pour Hermes
+    // IMPORTANT: HERMES_HOME doit pointer vers le dossier contenant config.yaml
+    agentCustomEnv.HERMES_HOME = overmindHermesSubPath;
+    
+    if (process.platform === 'win32') {
+      agentCustomEnv.USERPROFILE = overmindHermesPath;
+    } else {
+      agentCustomEnv.HOME = overmindHermesPath;
+    }
+
     let systemPrompt = '';
     if (agentName) {
       try {
@@ -77,8 +95,8 @@ export class NousHermesRunner {
             availableAgents = files
               .filter((f) => f.startsWith('settings_') && f.endsWith('.json'))
               .map((f) => f.replace('settings_', '').replace('.json', ''));
-          } catch (_e) {
-            /* ignore */
+          } catch (e) {
+            console.error(`[NousHermesRunner] ⚠️ Error reading settings directory: ${e}`);
           }
 
           return {
@@ -94,10 +112,43 @@ export class NousHermesRunner {
         }
 
         const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+        if (!options.model && settings.model) {
+          options.model = settings.model;
+        }
+        if (!options.model && settings.env?.ANTHROPIC_MODEL) {
+          options.model = settings.env.ANTHROPIC_MODEL;
+        }
         if (settings.env) {
           // Fusion intelligente : préserver les clés critiques (API keys)
-          const criticalKeys = ['OPENROUTER_API_KEY', 'NVIDIA_API_KEY', 'NVIDIA_API_BASE', 'OVERMIND_EMBEDDING_KEY'];
+          const criticalKeys = [
+            'OPENROUTER_API_KEY',
+            'NVIDIA_API_KEY',
+            'NVIDIA_API_BASE',
+            'OVERMIND_EMBEDDING_KEY',
+            'OPENAI_API_KEY',
+            'OPENAI_API_BASE',
+            'OPENAI_BASE_URL',
+            'MISTRAL_API_KEY',
+            'MISTRAL_API_KEY_2',
+            'MISTRAL_API_KEY_3',
+            'MISTRAL_API_KEY_4',
+          ];
           const envCopy = { ...settings.env };
+
+          // --- ENV VARIABLE SUBSTITUTION ($VAR_NAME) ---
+          for (const key in envCopy) {
+            const val = envCopy[key];
+            if (typeof val === 'string' && val.startsWith('$')) {
+              const envVarName = val.substring(1);
+              const resolvedVal = agentCustomEnv[envVarName] || process.env[envVarName];
+              if (resolvedVal) {
+                if (!silent) console.error(`[NousHermesRunner] 🔄 Substituted ${key} with ${resolvedVal.substring(0, 4)}...`);
+                debugLogs.push(`🔄 Substituted ${key} with ${resolvedVal.substring(0, 4)}...`);
+                envCopy[key] = resolvedVal;
+              }
+            }
+          }
+
           for (const key of criticalKeys) {
             if (agentCustomEnv[key] && !envCopy[key]) {
               envCopy[key] = agentCustomEnv[key];
@@ -115,20 +166,71 @@ export class NousHermesRunner {
         if (fs.existsSync(agentPromptPath)) {
           systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
         }
+
+        // --- MCP Config Translation (JSON -> YAML for Hermes) ---
+        const agentMcpPath = resolveConfigPath(
+          path.join(path.dirname(settingsDir), `.mcp.${agentName}.json`),
+          options.configPath,
+        );
+
+        if (fs.existsSync(agentMcpPath)) {
+          try {
+            const mcpConfig = JSON.parse(fs.readFileSync(agentMcpPath, 'utf8'));
+            const hermesConfigDir = overmindHermesSubPath;
+            if (!fs.existsSync(hermesConfigDir)) fs.mkdirSync(hermesConfigDir, { recursive: true });
+
+            const mcpJsonPath = path.join(hermesConfigDir, 'mcp.json');
+            const configYamlPath = path.join(hermesConfigDir, 'config.yaml');
+            
+            // Helper pour convertir le format MCP JSON vers le format mcp.json Hermes (identique à Claude Desktop)
+            fs.writeFileSync(mcpJsonPath, JSON.stringify(mcpConfig, null, 2), 'utf8');
+            
+            // Generer aussi config.yaml (format snake_case attendu par Hermes)
+            let yamlContent = 'mcp_servers:\n';
+            for (const [name, server] of Object.entries(mcpConfig.mcpServers || {})) {
+              const s = server as Record<string, unknown>;
+              yamlContent += `  ${name}:\n`;
+              if (s.command) yamlContent += `    command: "${s.command}"\n`;
+              if (s.args && Array.isArray(s.args)) {
+                yamlContent += `    args:\n`;
+                for (const arg of s.args) {
+                  yamlContent += `      - "${String(arg).replace(/"/g, '\\"')}"\n`;
+                }
+              }
+              if (s.env && typeof s.env === 'object') {
+                yamlContent += `    env:\n`;
+                for (const [k, v] of Object.entries(s.env)) {
+                  yamlContent += `      ${k}: "${String(v).replace(/"/g, '\\"')}"\n`;
+                }
+              }
+              if (s.url) yamlContent += `    url: "${s.url}"\n`;
+            }
+            fs.writeFileSync(configYamlPath, yamlContent, 'utf8');
+
+            if (!silent) console.error(`[NousHermesRunner] 🛠️  Hermes configs (mcp.json & config.yaml) generated in ${hermesConfigDir}`);
+          } catch (err) {
+            console.error(`[NousHermesRunner] ❌ Error translating MCP config: ${err}`);
+          }
+        }
       } catch (e) {
         if (e instanceof Error && e.message?.includes('INVALID_AGENT')) throw e;
-        // Silent failing for others
+        console.error(`[NousHermesRunner] ⚠️ Error processing agent settings: ${e}`);
       }
     }
 
-    // --- CLI Arguments ---
+    // --- CLI Arguments & Prompt Handling ---
     const finalPrompt = systemPrompt ? `${systemPrompt}\n\n[USER QUERY]:\n${prompt}` : prompt;
 
     // Nettoyer les sauts de ligne pour l'argument CLI (-q ne supporte pas les \n)
-    // Hermes CLI avec shell:false peut échouer si l'argument contient des \n
     const cliPrompt = finalPrompt.replace(/\n+/g, ' ').trim();
 
-    const cleanArgs = ['chat', '-q', cliPrompt, '--ignore-user-config', '--source', 'tool', '-Q'];
+    // Check command line length (Windows limit 8191)
+    if (cliPrompt.length > 7000) {
+      console.warn(`[NousHermesRunner] ⚠️  Prompt is very long (${cliPrompt.length} chars). This might fail on Windows.`);
+    }
+
+    const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool', '-Q', '-t', 'all,mcp-overmind'];
+    if (!silent) cleanArgs.push('-v');
 
     // --- Model & Provider selection ---
     const DEFAULT_MODEL = 'tencent/hy3-preview:free'; // Modèle OpenRouter gratuit
@@ -137,23 +239,48 @@ export class NousHermesRunner {
     const isNvidiaModel = model.includes('deepseek') || model.includes('nvidia');
     const hasNvidiaKey = !!(agentCustomEnv.NVIDIA_API_KEY || agentCustomEnv.NVAPI_KEY);
 
+    const isOpenAIModel = model.includes('gpt') || model.includes('o1') || model.includes('o3');
+    const hasOpenAIKey = !!agentCustomEnv.OPENAI_API_KEY;
+
+    const isMistralModel = model.includes('mistral') || model.includes('codestral') || model.includes('devstral');
+    const hasMistralKey = !!agentCustomEnv.MISTRAL_API_KEY;
+
     cleanArgs.push('--model', model);
 
-    if (isNvidiaModel && hasNvidiaKey) {
+    if (isOpenAIModel && hasOpenAIKey) {
+      if (!silent) console.error(`[NousHermesRunner] 🤖 Using OpenAI for ${model}`);
+      cleanArgs.push('--provider', 'openai');
+      // Nettoyage des clés conflictuelles
+      delete agentCustomEnv.OPENROUTER_API_KEY;
+      delete agentCustomEnv.NVIDIA_API_KEY;
+      delete agentCustomEnv.NVAPI_KEY;
+
+      // Map OPENAI_BASE_URL if present to OPENAI_API_BASE if needed by some tools
+      if (agentCustomEnv.OPENAI_BASE_URL && !agentCustomEnv.OPENAI_API_BASE) {
+        agentCustomEnv.OPENAI_API_BASE = agentCustomEnv.OPENAI_BASE_URL;
+      }
+    } else if (isMistralModel && hasMistralKey) {
+      if (!silent) console.error(`[NousHermesRunner] 🌪️ Using Mistral for ${model}`);
+      debugLogs.push(`🌪️ Using Mistral provider for ${model}`);
+      cleanArgs.push('--provider', 'mistral');
+      // Nettoyage des clés conflictuelles
+      delete agentCustomEnv.OPENROUTER_API_KEY;
+      delete agentCustomEnv.NVIDIA_API_KEY;
+      delete agentCustomEnv.NVAPI_KEY;
+      delete agentCustomEnv.OPENAI_API_KEY;
+    } else if (isNvidiaModel && hasNvidiaKey) {
       if (!silent) console.error(`[NousHermesRunner] 🎯 Using NVIDIA NIM for ${model}`);
+      debugLogs.push(`🎯 Using NVIDIA NIM for ${model}`);
       cleanArgs.push('--provider', 'nvidia');
     } else {
       // Fallback OpenRouter pour tout le reste ou si clé NIM manquante
       if (!silent) console.error(`[NousHermesRunner] 🌐 Using OpenRouter for ${model}`);
+      debugLogs.push(`🌐 Using OpenRouter for ${model} (isMistral: ${isMistralModel}, hasKey: ${hasMistralKey})`);
       cleanArgs.push('--provider', 'openrouter');
     }
 
     // --- OS Specific Spawn ---
-    const isWin = process.platform === 'win32';
-    const hermesExe =
-      'C:\\Users\\Deamon\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\hermes.exe';
-
-    const spawnCommand = isWin ? hermesExe : 'hermes';
+    const spawnCommand = 'hermes';
 
     if (!silent) {
       console.error(
@@ -162,9 +289,17 @@ export class NousHermesRunner {
     }
 
     return new Promise((resolve) => {
+      let resolved = false;
+      const safeResolve = (value: RunAgentResult) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(value);
+        }
+      };
+
       const child: ChildProcess = spawn(spawnCommand, cleanArgs, {
         cwd: options.cwd || process.cwd(),
-        shell: false, // FALSE: évite le découpage incorrect des arguments avec espaces sur Windows
+        shell: true, // TRUE: permet de résoudre via PATH et gère les wrappers Python/Scripts sur Windows
         windowsHide: true,
         env: agentCustomEnv as NodeJS.ProcessEnv,
       });
@@ -190,25 +325,31 @@ export class NousHermesRunner {
 
       const timeout = setTimeout(() => {
         child.kill();
-        resolve({ result: stdout.trim(), error: 'TIMEOUT', rawOutput: stdout });
+        // Fallback to SIGKILL after 5 seconds if process still running
+        setTimeout(() => {
+          if (!child.killed) {
+            child.kill('SIGKILL');
+          }
+        }, 5000);
+        safeResolve({
+          result: stdout.trim(),
+          error: 'TIMEOUT',
+          rawOutput: stdout + '\n\n' + stderr,
+        });
       }, this.timeoutMs);
 
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
 
         if (code !== 0 && !stdout) {
-          return resolve({
+          return safeResolve({
             result: '',
             error: `EXIT_CODE_${code}`,
             rawOutput: stderr || stdout,
           });
         }
 
-        // --- Session ID extraction ---
-        // If hermes outputs a session ID in its output, we should extract it here.
-        // For now, we'll return the sessionId we had.
-
-        resolve({
+        safeResolve({
           result: stdout.trim(),
           sessionId: sessionId,
           rawOutput: stdout,
@@ -217,7 +358,7 @@ export class NousHermesRunner {
 
       child.on('error', (err: Error) => {
         clearTimeout(timeout);
-        resolve({ result: '', error: err.message, rawOutput: '' });
+        safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
       });
 
       if (child.stdin) {

@@ -12,10 +12,21 @@ export const runHermesSchema = z.object({
   path: z.string().optional(),
   config: z.string().optional(),
   silent: z.boolean().optional().default(false),
-  model: z.string().optional().describe("Le modèle à utiliser. Priorité NVIDIA NIM (ex: deepseek-ai/deepseek-v4-pro) ou OpenRouter (ex: tencent/hy3-preview)"),
+  model: z.string().optional().describe("Le modèle à utiliser. Priorité OpenAI (ex: gpt-4o), NVIDIA NIM (ex: deepseek-ai/deepseek-v4-pro) ou OpenRouter (ex: tencent/hy3-preview)"),
 }).passthrough();
 
+import { verifyInstallation } from '../lib/InstallHelper.js';
+
 export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
+  const { runner: runnerKey } = { runner: 'hermes' }; // Identification
+  const check = await verifyInstallation(runnerKey);
+  if (!check.ok) {
+    return {
+      content: [{ type: 'text' as const, text: check.message || `CLI hermes non installé.` }],
+      isError: true,
+    };
+  }
+
   const runner = new NousHermesRunner();
   const { prompt, agentName, autoResume, sessionId, path: argPath, config: argConfig, silent, model } = args;
   const finalPath = argPath || getWorkspaceDir();
