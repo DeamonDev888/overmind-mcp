@@ -13,7 +13,7 @@ export const runHermesSchema = z.object({
   config: z.string().optional(),
   silent: z.boolean().optional().default(false),
   model: z.string().optional().describe("Le modèle à utiliser. Priorité NVIDIA NIM (ex: deepseek-ai/deepseek-v4-pro) ou OpenRouter (ex: tencent/hy3-preview)"),
-});
+}).passthrough();
 
 export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
   const runner = new NousHermesRunner();

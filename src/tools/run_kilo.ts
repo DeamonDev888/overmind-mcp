@@ -7,27 +7,26 @@ import { deleteSessionId } from '../lib/sessions.js';
 export const runKiloSchema = z.object({
   prompt: z.string().describe("Le prompt à envoyer à l'agent Kilo"),
   mode: z.enum(['code', 'architect', 'ask', 'debug', 'orchestrator']).optional(),
-  sessionId: z.string().optional(),
   agentName: z.string().optional(),
   autoResume: z.boolean().optional().default(false),
   path: z.string().optional(),
   config: z.string().optional(),
   silent: z.boolean().optional().default(false),
-});
+}).passthrough();
 
 export async function runKiloAgent(args: z.infer<typeof runKiloSchema>) {
   const runner = new KiloRunner();
-  const { prompt, agentName, autoResume, sessionId, mode, path: argPath, config: argConfig, silent } = args;
+  const { prompt, agentName, autoResume, mode, path: argPath, config: argConfig, silent } = args;
   const finalPath = argPath || getWorkspaceDir();
   const finalConfig = argConfig || getWorkspaceDir();
 
   const start = Date.now();
-  let result = await runner.runAgent({ prompt, agentName, autoResume, sessionId, mode, cwd: finalPath, configPath: finalConfig, silent });
+  let result = await runner.runAgent({ prompt, agentName, autoResume, mode, cwd: finalPath, configPath: finalConfig, silent });
 
   // Retry if session invalid
   if (result.error?.includes('session') || result.error?.includes('EXIT_CODE_1')) {
     if (agentName) await deleteSessionId(agentName, finalConfig);
-    result = await runner.runAgent({ prompt, agentName, autoResume: false, sessionId: undefined, mode, cwd: finalPath, configPath: finalConfig, silent });
+    result = await runner.runAgent({ prompt, agentName, autoResume: false, mode, cwd: finalPath, configPath: finalConfig, silent });
   }
 
   const durationMs = Date.now() - start;
@@ -49,6 +48,5 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>) {
       { type: 'text' as const, text: result.result },
       ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : []),
     ],
-    sessionId: result.sessionId,
   };
 }
