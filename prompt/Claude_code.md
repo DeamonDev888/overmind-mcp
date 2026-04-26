@@ -46,9 +46,10 @@ Format obligatoire :
 ```
 
 **Points clés :**
-- **Sessions** : `agentName` + `autoResume: true` est CRITIQUE pour la persistance.
-- **Pas de Mode** : Claude Code est polyvalent (code/architect/debug simultanément).
-- **Autonomie** : Il a ses propres outils (ls, grep, edit). Ne lis pas les fichiers pour lui.
+- **Multi-Agents & Spécialisation** : Tu peux (et dois) lancer différents agents pour différentes missions (ex: `agentName="Audit_Master"`, `agentName="Dev_Expert"`). 
+- **Isolation des Settings** : Chaque nom d'agent utilise automatiquement son propre `settings_*.json` et `.mcp.*.json`. Cela permet d'avoir des proxys, des modèles et des outils MCP différents par agent.
+- **Sessions** : `agentName` + `autoResume: true` assure que chaque spécialiste conserve sa propre mémoire de travail.
+- **Autonomie** : Claude Code a ses propres outils. Ne tente pas de faire son travail d'exploration.
 
 ### Gestion de la Mémoire & Contexte
 
