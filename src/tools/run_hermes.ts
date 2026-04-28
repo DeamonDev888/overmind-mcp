@@ -37,7 +37,7 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
 
   // Retry if session invalid
   if (result.error?.includes('session') || result.error?.includes('EXIT_CODE_1')) {
-    if (agentName) await deleteSessionId(agentName, finalConfig);
+    if (agentName) await deleteSessionId(agentName, finalConfig, 'hermes');
     result = await runner.runAgent({ prompt, agentName, autoResume: false, sessionId: undefined, cwd: finalPath, configPath: finalConfig, silent, model });
   }
 

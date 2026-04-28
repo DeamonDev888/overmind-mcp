@@ -3,6 +3,8 @@ import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
+import { interpolateEnvVars } from '../lib/envUtils.js';
+import { PromptManager } from './PromptManager.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -23,13 +25,25 @@ export interface RunAgentResult {
   rawOutput?: string;
 }
 
+const CLAUDE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const MODEL_MAPPING: Record<string, string> = {
   'tencent hy3': 'kilo/tencent/hy3-preview:free',
+  'tencent/hy3-preview:free': 'kilo/tencent/hy3-preview:free',
   'step 3.5 flash': 'kilo/stepfun/step-3.5-flash:free',
   'grok code': 'kilo/x-ai/grok-code-fast-1:optimized:free',
   'grok code fast 1 optimised': 'kilo/x-ai/grok-code-fast-1:optimized:free',
   elephant: 'kilo/openrouter/elephant-alpha',
   free: 'kilo/openrouter/free',
+  'glm': 'ilmu/ilmu-glm-5.1',
+  'ilmu': 'ilmu/ilmu-glm-5.1',
+  'ilmu-glm': 'ilmu/ilmu-glm-5.1',
+  'ilmu-glm-5.1': 'ilmu/ilmu-glm-5.1',
+  'z ai': 'ilmu/ilmu-glm-5.1',
+  'minimax': 'minimax/MiniMax-Text-01',
+  'minimax-text-01': 'minimax/MiniMax-Text-01',
+  'deepseek-reasoner': 'deepseek/deepseek-reasoner',
+  'moonshot-v1-32k': 'moonshot/moonshot-v1-32k',
 };
 
 export class KiloRunner {
@@ -73,9 +87,12 @@ export class KiloRunner {
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName, options.configPath);
+      const lastId = await getLastSessionId(agentName, options.configPath, 'kilo');
       if (lastId) {
         sessionId = lastId;
+        if (!options.silent) {
+          process.stderr.write(`\x1b[33m[Kilo] 📜 Auto-resume session: ${sessionId}\x1b[0m\n`);
+        }
       }
     }
 
@@ -90,13 +107,19 @@ export class KiloRunner {
           options.configPath,
         );
         if (fs.existsSync(agentSettingsPath)) {
-          const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+          let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+          
+          // --- New interpolation logic ---
+          settings = interpolateEnvVars(settings);
+          
           if (settings.env) {
             Object.assign(agentCustomEnv, settings.env);
-            if (settings.env.AGENT_TIMEOUT_MS) {
-              customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
+            if (settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS) {
+              customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS, 10) || customTimeoutMs;
             }
-            if (!model && settings.env.KILO_MODEL) {
+            if (!model && settings.env.MODEL) {
+              selectedModel = settings.env.MODEL;
+            } else if (!model && settings.env.KILO_MODEL) {
               selectedModel = settings.env.KILO_MODEL;
             }
           }
@@ -116,15 +139,28 @@ export class KiloRunner {
     // Build kilo args: kilo run [prompt] [options]
     const argsSpawn: string[] = ['run'];
 
-    // Le prompt est un argument positionnel pour 'run'
-    argsSpawn.push(prompt);
+    let effectivePrompt = prompt;
+    if (agentName) {
+      try {
+        const promptManager = new PromptManager(options.configPath);
+        const persona = await promptManager.getPromptContent(agentName);
+        if (persona) {
+          effectivePrompt = `${persona}\n\n---\n\n${prompt}`;
+        }
+      } catch (_e) {
+        // Persona injection is best-effort
+      }
+    }
+
+    argsSpawn.push(effectivePrompt);
 
     if (mode) {
-      // Dans v7.x, les modes code/architect sont souvent des agents prédéfinis
       argsSpawn.push('--agent', mode);
     }
 
-    // if (sessionId) argsSpawn.push('--session', sessionId);
+    if (sessionId && !CLAUDE_UUID_RE.test(sessionId)) {
+      argsSpawn.push('--session', sessionId);
+    }
     if (selectedModel) argsSpawn.push('--model', selectedModel);
 
     // Required for non-interactive execution
@@ -132,10 +168,18 @@ export class KiloRunner {
     argsSpawn.push('--format', 'json');
 
     if (cwd) {
-      argsSpawn.push('--dir', '.');
+      argsSpawn.push('--dir', cwd);
     }
 
     return new Promise((resolve) => {
+      let resolved = false;
+      const safeResolve = (value: RunAgentResult) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(value);
+        }
+      };
+
       const command = 'kilo';
 
       if (!options.silent) {
@@ -144,7 +188,7 @@ export class KiloRunner {
         );
         process.stderr.write(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m\n`);
         if (mode) process.stderr.write(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m\n`);
-        // if (sessionId) process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
+        if (sessionId && !CLAUDE_UUID_RE.test(sessionId)) process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
 
         process.stderr.write(`\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m\n`);
       }
@@ -169,7 +213,6 @@ export class KiloRunner {
           const chunk = d.toString();
           stdout += chunk;
 
-          // Traitement par ligne pour le format JSON
           const lines = chunk.split('\n');
           for (const line of lines) {
             const trimmedLine = line.trim();
@@ -178,12 +221,10 @@ export class KiloRunner {
             try {
               const event = JSON.parse(trimmedLine);
 
-              // Tracking du sessionID dans n'importe quel event
               if (event.sessionID && !lastSessionId) {
                 lastSessionId = event.sessionID;
               }
 
-              // Kilo v7 JSON events tracking
               if (event.type === 'text' && event.part && event.part.text) {
                 finalResult += event.part.text;
               } else if (event.type === 'message' || event.type === 'reply') {
@@ -194,7 +235,6 @@ export class KiloRunner {
                 stderr += (event.message || JSON.stringify(event)) + '\n';
               }
             } catch (_e) {
-              // Si ce n'est pas du JSON, c'est peut-être du log
               if (!trimmedLine.startsWith('{') && !options.silent) {
                 process.stderr.write(`\x1b[36m[Kilo]\x1b[0m ${trimmedLine}\n`);
               }
@@ -208,7 +248,6 @@ export class KiloRunner {
           const chunk = d.toString();
           stderr += chunk;
 
-          // DÉTECTION QUOTA / EXHAUSTED
           const lowerChunk = chunk.toLowerCase();
           if (
             lowerChunk.includes('quota') ||
@@ -224,17 +263,22 @@ export class KiloRunner {
         });
       }
 
+      let killTimer: NodeJS.Timeout | null = null;
       const timeout = setTimeout(() => {
         child.kill();
-        resolve({ result: finalResult || stdout, error: 'TIMEOUT', rawOutput: stdout });
+        killTimer = setTimeout(() => {
+          if (!child.killed) child.kill('SIGKILL');
+        }, 5000);
+        safeResolve({ result: finalResult || stdout, error: 'TIMEOUT', rawOutput: stdout });
       }, customTimeoutMs);
 
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
+        if (killTimer) clearTimeout(killTimer);
 
         if (code !== 0 && !finalResult && !stdout) {
           process.stderr.write(`\x1b[31m[Kilo] ❌ Échec avec Code: ${code}\x1b[0m\n`);
-          return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr || stdout });
+          return safeResolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr || stdout });
         }
 
         process.stderr.write(
@@ -242,10 +286,10 @@ export class KiloRunner {
         );
 
         if (agentName && lastSessionId) {
-          await saveSessionId(agentName, lastSessionId, options.configPath);
+          await saveSessionId(agentName, lastSessionId, options.configPath, 'kilo');
         }
 
-        resolve({
+        safeResolve({
           result: finalResult || stdout.trim(),
           sessionId: lastSessionId,
           rawOutput: stdout,
@@ -254,7 +298,8 @@ export class KiloRunner {
 
       child.on('error', (err: Error) => {
         clearTimeout(timeout);
-        resolve({ result: '', error: err.message, rawOutput: '' });
+        if (killTimer) clearTimeout(killTimer);
+        safeResolve({ result: '', error: err.message, rawOutput: '' });
       });
 
       if (child.stdin) {

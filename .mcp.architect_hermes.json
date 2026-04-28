@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "overmind": {
-      "command": "node",
-      "args": ["C:/Users/Deamon/Desktop/Backup/Serveur MCP/Workflow/dist/bin/cli.js"]
-    }
-  }
-}

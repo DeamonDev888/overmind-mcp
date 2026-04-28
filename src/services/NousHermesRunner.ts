@@ -3,6 +3,7 @@ import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId } from '../lib/sessions.js';
+import { interpolateEnvVars } from '../lib/envUtils.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -35,7 +36,7 @@ export class NousHermesRunner {
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName, options.configPath);
+      const lastId = await getLastSessionId(agentName, options.configPath, 'hermes');
       if (lastId) {
         sessionId = lastId;
       }
@@ -133,21 +134,10 @@ export class NousHermesRunner {
             'MISTRAL_API_KEY_3',
             'MISTRAL_API_KEY_4',
           ];
-          const envCopy = { ...settings.env };
-
+          let envCopy = { ...settings.env };
+          
           // --- ENV VARIABLE SUBSTITUTION ($VAR_NAME) ---
-          for (const key in envCopy) {
-            const val = envCopy[key];
-            if (typeof val === 'string' && val.startsWith('$')) {
-              const envVarName = val.substring(1);
-              const resolvedVal = agentCustomEnv[envVarName] || process.env[envVarName];
-              if (resolvedVal) {
-                if (!silent) console.error(`[NousHermesRunner] 🔄 Substituted ${key} with ${resolvedVal.substring(0, 4)}...`);
-                debugLogs.push(`🔄 Substituted ${key} with ${resolvedVal.substring(0, 4)}...`);
-                envCopy[key] = resolvedVal;
-              }
-            }
-          }
+          envCopy = interpolateEnvVars(envCopy);
 
           for (const key of criticalKeys) {
             if (agentCustomEnv[key] && !envCopy[key]) {
