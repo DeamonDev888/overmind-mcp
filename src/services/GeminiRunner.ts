@@ -3,6 +3,7 @@ import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
+import { interpolateEnvVars } from '../lib/envUtils.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -44,7 +45,7 @@ export class GeminiRunner {
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName, options.configPath);
+      const lastId = await getLastSessionId(agentName, options.configPath, 'gemini');
       if (lastId) {
         sessionId = lastId;
       }
@@ -130,7 +131,10 @@ export class GeminiRunner {
       );
 
       if (fs.existsSync(agentSettingsPath)) {
-        const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+        let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+
+        // --- New interpolation logic ---
+        settings = interpolateEnvVars(settings);
 
         if (settings.env) {
           Object.assign(agentCustomEnv, settings.env);
@@ -263,7 +267,7 @@ export class GeminiRunner {
             const newSessionId = (jsonOutput.session_id as string) || sessionId;
             
             if (newSessionId && agentName) {
-              await saveSessionId(agentName, newSessionId, options.configPath);
+              await saveSessionId(agentName, newSessionId, options.configPath, 'gemini');
             }
             
             return safeResolve({

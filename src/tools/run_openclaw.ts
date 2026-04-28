@@ -25,7 +25,7 @@ export async function runOpenClawAgent(args: z.infer<typeof runOpenClawSchema>) 
 
   // Retry if session invalid
   if (result.error?.includes('session') || result.error?.includes('EXIT_CODE_1')) {
-    if (agentName) await deleteSessionId(agentName, finalConfig);
+    if (agentName) await deleteSessionId(agentName, finalConfig, 'openclaw');
     result = await runner.runAgent({ prompt, agentName, autoResume: false, sessionId: undefined, cwd: finalPath, configPath: finalConfig, silent });
   }
 

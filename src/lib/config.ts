@@ -43,8 +43,8 @@ export const DEFAULT_CONFIG: ConfigType = {
     },
   },
   KILO: {
-    CORE: '--auto --json-io',
-    DEFAULT_MODEL: 'kilo/tencent/hy3-preview:free',
+    CORE: '--auto',
+    DEFAULT_MODEL: 'ilmu/ilmu-glm-5.1',
     PATHS: {
       SETTINGS: './.kilocode/settings.json',
     },

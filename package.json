@@ -31,7 +31,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "check-types": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run rebuild"
   },
   "keywords": [
     "mcp",

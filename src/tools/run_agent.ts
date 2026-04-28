@@ -13,16 +13,20 @@ export const runAgentSchema = z.object({
   runner: z
     .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
     .describe('Type de runner a utiliser'),
-  prompt: z.string().describe("Le prompt a envoyer a l'agent"),
+  prompt: z.string().min(1, 'prompt vide interdit').describe("Le prompt a envoyer a l'agent"),
   sessionId: z.string().optional().describe('Session ID'),
-  agentName: z.string().optional().describe("Nom de l'agent"),
+  agentName: z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]+$/, "agentName ne doit contenir que des caractères alphanumériques, tirets ou underscores")
+    .optional()
+    .describe("Nom de l'agent"),
   autoResume: z
     .boolean()
     .optional()
     .default(false)
     .describe('Auto resume session'),
   mode: z
-    .enum(['code', 'architect', 'ask', 'debug', 'orchestrator', 'plan', 'act'])
+    .string()
     .optional()
     .describe('Mode specifique'),
   path: z
@@ -42,7 +46,33 @@ export const runAgentSchema = z.object({
     .string()
     .optional()
     .describe("Nom du modèle. Pour Hermes : priorité OpenAI ou NVIDIA. Pour Kilo (gratuits) : 'tencent/hy3-preview:free' ou 'step 3.5 flash'."),
-}).passthrough();
+}).passthrough().superRefine((v, ctx) => {
+  const RUNNER_MODES: Record<string, readonly string[] | undefined> = {
+    kilo:    ['code', 'architect', 'ask', 'debug', 'orchestrator'],
+    cline:   ['plan', 'act'],
+    claude:  undefined,
+    gemini:  undefined,
+    qwencli: undefined,
+    openclaw: undefined,
+    opencode: undefined,
+    hermes:  undefined,
+  };
+  const allowed = RUNNER_MODES[v.runner];
+  if (v.mode && allowed && !allowed.includes(v.mode)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['mode'],
+      message: `mode "${v.mode}" non supporté par runner "${v.runner}". Autorisés : ${allowed.join('|')}`,
+    });
+  }
+  if (v.mode && !allowed) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['mode'],
+      message: `runner "${v.runner}" n'accepte pas de mode`,
+    });
+  }
+});
 
 import { verifyInstallation } from '../lib/InstallHelper.js';
 
