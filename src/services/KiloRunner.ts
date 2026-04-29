@@ -114,6 +114,10 @@ export class KiloRunner {
           
           if (settings.env) {
             Object.assign(agentCustomEnv, settings.env);
+            // Kilo uses OPENAI_API_BASE, not the Anthropic SDK.
+            // Remove ANTHROPIC_BASE_URL so polyglot agents (Claude + Kilo)
+            // don't accidentally redirect Kilo to a Claude-provider endpoint.
+            delete agentCustomEnv['ANTHROPIC_BASE_URL'];
             if (settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS) {
               customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS, 10) || customTimeoutMs;
             }
