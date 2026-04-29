@@ -133,6 +133,9 @@ export class NousHermesRunner {
             'MISTRAL_API_KEY_2',
             'MISTRAL_API_KEY_3',
             'MISTRAL_API_KEY_4',
+            'MISTRAL_API_KEY_5',
+            'MISTRAL_API_KEY_6',
+            'MISTRAL_API_KEY_7',
           ];
           let envCopy = { ...settings.env };
           

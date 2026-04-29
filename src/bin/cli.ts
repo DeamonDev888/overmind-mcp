@@ -28,61 +28,113 @@ function loadEnvQuietly(envPath: string) {
   }
 }
 
-// 🪄 Auto-formatteur de .env (Classifie sans rien effacer)
+// 🪄 Auto-formatteur de .env — Classifie tous les providers connus, préserve les valeurs
 function autoFormatEnvFile(envPath: string) {
   try {
     if (!fs.existsSync(envPath)) return;
     const content = fs.readFileSync(envPath, 'utf8');
-    
+
+    // Parser robuste : ignore commentaires, lit les lignes KEY=VALUE (valeur peut contenir '=')
     const envVars: Record<string, string> = {};
-    content.split('\n').forEach(line => {
-      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-      if (match) envVars[match[1]] = match[2];
-    });
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const value = trimmed.slice(eqIdx + 1).trim();
+      if (key) envVars[key] = value;
+    }
 
     if (Object.keys(envVars).length === 0) return;
 
     const usedKeys = new Set<string>();
-    
-    function extract(prefix: string | string[], exactMatch = false) {
+
+    // Tri naturel pour les clés avec suffixes numériques (KEY, KEY_2, KEY_3…)
+    function naturalSort(pairs: [string, string][]): [string, string][] {
+      return pairs.sort((a, b) =>
+        a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' }),
+      );
+    }
+
+    function extract(prefix: string | string[], exactMatch = false): [string, string][] {
       const res: [string, string][] = [];
       const prefixes = Array.isArray(prefix) ? prefix : [prefix];
       for (const key of Object.keys(envVars)) {
         if (usedKeys.has(key)) continue;
-        const matches = exactMatch ? prefixes.includes(key) : prefixes.some(p => key.startsWith(p));
+        const matches = exactMatch
+          ? prefixes.includes(key)
+          : prefixes.some(p => key.startsWith(p));
         if (matches) {
           res.push([key, envVars[key]]);
           usedKeys.add(key);
         }
       }
-      return res.sort((a, b) => a[0].localeCompare(b[0]));
+      return naturalSort(res);
     }
 
-    const sections = [
-      { title: "🌐 OVERMIND CORE & INFRASTRUCTURE", vars: extract(["OVERMIND_WORKSPACE", "OVERMIND_MEMORY_TYPE"], true) },
-      { title: "⚙️ GLOBAL SETTINGS", vars: extract(["API_TIMEOUT_MS"], true) },
-      { title: "🗄️ DATABASE CONFIGURATION (PostgreSQL)", vars: extract("POSTGRES_") },
-      { title: "🧠 EMBEDDINGS & VECTOR MEMORY", vars: extract("OVERMIND_EMBEDDING_") },
-      { title: "🤖 LLM PROVIDER - Mistral AI", vars: extract("MISTRAL_") },
-      { title: "🤖 LLM PROVIDER - OpenAI", vars: extract("OPENAI_") },
-      { title: "🤖 LLM PROVIDER - NVIDIA NIM", vars: extract("NVAPI_") },
-      { title: "🤖 LLM PROVIDER - Minimax", vars: extract("MINIMAXI_") },
-      { title: "🤖 LLM PROVIDER - Ilmu AI", vars: extract("Z_AI_") },
-      { title: "🤖 LLM PROVIDER - Anthropic", vars: extract("ANTHROPIC_") },
-      { title: "🤖 LLM PROVIDER - DeepSeek", vars: extract("DEEPSEEK_") },
-      { title: "🤖 LLM PROVIDER - SiliconFlow", vars: extract("SILICONFLOW_") },
-      { title: "🤖 LLM PROVIDER - Alibaba (DashScope)", vars: extract("ALIBABA_") }
+    // ─── SECTIONS ──────────────────────────────────────────────────────────────
+    const sections: { title: string; vars: [string, string][] }[] = [
+      // ── Overmind Infrastructure ──
+      { title: "🌐 OVERMIND CORE & INFRASTRUCTURE",      vars: extract(["OVERMIND_WORKSPACE", "OVERMIND_MEMORY_TYPE"], true) },
+      { title: "⚙️  GLOBAL SETTINGS",                    vars: extract(["API_TIMEOUT_MS"], true) },
+      { title: "🗄️  DATABASE (PostgreSQL / pgvector)",    vars: extract("POSTGRES_") },
+      { title: "🧠 EMBEDDINGS & VECTOR MEMORY",           vars: extract("OVERMIND_EMBEDDING_") },
+
+      // ── LLM Providers (Europe / USA) ──
+      { title: "🤖 LLM PROVIDER - Mistral AI 🇫🇷",       vars: extract("MISTRAL_") },
+      { title: "🤖 LLM PROVIDER - OpenAI 🇺🇸",            vars: extract("OPENAI_") },
+      { title: "🤖 LLM PROVIDER - Anthropic 🇺🇸",         vars: extract("ANTHROPIC_") },
+      { title: "🤖 LLM PROVIDER - Google Gemini 🇺🇸",     vars: extract(["GEMINI_API_KEY", "GEMINI_MODEL", "GOOGLE_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"], true) },
+      { title: "🤖 LLM PROVIDER - NVIDIA NIM 🇺🇸",        vars: [...extract(["NVAPI_KEY", "NVIDIA_API_KEY", "NVIDIA_API_BASE"], true), ...extract("NVIDIA_")] },
+      { title: "🤖 LLM PROVIDER - OpenRouter 🇺🇸",        vars: extract(["OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OPENROUTER_MODEL"], true) },
+      { title: "🤖 LLM PROVIDER - xAI / Grok 🇺🇸",       vars: extract(["XAI_API_KEY", "XAI_BASE_URL", "GROK_API_KEY", "GROK_MODEL"], true) },
+      { title: "🤖 LLM PROVIDER - Groq 🇺🇸",              vars: extract("GROQ_") },
+      { title: "🤖 LLM PROVIDER - Together AI 🇺🇸",       vars: extract("TOGETHER_") },
+      { title: "🤖 LLM PROVIDER - Cohere 🇺🇸",            vars: extract("COHERE_") },
+      { title: "🤖 LLM PROVIDER - Replicate 🇺🇸",         vars: extract("REPLICATE_") },
+      { title: "🤖 LLM PROVIDER - HuggingFace 🇺🇸",       vars: extract(["HUGGINGFACE_API_KEY", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"], true) },
+      { title: "🤖 LLM PROVIDER - Perplexity 🇺🇸",        vars: extract("PERPLEXITY_") },
+      { title: "🤖 LLM PROVIDER - SambaNova 🇺🇸",         vars: extract("SAMBANOVA_") },
+      { title: "🤖 LLM PROVIDER - Azure OpenAI ☁️",       vars: extract(["AZURE_API_KEY", "AZURE_API_BASE", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_VERSION"], true) },
+      { title: "🤖 LLM PROVIDER - ElevenLabs 🎙️",        vars: extract(["ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_MODEL_ID"], true) },
+      { title: "🤖 LLM PROVIDER - AWS Bedrock ☁️",        vars: extract(["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_REGION", "AWS_DEFAULT_REGION", "AWS_ENDPOINT_URL"], true) },
+
+      // ── LLM Providers (Chine / Asie) ──
+      { title: "🤖 LLM PROVIDER - DeepSeek 🇨🇳",          vars: extract("DEEPSEEK_") },
+      { title: "🤖 LLM PROVIDER - Alibaba DashScope 🇨🇳",  vars: extract("ALIBABA_") },
+      { title: "🤖 LLM PROVIDER - Qwen (DashScope) 🇨🇳",   vars: extract(["QWEN_API_KEY", "QWEN_BASE_URL", "QWEN_MODEL", "DASHSCOPE_API_KEY", "DASHSCOPE_BASE_URL"], true) },
+      { title: "🤖 LLM PROVIDER - SiliconFlow 🇨🇳",        vars: extract("SILICONFLOW_") },
+      { title: "🤖 LLM PROVIDER - Minimax 🇨🇳",            vars: [...extract("MINIMAXI_"), ...extract("MINIMAX_")] },
+      { title: "🤖 LLM PROVIDER - Ilmu AI / Z.AI 🇨🇳",    vars: extract("Z_AI_") },
+      { title: "🤖 LLM PROVIDER - Moonshot / Kimi 🇨🇳",    vars: extract(["MOONSHOT_API_KEY", "MOONSHOT_BASE_URL", "MOONSHOT_MODEL", "KIMI_API_KEY"], true) },
+      { title: "🤖 LLM PROVIDER - Baidu / ERNIE 🇨🇳",      vars: extract(["BAIDU_API_KEY", "ERNIE_API_KEY", "WENXIN_API_KEY"], true) },
+      { title: "🤖 LLM PROVIDER - ZhipuAI / GLM 🇨🇳",      vars: [...extract(["ZHIPU_API_KEY", "GLM_API_KEY"], true), ...extract("ZHIPUAI_")] },
+
+      // ── Services & Intégrations ──
+      { title: "💬 SERVICE - Discord",                    vars: extract(["DISCORD_TOKEN", "DISCORD_BOT_TOKEN", "DISCORD_CHANNEL_ID", "DISCORD_GUILD_ID", "DISCORD_WEBHOOK_URL", "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"], true) },
+      { title: "🐦 SERVICE - Twitter / X",                vars: extract(["TWITTER_API_KEY", "TWITTER_API_SECRET", "TWITTER_ACCESS_TOKEN", "TWITTER_ACCESS_SECRET", "TWITTER_BEARER_TOKEN", "X_API_KEY", "X_BEARER_TOKEN", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"], true) },
+      { title: "📱 SERVICE - Telegram",                   vars: extract(["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"], true) },
+      { title: "📱 SERVICE - Twilio / SMS",               vars: extract(["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "TWILIO_API_KEY", "TWILIO_API_SECRET"], true) },
+      { title: "🐙 SERVICE - GitHub",                     vars: extract(["GITHUB_TOKEN", "GITHUB_API_KEY", "GH_TOKEN", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"], true) },
+      { title: "▲ SERVICE - Vercel",                      vars: extract(["VERCEL_TOKEN", "VERCEL_API_TOKEN", "VERCEL_PROJECT_ID", "VERCEL_ORG_ID", "VERCEL_TEAM_ID"], true) },
+      { title: "🔺 SERVICE - Supabase",                   vars: extract(["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_JWT_SECRET"], true) },
+      { title: "🎮 SERVICE - Riot Games",                 vars: extract(["RIOT_API_KEY", "RIOT_REGION"], true) },
+      { title: "🔍 SERVICE - Search (Serper/Tavily)",     vars: extract(["SERPER_API_KEY", "TAVILY_API_KEY", "SERPAPI_KEY", "BRAVE_SEARCH_API_KEY"], true) },
+      { title: "📰 SERVICE - Market Data & News",         vars: extract(["FINNHUB_API_KEY", "NEWSAPI_KEY", "ALPHAVANTAGE_API_KEY", "POLYGON_API_KEY", "TIINGO_API_KEY"], true) },
     ];
 
+    // Clés restantes non classifiées → section fourre-tout
     const uncategorized: [string, string][] = [];
     for (const key of Object.keys(envVars)) {
       if (!usedKeys.has(key)) uncategorized.push([key, envVars[key]]);
     }
     if (uncategorized.length > 0) {
-      sections.push({ title: "📁 AUTRES / NON-CLASSIFIÉS", vars: uncategorized.sort((a, b) => a[0].localeCompare(b[0])) });
+      sections.push({ title: "📁 AUTRES / NON-CLASSIFIÉS", vars: naturalSort(uncategorized) });
     }
 
-    let newContent = "";
+    // ─── RENDU ──────────────────────────────────────────────────────────────────
+    let newContent = '';
     for (const section of sections) {
       if (section.vars.length > 0) {
         newContent += `# ==========================================\n`;
@@ -95,14 +147,15 @@ function autoFormatEnvFile(envPath: string) {
       }
     }
 
-    // On évite d'écrire sur le disque si le fichier est déjà parfaitement formaté (optimisation)
+    // N'écrire sur le disque que si quelque chose a changé (optimisation I/O)
     if (content.trim() !== newContent.trim()) {
-        fs.writeFileSync(envPath, newContent.trim() + '\n', 'utf8');
+      fs.writeFileSync(envPath, newContent.trim() + '\n', 'utf8');
     }
-  } catch (e) {
-    // Ignore error silently to not crash the boot
+  } catch (_e) {
+    // Ignorer silencieusement pour ne pas crasher le boot
   }
 }
+
 
 const localEnvPath = path.resolve(__dirname, '../../.env');
 
@@ -117,7 +170,7 @@ try {
       fs.appendFileSync(localEnvPath, `\nOVERMIND_WORKSPACE=${workspacePath}\n`, 'utf8');
     }
   }
-} catch (e) {
+} catch (_e) {
   // Ignorer l'erreur silencieusement
 }
 

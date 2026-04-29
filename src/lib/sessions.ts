@@ -36,13 +36,6 @@ async function purgeExpired(sessions: Record<string, SessionEntry | string>): Pr
   return changed ? purged : sessions;
 }
 
-function normalizeToEntry(val: SessionEntry | string | null | undefined): SessionEntry | null {
-  if (!val) return null;
-  if (typeof val === 'string') {
-    return { id: val, ts: Date.now() };
-  }
-  return val;
-}
 
 function extractId(val: SessionEntry | string | null | undefined): string | null {
   if (!val) return null;

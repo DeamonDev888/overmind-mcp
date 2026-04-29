@@ -46,7 +46,7 @@ export const DEFAULT_CONFIG: ConfigType = {
     CORE: '--auto',
     DEFAULT_MODEL: 'step 3.5 flash',
     PATHS: {
-      SETTINGS: './.kilocode/settings.json',
+      SETTINGS: './.claude/settings.json',
     },
   },
   HERMES: {
