@@ -1,0 +1,29 @@
+{
+  "env": {
+    "ANTHROPIC_MODEL": "mistral/devstral-medium-latest",
+    "ANTHROPIC_AUTH_TOKEN": "your_anthropic_token_here",
+    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-sonnet-4-6",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-7",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
+    "API_TIMEOUT_MS": "900000",
+    "agent": "mistral_4",
+    "MISTRAL_API_KEY": "$MISTRAL_API_KEY_5",
+    "OPENAI_API_BASE": "https://api.mistral.ai/v1",
+    "OPENAI_API_KEY": "8fdrHDxEIALzkFL7VYWXrRwfBLgPs7Gw"
+  },
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": [
+    "postgresql-server",
+    "discord-server",
+    "sms-server",
+    "x-mcp-server",
+    "overmind",
+    "memory",
+    "news-server",
+    "news-btc-server",
+    "debats-mcp-server"
+  ],
+  "agent": "mistral_4",
+  "runner": "kilo"
+}
