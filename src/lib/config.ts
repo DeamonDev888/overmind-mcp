@@ -44,7 +44,7 @@ export const DEFAULT_CONFIG: ConfigType = {
   },
   KILO: {
     CORE: '--auto',
-    DEFAULT_MODEL: 'ilmu/ilmu-glm-5.1',
+    DEFAULT_MODEL: 'step 3.5 flash',
     PATHS: {
       SETTINGS: './.kilocode/settings.json',
     },
