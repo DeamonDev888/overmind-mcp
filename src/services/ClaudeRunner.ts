@@ -3,12 +3,14 @@ import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
+import { interpolateEnvVars } from '../lib/envUtils.js';
 
 export interface RunAgentOptions {
   prompt: string;
   agentName?: string;
   sessionId?: string;
   autoResume?: boolean;
+  model?: string;
   cwd?: string;
   configPath?: string;
   silent?: boolean;
@@ -36,11 +38,18 @@ export class ClaudeRunner {
     const { CORE, PERMISSIONS, PATHS } = this.config;
     const agentCustomEnv: Record<string, string> = {};
 
+    if (agentName) {
+      agentCustomEnv.OVERMIND_AGENT_NAME = agentName;
+    }
+
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName, options.configPath);
+      const lastId = await getLastSessionId(agentName, options.configPath, 'claude');
       if (lastId) {
         sessionId = lastId;
+        if (!options.silent) {
+          console.log(`[ClaudeRunner] Auto-resume session: ${sessionId}`);
+        }
       }
     }
 
@@ -64,6 +73,7 @@ export class ClaudeRunner {
 
     let mcpPath = resolveConfigPath(PATHS.MCP, options.configPath);
     let tmpMcpPathToDelete: string | null = null;
+    let tmpSettingsPathToDelete: string | null = null;
     let customTimeoutMs = this.timeoutMs;
 
     if (agentName) {
@@ -73,13 +83,28 @@ export class ClaudeRunner {
           options.configPath,
         );
         if (fs.existsSync(agentSettingsPath)) {
-          const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+          let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+
+          // --- New interpolation logic ---
+          settings = interpolateEnvVars(settings);
+
+          // 1. Create a temporary settings file with interpolated values
+          const tmpSettingsPath = path.join(
+            path.dirname(agentSettingsPath),
+            `settings_${agentName}_tmp.json`,
+          );
+          fs.writeFileSync(tmpSettingsPath, JSON.stringify(settings, null, 2));
+          settingsPath = tmpSettingsPath;
+          tmpSettingsPathToDelete = tmpSettingsPath;
 
           if (settings.env) {
             Object.assign(agentCustomEnv, settings.env);
             if (settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS) {
               const timeoutValue = settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS;
               customTimeoutMs = parseInt(timeoutValue, 10) || customTimeoutMs;
+            }
+            if (!options.model && settings.env.MODEL) {
+              agentCustomEnv.ANTHROPIC_MODEL = settings.env.MODEL;
             }
           }
 
@@ -128,7 +153,9 @@ export class ClaudeRunner {
 
     if (sessionId) argsSpawn.push('--resume', sessionId);
 
-    if (agentCustomEnv.ANTHROPIC_MODEL) {
+    if (options.model) {
+      argsSpawn.push('--model', options.model);
+    } else if (agentCustomEnv.ANTHROPIC_MODEL) {
       argsSpawn.push('--model', agentCustomEnv.ANTHROPIC_MODEL);
     }
     if (agentName) argsSpawn.push('--name', agentName);
@@ -144,8 +171,15 @@ export class ClaudeRunner {
 
       const cleanupTmpFiles = () => {
         if (tmpMcpPathToDelete && fs.existsSync(tmpMcpPathToDelete)) {
-          try { 
-            fs.unlinkSync(tmpMcpPathToDelete); 
+          try {
+            fs.unlinkSync(tmpMcpPathToDelete);
+          } catch {
+            // Ignored
+          }
+        }
+        if (tmpSettingsPathToDelete && fs.existsSync(tmpSettingsPathToDelete)) {
+          try {
+            fs.unlinkSync(tmpSettingsPathToDelete);
           } catch {
             // Ignored
           }
@@ -176,14 +210,16 @@ export class ClaudeRunner {
         child.stdout.on('data', (d: Buffer) => {
           const chunk = d.toString();
           stdout += chunk;
-          if (agentName && !options.silent) process.stderr.write(`[ClaudeRunner:${agentName}] ${chunk}`);
+          if (agentName && !options.silent)
+            process.stderr.write(`[ClaudeRunner:${agentName}] ${chunk}`);
         });
       }
       if (child.stderr) {
         child.stderr.on('data', (d: Buffer) => {
           const chunk = d.toString();
           stderr += chunk;
-          if (agentName && !options.silent) process.stderr.write(`[ClaudeRunner:${agentName}:ERR] ${chunk}`);
+          if (agentName && !options.silent)
+            process.stderr.write(`[ClaudeRunner:${agentName}:ERR] ${chunk}`);
         });
       }
 
@@ -238,11 +274,12 @@ export class ClaudeRunner {
             let foundSessionId = sessionId;
             if (jsonEnvelope.session_id && agentName) {
               foundSessionId = jsonEnvelope.session_id as string;
-              await saveSessionId(agentName, jsonEnvelope.session_id as string, options.configPath);
+              await saveSessionId(agentName, jsonEnvelope.session_id as string, options.configPath, 'claude');
             }
 
             return safeResolve({
-              result: (jsonEnvelope.reply as string) || (jsonEnvelope.result as string) || stdout.trim(),
+              result:
+                (jsonEnvelope.reply as string) || (jsonEnvelope.result as string) || stdout.trim(),
               sessionId: foundSessionId,
               rawOutput: stdout,
             });

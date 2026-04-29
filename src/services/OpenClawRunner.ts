@@ -3,6 +3,7 @@ import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
+import { interpolateEnvVars } from '../lib/envUtils.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -37,7 +38,7 @@ export class OpenClawRunner {
 
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
-      const lastId = await getLastSessionId(agentName, options.configPath);
+      const lastId = await getLastSessionId(agentName, options.configPath, 'openclaw');
       if (lastId) {
         sessionId = lastId;
       }
@@ -53,7 +54,11 @@ export class OpenClawRunner {
           options.configPath
         );
         if (fs.existsSync(agentSettingsPath)) {
-          const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+          let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+          
+          // --- New interpolation logic ---
+          settings = interpolateEnvVars(settings);
+          
           if (settings.env && settings.env.AGENT_TIMEOUT_MS) {
             customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
           }
@@ -99,7 +104,7 @@ export class OpenClawRunner {
         }
 
         if (agentName && sessionId) {
-          await saveSessionId(agentName, sessionId, options.configPath);
+          await saveSessionId(agentName, sessionId, options.configPath, 'openclaw');
         }
 
         resolve({

@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
 import { getMemoryProvider } from '../memory/MemoryFactory.js';
+import { interpolateEnvVars } from '../lib/envUtils.js';
 
 export interface AgentConfigUpdates {
   model?: string;
@@ -56,7 +57,11 @@ export class AgentManager {
       const settingsPath = path.join(this.claudeDir, `settings_${agentName}.json`);
       try {
         const settingsContent = await fs.readFile(settingsPath, 'utf-8');
-        const settings = JSON.parse(settingsContent);
+        let settings = JSON.parse(settingsContent);
+        
+        // --- New interpolation logic ---
+        settings = interpolateEnvVars(settings);
+        
         const model = settings.env?.ANTHROPIC_MODEL || settings.model || 'settings-default';
         const runner = settings.runner || 'claude';
         const servers = settings.enabledMcpjsonServers || [];
