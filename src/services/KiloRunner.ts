@@ -44,6 +44,7 @@ const MODEL_MAPPING: Record<string, string> = {
   'minimax-text-01': 'minimax/MiniMax-Text-01',
   'deepseek-reasoner': 'deepseek/deepseek-reasoner',
   'moonshot-v1-32k': 'moonshot/moonshot-v1-32k',
+  'devstral': 'mistral/devstral-medium-latest',
 };
 
 export class KiloRunner {
@@ -121,15 +122,36 @@ export class KiloRunner {
             if (settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS) {
               customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS, 10) || customTimeoutMs;
             }
-            if (!model && settings.env.MODEL) {
+            if (!model && settings.model) {
+              selectedModel = settings.model;
+              if (!options.silent) {
+                process.stderr.write(`\x1b[35m[Kilo:Debug] model from settings: ${selectedModel}\x1b[0m\n`);
+              }
+            } else if (!model && settings.env.MODEL) {
               selectedModel = settings.env.MODEL;
+              if (!options.silent) {
+                process.stderr.write(`\x1b[35m[Kilo:Debug] MODEL from env: ${selectedModel}\x1b[0m\n`);
+              }
             } else if (!model && settings.env.KILO_MODEL) {
               selectedModel = settings.env.KILO_MODEL;
+              if (!options.silent) {
+                process.stderr.write(`\x1b[35m[Kilo:Debug] KILO_MODEL from env: ${selectedModel}\x1b[0m\n`);
+              }
+            } else if (!model && settings.env.ANTHROPIC_MODEL) {
+              selectedModel = settings.env.ANTHROPIC_MODEL;
+              if (!options.silent) {
+                process.stderr.write(`\x1b[35m[Kilo:Debug] ANTHROPIC_MODEL from env: ${selectedModel}\x1b[0m\n`);
+              }
+            }
+            if (!options.silent) {
+              process.stderr.write(`\x1b[35m[Kilo:Debug] Final selectedModel (pre-mapping): ${selectedModel} (model arg was: ${model})\x1b[0m\n`);
             }
           }
         }
       } catch (_e) {
-        // silent
+        if (!options.silent) {
+          process.stderr.write(`\x1b[31m[Kilo:Debug] Error loading agent settings: ${_e}\x1b[0m\n`);
+        }
       }
     }
 

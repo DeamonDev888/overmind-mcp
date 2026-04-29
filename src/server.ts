@@ -1,5 +1,6 @@
 import { FastMCP } from 'fastmcp';
 import { runAgent, runAgentSchema } from './tools/run_agent.js';
+import { runAgentsParallel, runAgentsParallelSchema } from './tools/run_agents_parallel.js';
 import { memorySearchTool, memorySearchSchema } from './tools/memory_search.js';
 import { memoryStoreTool, memoryStoreSchema } from './tools/memory_store.js';
 import { memoryRunsTool, memoryRunsSchema } from './tools/memory_runs.js';
@@ -66,8 +67,28 @@ run_agent(runner: "cline", agentName: "planner", mode: "plan", prompt: "Planifie
     execute: runAgent,
   });
 
+  // ─── OUTIL PARALLÈLE MULTI-AGENTS ──────────────────────────────────────────
+  server.addTool({
+    name: 'run_agents_parallel',
+    description: `🚀 Lance plusieurs agents IA EN PARALLÈLE depuis un seul appel MCP. Polyglotte (mixe runners/modèles). Retourne les résultats consolidés une fois tous terminés.
 
-  // ─── GESTION DES AGENTS ───────────────────────────────────────────────────────
+**Cas d'usage :** Orchestration de flotte, rotation de tokens, tâches indépendantes simultanées.
+
+**Exemple :**
+run_agents_parallel(agents: [
+  { taskId: "build",  runner: "kilo", agentName: "mistral_1", prompt: "npm run build", path: "./project" },
+  { taskId: "lint",   runner: "kilo", agentName: "mistral_2", prompt: "npm run lint",  path: "./project" },
+  { taskId: "test",   runner: "kilo", agentName: "mistral_3", prompt: "npm test",      path: "./project" },
+  { taskId: "audit",  runner: "kilo", agentName: "mistral_4", prompt: "Analyse le fichier audit.md", path: "./project" },
+])
+
+**Options :**
+- waitAll (défaut: true) : attend tous les agents avant de retourner.
+- waitAll: false : retourne dès que le premier agent réussit (race mode).`,
+    parameters: runAgentsParallelSchema,
+    execute: runAgentsParallel,
+  });
+
 
   // Outil : Créer un nouvel agent (tous runners supportés)
   server.addTool({
