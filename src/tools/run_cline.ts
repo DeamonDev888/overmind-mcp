@@ -26,7 +26,7 @@ export async function runClineAgent(args: z.infer<typeof runClineSchema>) {
 
   // Retry if session invalid
   if (result.error?.includes('session') || result.error?.includes('EXIT_CODE_1')) {
-    if (agentName) await deleteSessionId(agentName, finalConfig);
+    if (agentName) await deleteSessionId(agentName, finalConfig, 'cline');
     result = await runner.runAgent({ prompt, agentName, autoResume: false, sessionId: undefined, mode, cwd: finalPath, configPath: finalConfig, silent });
   }
 

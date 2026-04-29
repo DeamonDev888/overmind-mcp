@@ -18,6 +18,7 @@ export const runClaudeSchema = z.object({
     .describe(
       'Si true (et agentName fourni), reprend automatiquement la dernière conversation de cet agent',
     ),
+  model: z.string().optional().describe("Modèle à utiliser (override env.ANTHROPIC_MODEL)"),
   path: z.string().optional().describe("Répertoire de travail"),
   config: z.string().optional().describe("Répertoire racine Overmind"),
   silent: z.boolean().optional().default(false).describe("Mode silencieux"),
@@ -29,25 +30,24 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
   sessionId?: string;
 }> {
   const runner = new ClaudeRunner();
-  const { prompt, agentName, autoResume, sessionId, path: argPath, config: argConfig, silent } = args;
+  const { prompt, agentName, autoResume, sessionId, model, path: argPath, config: argConfig, silent } = args;
 
   const finalPath = argPath || getWorkspaceDir();
   const finalConfig = argConfig || getWorkspaceDir();
 
   const start = Date.now();
   
-  // Tentative initiale
   let result = await runner.runAgent({ 
     prompt, 
     agentName, 
     autoResume, 
     sessionId,
+    model,
     cwd: finalPath,
     configPath: finalConfig,
     silent
   });
 
-  // [RETRY LOGIC] - Moved from run_agent.ts to here
   if (result.error?.includes('No conversation found') ||
       result.error?.includes('session') ||
       result.error?.includes('EXIT_CODE_1') ||
@@ -57,9 +57,8 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
       console.warn(`[run_claude] Session invalide ou erreur JSON, création nouvelle session...`);
     }
     
-    // Supprimer la session corrompue si agentName est présent
     if (agentName) {
-      await deleteSessionId(agentName, finalConfig);
+      await deleteSessionId(agentName, finalConfig, 'claude');
     }
 
     result = await runner.runAgent({
@@ -67,6 +66,7 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
       agentName,
       autoResume: false,
       sessionId: undefined,
+      model,
       cwd: finalPath,
       configPath: finalConfig,
       silent,
@@ -91,7 +91,7 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
     // Memory store is secondary, don't crash if it fails
   }
 
-  if (result.error === 'INVALID_AGENT') {
+  if (result.error?.startsWith('INVALID_AGENT')) {
     return {
       content: [{ type: 'text' as const, text: `❌ Agent '${agentName}' introuvable.` }],
       isError: true,
