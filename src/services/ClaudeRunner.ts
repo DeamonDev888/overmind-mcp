@@ -4,6 +4,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
+import { resolveModel } from '../lib/modelMapping.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -21,6 +22,8 @@ export interface RunAgentResult {
   sessionId?: string;
   error?: string;
   rawOutput?: string;
+  model?: string;      // resolved real model ID (e.g. 'claude-opus-4-7')
+  nickname?: string;   // original value from config (e.g. 'The Data Alchemist')
 }
 
 export class ClaudeRunner {
@@ -151,13 +154,22 @@ export class ClaudeRunner {
     argsSpawn.push('--mcp-config', mcpPath);
     argsSpawn.push('--output-format', 'json');
 
+    let modelUsed = options.model;
+    if (!modelUsed && agentCustomEnv.ANTHROPIC_MODEL) {
+      modelUsed = agentCustomEnv.ANTHROPIC_MODEL;
+    }
+
+    // Remember original value (nickname or raw model) for display
+    const originalModel = modelUsed ?? '';
+
+    // Resolve nickname → real model ID before calling the API
+    if (modelUsed) {
+      modelUsed = resolveModel(modelUsed);
+    }
+
     if (sessionId) argsSpawn.push('--resume', sessionId);
 
-    if (options.model) {
-      argsSpawn.push('--model', options.model);
-    } else if (agentCustomEnv.ANTHROPIC_MODEL) {
-      argsSpawn.push('--model', agentCustomEnv.ANTHROPIC_MODEL);
-    }
+    if (modelUsed) argsSpawn.push('--model', modelUsed);
     if (agentName) argsSpawn.push('--name', agentName);
 
     return new Promise((resolve) => {
@@ -282,6 +294,8 @@ export class ClaudeRunner {
                 (jsonEnvelope.reply as string) || (jsonEnvelope.result as string) || stdout.trim(),
               sessionId: foundSessionId,
               rawOutput: stdout,
+              model: modelUsed ?? undefined,
+              nickname: originalModel !== modelUsed ? originalModel : undefined,
             });
           }
 
@@ -290,6 +304,8 @@ export class ClaudeRunner {
               result: stdout.trim(),
               sessionId,
               rawOutput: stdout,
+              model: modelUsed ?? undefined,
+              nickname: originalModel !== modelUsed ? originalModel : undefined,
             });
           }
 

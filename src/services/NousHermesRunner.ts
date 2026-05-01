@@ -4,6 +4,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
+import { resolveKiloModel } from '../lib/modelMapping.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -21,6 +22,8 @@ export interface RunAgentResult {
   sessionId?: string;
   error?: string;
   rawOutput?: string;
+  model?: string;      // resolved real model ID
+  nickname?: string;   // original value from config (if different)
 }
 
 export class NousHermesRunner {
@@ -222,17 +225,25 @@ export class NousHermesRunner {
       console.warn(`[NousHermesRunner] ⚠️  Prompt is very long (${cliPrompt.length} chars). This might fail on Windows.`);
     }
 
-    const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool', '-Q', '-t', 'all,mcp-overmind'];
+    // En version 0.11.0, on simplifie pour éviter les erreurs d'arguments
+    const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool', '-Q'];
     if (!silent) cleanArgs.push('-v');
 
     // --- Model & Provider selection ---
     const DEFAULT_MODEL = 'tencent/hy3-preview:free'; // Modèle OpenRouter gratuit
-    const model = options.model || DEFAULT_MODEL;
+    const originalModel = options.model || DEFAULT_MODEL;
+    const model = resolveKiloModel(originalModel);
 
     const isNvidiaModel = model.includes('deepseek') || model.includes('nvidia');
     const hasNvidiaKey = !!(agentCustomEnv.NVIDIA_API_KEY || agentCustomEnv.NVAPI_KEY);
 
-    const isOpenAIModel = model.includes('gpt') || model.includes('o1') || model.includes('o3');
+    const lowModel = model.toLowerCase();
+    const isOpenAIModel = 
+      lowModel.includes('gpt') || 
+      lowModel.includes('o1') || 
+      lowModel.includes('o3') || 
+      lowModel.includes('minimax') || 
+      lowModel.includes('glm');
     const hasOpenAIKey = !!agentCustomEnv.OPENAI_API_KEY;
 
     const isMistralModel = model.includes('mistral') || model.includes('codestral') || model.includes('devstral');
@@ -273,7 +284,7 @@ export class NousHermesRunner {
     }
 
     // --- OS Specific Spawn ---
-    const spawnCommand = 'hermes';
+    const spawnCommand = 'C:\\Users\\Deamon\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\hermes.exe';
 
     if (!silent) {
       console.error(
@@ -328,6 +339,8 @@ export class NousHermesRunner {
           result: stdout.trim(),
           error: 'TIMEOUT',
           rawOutput: stdout + '\n\n' + stderr,
+          model,
+          nickname: originalModel !== model ? originalModel : undefined,
         });
       }, this.timeoutMs);
 
@@ -339,6 +352,8 @@ export class NousHermesRunner {
             result: '',
             error: `EXIT_CODE_${code}`,
             rawOutput: stderr || stdout,
+            model,
+            nickname: originalModel !== model ? originalModel : undefined,
           });
         }
 
@@ -346,6 +361,8 @@ export class NousHermesRunner {
           result: stdout.trim(),
           sessionId: sessionId,
           rawOutput: stdout,
+          model,
+          nickname: originalModel !== model ? originalModel : undefined,
         });
       });
 

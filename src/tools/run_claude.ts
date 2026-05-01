@@ -106,6 +106,8 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
     content: [
       { type: 'text' as const, text: result.result },
       ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : []),
+      ...(result.model ? [{ type: 'text' as const, text: `MODEL: ${result.model}` }] : []),
+      ...(result.nickname ? [{ type: 'text' as const, text: `USING: ${result.nickname}` }] : []),
     ],
     sessionId: result.sessionId,
   };

@@ -61,6 +61,7 @@
     "@eslint/js": "^9.39.4",
     "@types/node": "^22.19.17",
     "@types/pg": "^8.20.0",
+    "@types/pino": "^7.0.5",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.5.0",
@@ -75,6 +76,9 @@
     "fastmcp": "^3.35.0",
     "overmind-postgres-mcp": "^1.1.6",
     "pg": "^8.20.0",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "pino-roll": "^2.2.0",
     "zod": "^4.3.6"
   }
 }
