@@ -5,6 +5,7 @@ import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { PromptManager } from './PromptManager.js';
+import { resolveKiloModel } from '../lib/modelMapping.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -23,29 +24,11 @@ export interface RunAgentResult {
   sessionId?: string;
   error?: string;
   rawOutput?: string;
+  model?: string;      // resolved real model ID (e.g. 'minimax/MiniMax-Text-01')
+  nickname?: string;   // original value from config (e.g. 'mini-max-m2.7-highspeed')
 }
 
 const CLAUDE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const MODEL_MAPPING: Record<string, string> = {
-  'tencent hy3': 'kilo/tencent/hy3-preview:free',
-  'tencent/hy3-preview:free': 'kilo/tencent/hy3-preview:free',
-  'step 3.5 flash': 'kilo/stepfun/step-3.5-flash:free',
-  'grok code': 'kilo/x-ai/grok-code-fast-1:optimized:free',
-  'grok code fast 1 optimised': 'kilo/x-ai/grok-code-fast-1:optimized:free',
-  elephant: 'kilo/openrouter/elephant-alpha',
-  free: 'kilo/openrouter/free',
-  'glm': 'ilmu/ilmu-glm-5.1',
-  'ilmu': 'ilmu/ilmu-glm-5.1',
-  'ilmu-glm': 'ilmu/ilmu-glm-5.1',
-  'ilmu-glm-5.1': 'ilmu/ilmu-glm-5.1',
-  'z ai': 'ilmu/ilmu-glm-5.1',
-  'minimax': 'minimax/MiniMax-Text-01',
-  'minimax-text-01': 'minimax/MiniMax-Text-01',
-  'deepseek-reasoner': 'deepseek/deepseek-reasoner',
-  'moonshot-v1-32k': 'moonshot/moonshot-v1-32k',
-  'devstral': 'mistral/devstral-medium-latest',
-};
 
 export class KiloRunner {
   private config: typeof CONFIG.KILO;
@@ -99,6 +82,7 @@ export class KiloRunner {
 
     let customTimeoutMs = this.timeoutMs;
     let selectedModel = model || DEFAULT_MODEL;
+    const originalModel = selectedModel;
 
     // --- Isolation ---
     if (agentName) {
@@ -155,12 +139,8 @@ export class KiloRunner {
       }
     }
 
-    // Apply mapping
-    if (MODEL_MAPPING[selectedModel]) {
-      selectedModel = MODEL_MAPPING[selectedModel];
-    } else if (model && MODEL_MAPPING[model]) {
-      selectedModel = MODEL_MAPPING[model];
-    }
+    // Apply mapping using shared resolver
+    selectedModel = resolveKiloModel(selectedModel);
 
     // Build kilo args: kilo run [prompt] [options]
     const argsSpawn: string[] = ['run'];
@@ -319,6 +299,8 @@ export class KiloRunner {
           result: finalResult || stdout.trim(),
           sessionId: lastSessionId,
           rawOutput: stdout,
+          model: selectedModel,
+          nickname: originalModel !== selectedModel ? originalModel : undefined,
         });
       });
 

@@ -209,22 +209,37 @@ function checkMissingConfigs() {
 }
 checkMissingConfigs();
 
-// Suppress experimental warnings (like node:sqlite) to avoid breaking MCP handshake
-process.removeAllListeners('warning');
+import { rootLogger } from '../lib/logger.js';
 
 // 💥 ERROR HANDLING: Catch everything to avoid silent EOFs
 process.on('uncaughtException', (err) => {
-  console.error('💥 UNCAUGHT EXCEPTION:', err);
+  rootLogger.fatal({ err }, '💥 UNCAUGHT EXCEPTION');
+  rootLogger.flush();
+  process.exit(1);
 });
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
+  rootLogger.fatal({ reason, promise }, '💥 UNHANDLED REJECTION');
+  rootLogger.flush();
+});
+
+// Ensure logs are flushed on exit
+process.on('SIGINT', () => {
+  rootLogger.info('🛑 Received SIGINT, flushing logs...');
+  rootLogger.flush();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  rootLogger.info('🛑 Received SIGTERM, flushing logs...');
+  rootLogger.flush();
+  process.exit(0);
 });
 
 // 🛡️ SHIELD: Prevent any library from logging to stdout during initialization
 // This is critical for MCP servers because any non-JSON output on stdout kills the handshake (EOF).
-console.log = (...args) => console.error(...args);
-console.info = (...args) => console.error(...args);
-console.warn = (...args) => console.error(...args);
+console.log = (...args) => rootLogger.info(args.length > 1 ? { args } : args[0]);
+console.info = (...args) => rootLogger.info(args.length > 1 ? { args } : args[0]);
+console.warn = (...args) => rootLogger.warn(args.length > 1 ? { args } : args[0]);
+console.error = (...args) => rootLogger.error(args.length > 1 ? { args } : args[0]);
 
 // 🛡️ ULTIMATE SHIELD: Proxy process.stdout.write to redirect non-JSON data to stderr
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
@@ -247,7 +262,8 @@ process.stdout.write = function (
     return originalStdoutWrite(chunk, encoding as BufferEncoding, callback);
   }
 
-  // Redirect everything else to stderr
+  // Redirect everything else to stderr (via Pino)
+  rootLogger.debug({ raw: trimmed }, 'Intercepted STDOUT write');
   return process.stderr.write(chunk, encoding as BufferEncoding, callback);
 } as typeof process.stdout.write;
 
@@ -274,6 +290,6 @@ if (settingsPath || mcpPath) {
 }
 
 const server = createServer();
-console.error(`[Overmind] 🚀 Démarrage du serveur...`);
+rootLogger.info('[Overmind] 🚀 Démarrage du serveur...');
 server.start({ transportType: 'stdio' });
-console.error(`[Overmind] ✅ Serveur prêt sur STDIO.`);
+rootLogger.info('[Overmind] ✅ Serveur prêt sur STDIO.');
