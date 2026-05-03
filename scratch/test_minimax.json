@@ -1,0 +1,10 @@
+{
+  "model": "mini-max-m2.7-highspeed",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello"
+    }
+  ],
+  "max_tokens": 10
+}

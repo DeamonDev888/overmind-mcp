@@ -22,8 +22,8 @@ export interface RunAgentResult {
   sessionId?: string;
   error?: string;
   rawOutput?: string;
-  model?: string;      // resolved real model ID (e.g. 'claude-opus-4-7')
-  nickname?: string;   // original value from config (e.g. 'The Data Alchemist')
+  model?: string; // resolved real model ID (e.g. 'claude-opus-4-7')
+  nickname?: string; // original value from config (e.g. 'The Data Alchemist')
 }
 
 export class ClaudeRunner {
@@ -142,7 +142,7 @@ export class ClaudeRunner {
           }
         }
       } catch (e) {
-        console.error(`[ClaudeRunner] ⚠️ Error processing agent settings: ${e}`);
+        console.error(`[ClaudeRunner] [WARN] Error processing agent settings: ${e}`);
       }
     }
 
@@ -237,29 +237,53 @@ export class ClaudeRunner {
 
       if (child.stdin) {
         child.stdin.write(prompt);
-        child.stdin.end();
+        child.stdin.end(); // IMPORTANT: Claude CLI needs EOF to start processing in -p mode
       }
 
       let killTimer: NodeJS.Timeout | null = null;
+      let hardTimeoutTimer: NodeJS.Timeout | null = null;
+
       const timeout = setTimeout(() => {
-        child.kill();
-        killTimer = setTimeout(() => {
-          if (!child.killed) child.kill('SIGKILL');
-        }, 5000);
-        cleanupTmpFiles();
-        safeResolve({ result: '', error: 'TIMEOUT', rawOutput: stdout + stderr });
+        // 1. Send keep-alive input (\n)
+        if (child.stdin && !child.stdin.destroyed) {
+          try {
+            child.stdin.write('\n');
+            if (!options.silent) {
+              process.stderr.write(
+                `\n\x1b[33m[ClaudeRunner] [WARN] Agent stagnant (${customTimeoutMs}ms). Envoi d'un keep-alive (\\n)...\x1b[0m\n`,
+              );
+            }
+          } catch (_e) {
+            // Ignore write errors if stdin closed in the meantime
+          }
+        }
+
+        // 2. Schedule HARD timeout (default +1 minute)
+        const hardTimeoutDelay = CONFIG.HARD_TIMEOUT_MS || 60000;
+        hardTimeoutTimer = setTimeout(() => {
+          child.kill();
+          killTimer = setTimeout(() => {
+            if (!child.killed) child.kill('SIGKILL');
+          }, 5000);
+          cleanupTmpFiles();
+          safeResolve({ result: '', error: 'HARD_TIMEOUT', rawOutput: stdout + stderr });
+        }, hardTimeoutDelay);
       }, customTimeoutMs);
 
-      child.on('error', (err: Error) => {
+      const clearAllTimers = () => {
         clearTimeout(timeout);
+        if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
         if (killTimer) clearTimeout(killTimer);
+      };
+
+      child.on('error', (err: Error) => {
+        clearAllTimers();
         cleanupTmpFiles();
         safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
       });
 
       child.on('close', async (code: number | null) => {
-        clearTimeout(timeout);
-        if (killTimer) clearTimeout(killTimer);
+        clearAllTimers();
         cleanupTmpFiles();
 
         const fullRaw = stdout + (stderr ? `\n\n--- STDERR ---\n${stderr}` : '');
@@ -286,7 +310,12 @@ export class ClaudeRunner {
             let foundSessionId = sessionId;
             if (jsonEnvelope.session_id && agentName) {
               foundSessionId = jsonEnvelope.session_id as string;
-              await saveSessionId(agentName, jsonEnvelope.session_id as string, options.configPath, 'claude');
+              await saveSessionId(
+                agentName,
+                jsonEnvelope.session_id as string,
+                options.configPath,
+                'claude',
+              );
             }
 
             return safeResolve({

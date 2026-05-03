@@ -16,14 +16,14 @@ export const runAgentsParallelSchema = z.object({
     .min(1, 'Au moins un agent requis.')
     .max(10, 'Maximum 10 agents en parallèle.')
     .describe(
-      "Liste des agents à lancer en parallèle. Chaque entrée est un appel run_agent complet (runner, prompt, agentName, model, path, mode…)."
+      'Liste des agents à lancer en parallèle. Chaque entrée est un appel run_agent complet (runner, prompt, agentName, model, path, mode…).',
     ),
   waitAll: z
     .boolean()
     .optional()
     .default(true)
     .describe(
-      "Si true (défaut), attend que TOUS les agents terminent avant de retourner le résultat. Si false, retourne dès que le premier réussit."
+      'Si true (défaut), attend que TOUS les agents terminent avant de retourner le résultat. Si false, retourne dès que le premier réussit.',
     ),
 });
 
@@ -45,13 +45,12 @@ export async function runAgentsParallel(args: z.infer<typeof runAgentsParallelSc
       const elapsed = ((Date.now() - taskStart) / 1000).toFixed(1);
 
       // Extrait le texte du résultat
-      const text =
-        Array.isArray(result?.content)
-          ? result.content
-              .filter((c: { type: string }) => c.type === 'text')
-              .map((c: { text: string }) => c.text)
-              .join('\n')
-          : String(result);
+      const text = Array.isArray(result?.content)
+        ? result.content
+            .filter((c: { type: string }) => c.type === 'text')
+            .map((c: { text: string }) => c.text)
+            .join('\n')
+        : String(result);
 
       return {
         label,
@@ -76,7 +75,7 @@ export async function runAgentsParallel(args: z.infer<typeof runAgentsParallelSc
   });
 
   // Attendre tous les résultats ou le premier succès
-  let results: Awaited<typeof promises[number]>[];
+  let results: Awaited<(typeof promises)[number]>[];
 
   if (waitAll) {
     // Promise.allSettled : on attend tous, même si certains échouent
@@ -101,13 +100,13 @@ export async function runAgentsParallel(args: z.infer<typeof runAgentsParallelSc
 
   // ─── Résumé formaté ────────────────────────────────────────────────────────
   const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  const successCount = results.filter(r => r.status === 'success').length;
-  const errorCount = results.filter(r => r.status === 'error').length;
+  const successCount = results.filter((r) => r.status === 'success').length;
+  const errorCount = results.filter((r) => r.status === 'error').length;
 
   const summary = [
     `⚡ run_agents_parallel — ${results.length} agent(s) | ✅ ${successCount} succès | ❌ ${errorCount} erreurs | 🕐 ${totalElapsed}s total`,
     '',
-    ...results.map(r => {
+    ...results.map((r) => {
       const icon = r.status === 'success' ? '✅' : '❌';
       const header = `${icon} [${r.label}] ${r.runner}${r.agentName ? `/${r.agentName}` : ''} (${r.elapsed})`;
       return `${header}\n${r.result}`;
@@ -115,9 +114,7 @@ export async function runAgentsParallel(args: z.infer<typeof runAgentsParallelSc
   ].join('\n---\n');
 
   return {
-    content: [
-      { type: 'text' as const, text: summary },
-    ],
+    content: [{ type: 'text' as const, text: summary }],
     isError: errorCount === results.length, // Erreur globale seulement si TOUS ont échoué
   };
 }

@@ -13,7 +13,7 @@ async function dumpRecent() {
   try {
     await client.connect();
     console.log('--- 🛡️ DUMP DES DERNIERS VERDICTS DE COMBAT ---');
-    
+
     const verdicts = await client.query(`
       SELECT * FROM combat_verdicts 
       ORDER BY id DESC 
@@ -38,7 +38,6 @@ async function dumpRecent() {
       LIMIT 5
     `);
     console.table(gaps.rows);
-
   } catch (err) {
     console.error('❌ ERREUR:', err);
   } finally {

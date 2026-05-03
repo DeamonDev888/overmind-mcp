@@ -16,22 +16,55 @@ export const runGeminiSchema = z.object({
 
 export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
   const runner = new GeminiRunner();
-  const { prompt, agentName, autoResume, sessionId, path: argPath, config: argConfig, silent } = args;
+  const {
+    prompt,
+    agentName,
+    autoResume,
+    sessionId,
+    path: argPath,
+    config: argConfig,
+    silent,
+  } = args;
   const finalPath = argPath || getWorkspaceDir();
   const finalConfig = argConfig || getWorkspaceDir();
 
   const start = Date.now();
-  let result = await runner.runAgent({ prompt, agentName, autoResume, sessionId, cwd: finalPath, configPath: finalConfig, silent });
+  let result = await runner.runAgent({
+    prompt,
+    agentName,
+    autoResume,
+    sessionId,
+    cwd: finalPath,
+    configPath: finalConfig,
+    silent,
+  });
 
   // Retry if session invalid
   if (result.error?.includes('session') || result.error?.includes('EXIT_CODE_1')) {
     if (agentName) await deleteSessionId(agentName, finalConfig, 'gemini');
-    result = await runner.runAgent({ prompt, agentName, autoResume: false, sessionId: undefined, cwd: finalPath, configPath: finalConfig, silent });
+    result = await runner.runAgent({
+      prompt,
+      agentName,
+      autoResume: false,
+      sessionId: undefined,
+      cwd: finalPath,
+      configPath: finalConfig,
+      silent,
+    });
   }
 
   const durationMs = Date.now() - start;
   try {
-    await storeRun({ runner: 'gemini', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
+    await storeRun({
+      runner: 'gemini',
+      agentName,
+      prompt,
+      result: result.result,
+      error: result.error,
+      durationMs,
+      success: !result.error,
+      sessionId: result.sessionId,
+    });
   } catch (_e) {
     // Memory store is secondary
   }
@@ -44,14 +77,18 @@ export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
   }
 
   if (result.error) {
-    return { content: [{ type: 'text' as const, text: `❌ Erreur Gemini: ${result.error}` }], isError: true };
+    return {
+      content: [{ type: 'text' as const, text: `❌ Erreur Gemini: ${result.error}` }],
+      isError: true,
+    };
   }
 
   return {
     content: [
       { type: 'text' as const, text: result.result },
-      ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : []),
+      ...(result.sessionId
+        ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }]
+        : []),
     ],
-    sessionId: result.sessionId,
   };
 }

@@ -10,7 +10,7 @@ const workspace = getWorkspaceDir();
 console.log('Resolved Workspace Dir:', workspace);
 
 if (workspace.toLowerCase().includes('workflow')) {
-    console.error('❌ ERROR: Workspace resolved to Workflow subdirectory instead of Root!');
+  console.error('❌ ERROR: Workspace resolved to Workflow subdirectory instead of Root!');
 } else {
-    console.log('✅ SUCCESS: Workspace resolved to Root.');
+  console.log('✅ SUCCESS: Workspace resolved to Root.');
 }

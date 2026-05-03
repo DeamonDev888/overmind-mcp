@@ -24,8 +24,8 @@ export interface RunAgentResult {
   sessionId?: string;
   error?: string;
   rawOutput?: string;
-  model?: string;      // resolved real model ID (e.g. 'minimax/MiniMax-Text-01')
-  nickname?: string;   // original value from config (e.g. 'mini-max-m2.7-highspeed')
+  model?: string; // resolved real model ID (e.g. 'minimax/MiniMax-Text-01')
+  nickname?: string; // original value from config (e.g. 'mini-max-m2.7-highspeed')
 }
 
 const CLAUDE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -75,7 +75,9 @@ export class KiloRunner {
       if (lastId) {
         sessionId = lastId;
         if (!options.silent) {
-          process.stderr.write(`\x1b[33m[Kilo] 📜 Auto-resume session: ${sessionId}\x1b[0m\n`);
+          process.stderr.write(
+            `\x1b[33m[Kilo] [SESSION] Auto-resume session: ${sessionId}\x1b[0m\n`,
+          );
         }
       }
     }
@@ -93,42 +95,54 @@ export class KiloRunner {
         );
         if (fs.existsSync(agentSettingsPath)) {
           let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
-          
+
           // --- New interpolation logic ---
           settings = interpolateEnvVars(settings);
-          
+
           if (settings.env) {
             Object.assign(agentCustomEnv, settings.env);
             // Kilo uses OPENAI_API_BASE, not the Anthropic SDK.
             // Remove ANTHROPIC_BASE_URL so polyglot agents (Claude + Kilo)
             // don't accidentally redirect Kilo to a Claude-provider endpoint.
-            delete agentCustomEnv['ANTHROPIC_BASE_URL'];
+            delete agentCustomEnv['ANTHROPIC_BASE_URL']; // Allow custom base URL for Anthropic-compatible providers like Minimax
             if (settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS) {
-              customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS, 10) || customTimeoutMs;
+              customTimeoutMs =
+                parseInt(settings.env.AGENT_TIMEOUT_MS || settings.env.API_TIMEOUT_MS, 10) ||
+                customTimeoutMs;
             }
             if (!model && settings.model) {
               selectedModel = settings.model;
               if (!options.silent) {
-                process.stderr.write(`\x1b[35m[Kilo:Debug] model from settings: ${selectedModel}\x1b[0m\n`);
+                process.stderr.write(
+                  `\x1b[35m[Kilo:Debug] model from settings: ${selectedModel}\x1b[0m\n`,
+                );
               }
             } else if (!model && settings.env.MODEL) {
               selectedModel = settings.env.MODEL;
               if (!options.silent) {
-                process.stderr.write(`\x1b[35m[Kilo:Debug] MODEL from env: ${selectedModel}\x1b[0m\n`);
+                process.stderr.write(
+                  `\x1b[35m[Kilo:Debug] MODEL from env: ${selectedModel}\x1b[0m\n`,
+                );
               }
             } else if (!model && settings.env.KILO_MODEL) {
               selectedModel = settings.env.KILO_MODEL;
               if (!options.silent) {
-                process.stderr.write(`\x1b[35m[Kilo:Debug] KILO_MODEL from env: ${selectedModel}\x1b[0m\n`);
+                process.stderr.write(
+                  `\x1b[35m[Kilo:Debug] KILO_MODEL from env: ${selectedModel}\x1b[0m\n`,
+                );
               }
             } else if (!model && settings.env.ANTHROPIC_MODEL) {
               selectedModel = settings.env.ANTHROPIC_MODEL;
               if (!options.silent) {
-                process.stderr.write(`\x1b[35m[Kilo:Debug] ANTHROPIC_MODEL from env: ${selectedModel}\x1b[0m\n`);
+                process.stderr.write(
+                  `\x1b[35m[Kilo:Debug] ANTHROPIC_MODEL from env: ${selectedModel}\x1b[0m\n`,
+                );
               }
             }
             if (!options.silent) {
-              process.stderr.write(`\x1b[35m[Kilo:Debug] Final selectedModel (pre-mapping): ${selectedModel} (model arg was: ${model})\x1b[0m\n`);
+              process.stderr.write(
+                `\x1b[35m[Kilo:Debug] Final selectedModel (pre-mapping): ${selectedModel} (model arg was: ${model})\x1b[0m\n`,
+              );
             }
           }
         }
@@ -194,9 +208,12 @@ export class KiloRunner {
         );
         process.stderr.write(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m\n`);
         if (mode) process.stderr.write(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m\n`);
-        if (sessionId && !CLAUDE_UUID_RE.test(sessionId)) process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
+        if (sessionId && !CLAUDE_UUID_RE.test(sessionId))
+          process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
 
-        process.stderr.write(`\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m\n`);
+        process.stderr.write(
+          `\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m\n`,
+        );
       }
       const child: ChildProcess = spawn(command, argsSpawn, {
         cwd: options.cwd || process.cwd(),
@@ -261,7 +278,9 @@ export class KiloRunner {
             lowerChunk.includes('rate limit') ||
             chunk.includes('429')
           ) {
-            process.stderr.write(`\n\x1b[41m\x1b[37m[Kilo ALERT] QUOTA ATTEINT / MODÈLE ÉPUISÉ\x1b[0m\n`);
+            process.stderr.write(
+              `\n\x1b[41m\x1b[37m[Kilo ALERT] QUOTA ATTEINT / MODÈLE ÉPUISÉ\x1b[0m\n`,
+            );
             process.stderr.write(`\x1b[31m[Détail] ${chunk.trim()}\x1b[0m\n`);
           } else if (!options.silent) {
             process.stderr.write(`\x1b[31m[Kilo STDERR]\x1b[0m ${chunk}`);
@@ -270,21 +289,49 @@ export class KiloRunner {
       }
 
       let killTimer: NodeJS.Timeout | null = null;
+      let hardTimeoutTimer: NodeJS.Timeout | null = null;
+
       const timeout = setTimeout(() => {
-        child.kill();
-        killTimer = setTimeout(() => {
-          if (!child.killed) child.kill('SIGKILL');
-        }, 5000);
-        safeResolve({ result: finalResult || stdout, error: 'TIMEOUT', rawOutput: stdout });
+        // 1. Send keep-alive input (\n)
+        if (child.stdin && !child.stdin.destroyed) {
+          try {
+            child.stdin.write('\n');
+            if (!options.silent) {
+              process.stderr.write(
+                `\n\x1b[33m[Kilo] [WARN] Agent stagnant (${customTimeoutMs}ms). Envoi d'un keep-alive (\\n)...\x1b[0m\n`,
+              );
+            }
+          } catch (_e) {
+            // ignore
+          }
+        }
+
+        // 2. Schedule HARD timeout
+        const hardTimeoutDelay = CONFIG.HARD_TIMEOUT_MS || 60000;
+        hardTimeoutTimer = setTimeout(() => {
+          child.kill();
+          killTimer = setTimeout(() => {
+            if (!child.killed) child.kill('SIGKILL');
+          }, 5000);
+          safeResolve({ result: finalResult || stdout, error: 'HARD_TIMEOUT', rawOutput: stdout });
+        }, hardTimeoutDelay);
       }, customTimeoutMs);
 
-      child.on('close', async (code: number | null) => {
+      const clearAllTimers = () => {
         clearTimeout(timeout);
+        if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
         if (killTimer) clearTimeout(killTimer);
+      };
 
+      child.on('close', async (code: number | null) => {
+        clearAllTimers();
         if (code !== 0 && !finalResult && !stdout) {
           process.stderr.write(`\x1b[31m[Kilo] ❌ Échec avec Code: ${code}\x1b[0m\n`);
-          return safeResolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr || stdout });
+          return safeResolve({
+            result: '',
+            error: `EXIT_CODE_${code}`,
+            rawOutput: stderr || stdout,
+          });
         }
 
         process.stderr.write(
@@ -305,13 +352,12 @@ export class KiloRunner {
       });
 
       child.on('error', (err: Error) => {
-        clearTimeout(timeout);
-        if (killTimer) clearTimeout(killTimer);
+        clearAllTimers();
         safeResolve({ result: '', error: err.message, rawOutput: '' });
       });
 
       if (child.stdin) {
-        child.stdin.end();
+        // child.stdin.end(); // Keep open for keep-alive
       }
     });
   }

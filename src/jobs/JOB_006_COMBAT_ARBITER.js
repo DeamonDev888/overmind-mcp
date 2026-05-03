@@ -35,8 +35,8 @@ async function runAudit() {
       GROUP BY action
     `);
     console.table(convictionRes.rows);
-    
-    const overflow = convictionRes.rows.filter(r => r.max_conf > 20);
+
+    const overflow = convictionRes.rows.filter((r) => r.max_conf > 20);
     if (overflow.length > 0) {
       console.warn('⚠️ ANOMALIE: Scores de confiance hors plage [0-20] détectés !');
     }
@@ -71,9 +71,8 @@ async function runAudit() {
     console.log('\n--- 🎯 CONCLUSION ---');
     const healthScore = execGap > 0 ? 78 : 100;
     console.log(`HEALTH SCORE: ${healthScore}/100`);
-    
   } catch (err) {
-    console.error('❌ ERREUR LORS DE L\'AUDIT:', err);
+    console.error("❌ ERREUR LORS DE L'AUDIT:", err);
   } finally {
     await client.end();
   }

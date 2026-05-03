@@ -9,75 +9,54 @@ import { runOpenCodeAgent } from './run_opencode.js';
 import { runHermesAgent } from './run_hermes.js';
 
 // Schema unified for all runners
-export const runAgentSchema = z.object({
-  runner: z
-    .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
-    .describe('Type de runner a utiliser'),
-  prompt: z.string().min(1, 'prompt vide interdit').describe("Le prompt a envoyer a l'agent"),
-  sessionId: z.string().optional().describe('Session ID'),
-  agentName: z
-    .string()
-    .regex(/^[a-zA-Z0-9_-]+$/, "agentName ne doit contenir que des caractères alphanumériques, tirets ou underscores")
-    .optional()
-    .describe("Nom de l'agent"),
-  autoResume: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Auto resume session'),
-  mode: z
-    .string()
-    .optional()
-    .describe('Mode specifique'),
-  path: z
-    .string()
-    .optional()
-    .describe("Working directory"),
-  config: z
-    .string()
-    .optional()
-    .describe("Config directory"),
-  silent: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Silent mode'),
-  model: z
-    .string()
-    .optional()
-    .describe("Nom du modèle. Pour Hermes : priorité OpenAI ou NVIDIA. Pour Kilo (gratuits) : 'tencent/hy3-preview:free' ou 'step 3.5 flash'."),
-}).passthrough().superRefine((v, ctx) => {
-  const RUNNER_MODES: Record<string, readonly string[] | undefined> = {
-    kilo:    ['code', 'architect', 'ask', 'debug', 'orchestrator'],
-    cline:   ['plan', 'act'],
-    claude:  undefined,
-    gemini:  undefined,
-    qwencli: undefined,
-    openclaw: undefined,
-    opencode: undefined,
-    hermes:  undefined,
-  };
-  const allowed = RUNNER_MODES[v.runner];
-  if (v.mode && allowed && !allowed.includes(v.mode)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['mode'],
-      message: `mode "${v.mode}" non supporté par runner "${v.runner}". Autorisés : ${allowed.join('|')}`,
-    });
-  }
-  if (v.mode && !allowed) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['mode'],
-      message: `runner "${v.runner}" n'accepte pas de mode`,
-    });
-  }
-});
+export const runAgentSchema = z
+  .object({
+    runner: z
+      .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
+      .describe('Type de runner a utiliser'),
+    prompt: z.string().min(1, 'prompt vide interdit').describe("Le prompt a envoyer a l'agent"),
+    sessionId: z.string().optional().describe('Session ID'),
+    agentName: z
+      .string()
+      .regex(
+        /^[a-zA-Z0-9_-]+$/,
+        'agentName ne doit contenir que des caractères alphanumériques, tirets ou underscores',
+      )
+      .optional()
+      .describe("Nom de l'agent"),
+    autoResume: z.boolean().optional().default(false).describe('Auto resume session'),
+    mode: z.string().optional().describe('Mode specifique'),
+    path: z.string().optional().describe('Working directory'),
+    config: z.string().optional().describe('Config directory'),
+    silent: z.boolean().optional().default(false).describe('Silent mode'),
+    model: z
+      .string()
+      .optional()
+      .describe(
+        "Nom du modèle. Pour Hermes : priorité OpenAI ou NVIDIA. Pour Kilo (gratuits) : 'tencent/hy3-preview:free' ou 'step 3.5 flash'.",
+      ),
+  })
+  .passthrough();
 
 import { verifyInstallation } from '../lib/InstallHelper.js';
 
 export async function runAgent(args: z.infer<typeof runAgentSchema>) {
-  const { runner, ...params } = args;
+  const { runner, mode, ...params } = args;
+
+  // Validation manuelle des modes (déplacée ici pour compatibilité FastMCP)
+  const RUNNER_MODES: Record<string, readonly string[] | undefined> = {
+    kilo: ['code', 'architect', 'ask', 'debug', 'orchestrator'],
+    cline: ['plan', 'act'],
+  };
+  const allowed = RUNNER_MODES[runner];
+  if (mode && allowed && !allowed.includes(mode)) {
+    throw new Error(
+      `mode "${mode}" non supporté par runner "${runner}". Autorisés : ${allowed.join('|')}`,
+    );
+  }
+  if (mode && !allowed) {
+    throw new Error(`runner "${runner}" n'accepte pas de mode`);
+  }
 
   const check = await verifyInstallation(runner);
   if (!check.ok) {

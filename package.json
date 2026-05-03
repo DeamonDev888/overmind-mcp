@@ -1,6 +1,6 @@
 {
   "name": "overmind-mcp",
-  "version": "1.5.9",
+  "version": "1.5.10",
   "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut le protocole 'Custom-Nickname' pour identifier vos agents avec des surnoms originaux (The Chaos Prophet, Shadow Sniper, etc.), l'isolation mémoire (Private Memory Context) et le support pour QwenCli et Nous Hermes.",
   "type": "module",
   "main": "dist/index.js",
@@ -76,8 +76,8 @@
     "fastmcp": "^3.35.0",
     "overmind-postgres-mcp": "^1.1.6",
     "pg": "^8.20.0",
-    "pino": "^9.6.0",
-    "pino-pretty": "^13.0.0",
+    "pino": "^9.14.0",
+    "pino-pretty": "^13.1.3",
     "pino-roll": "^2.2.0",
     "zod": "^4.3.6"
   }

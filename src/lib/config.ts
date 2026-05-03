@@ -27,6 +27,8 @@ export interface ConfigType {
     };
   };
   TIMEOUT_MS: number;
+  HARD_TIMEOUT_MS: number;
+  KEEPALIVE_INTERVAL_MS: number;
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,6 +36,8 @@ const __dirname = path.dirname(__filename);
 
 export const DEFAULT_CONFIG: ConfigType = {
   TIMEOUT_MS: 900000, // 15 minutes
+  KEEPALIVE_INTERVAL_MS: 900000, // 15 minutes
+  HARD_TIMEOUT_MS: 60000, // 1 minute extra after keepalive
   CLAUDE: {
     CORE: '--output-format json',
     PERMISSIONS: '--dangerously-skip-permissions',
