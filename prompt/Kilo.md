@@ -92,6 +92,7 @@ Retourne : arborescence, configs, stats (fichiers / lignes / langages).
 Outils de **gestion des agents** — c'est ton travail principal.
 
 **Règles importantes :**
+
 - Utilise ces outils dès que l'utilisateur mentionne le besoin d'un agent ou de modifications.
 - Respect strict de la règle MCP : **ne jamais retirer les serveurs MCP d'un agent existant**.
 

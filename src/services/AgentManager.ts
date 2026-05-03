@@ -58,10 +58,10 @@ export class AgentManager {
       try {
         const settingsContent = await fs.readFile(settingsPath, 'utf-8');
         let settings = JSON.parse(settingsContent);
-        
+
         // --- New interpolation logic ---
         settings = interpolateEnvVars(settings);
-        
+
         const model = settings.env?.ANTHROPIC_MODEL || settings.model || 'settings-default';
         const runner = settings.runner || 'claude';
         const servers = settings.enabledMcpjsonServers || [];
@@ -73,7 +73,12 @@ export class AgentManager {
           else if (settings.env?.OPENAI_API_KEY) provider = 'openai';
           else if (settings.env?.NVIDIA_API_KEY || settings.env?.NVAPI_KEY) provider = 'nvidia';
           else if (settings.env?.GEMINI_API_KEY) provider = 'google';
-          else if (model.includes('mistral') || model.includes('codestral') || model.includes('devstral')) provider = 'mistral';
+          else if (
+            model.includes('mistral') ||
+            model.includes('codestral') ||
+            model.includes('devstral')
+          )
+            provider = 'mistral';
           else if (model.includes('gpt-')) provider = 'openai';
           else if (model.includes('gemini')) provider = 'google';
           else if (model.includes('claude')) provider = 'anthropic';
@@ -332,9 +337,12 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
       ANTHROPIC_MODEL: model,
       ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN || 'VOTRE_TOKEN_ANTHROPIC',
       ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || 'claude-3-5-haiku-20241022',
-      ANTHROPIC_DEFAULT_OPUS_MODEL: process.env.ANTHROPIC_DEFAULT_OPUS_MODEL || 'claude-3-opus-20240229',
-      ANTHROPIC_DEFAULT_SONNET_MODEL: process.env.ANTHROPIC_DEFAULT_SONNET_MODEL || 'claude-3-5-sonnet-20241022',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL:
+        process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || 'claude-3-5-haiku-20241022',
+      ANTHROPIC_DEFAULT_OPUS_MODEL:
+        process.env.ANTHROPIC_DEFAULT_OPUS_MODEL || 'claude-3-opus-20240229',
+      ANTHROPIC_DEFAULT_SONNET_MODEL:
+        process.env.ANTHROPIC_DEFAULT_SONNET_MODEL || 'claude-3-5-sonnet-20241022',
       API_TIMEOUT_MS: process.env.API_TIMEOUT_MS || '3000000',
       MISTRAL_API_KEY: process.env.MISTRAL_API_KEY || '',
       OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',

@@ -51,14 +51,14 @@ export class QwenCLIRunner {
       try {
         const agentSettingsPath = resolveConfigPath(
           path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
-          options.configPath
+          options.configPath,
         );
         if (fs.existsSync(agentSettingsPath)) {
           let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
-          
+
           // --- New interpolation logic ---
           settings = interpolateEnvVars(settings);
-          
+
           if (settings.env && settings.env.AGENT_TIMEOUT_MS) {
             customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
           }

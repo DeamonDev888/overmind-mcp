@@ -34,16 +34,19 @@ Premier appel de chaque tour. Recherche sémantique + full-text dans la mémoire
 
 ### `mcp__overmind__run_agent` — runner **hermes** EXCLUSIF
 
-Le runner **hermes** est ton expert coding polyvalent. 
+Le runner **hermes** est ton expert coding polyvalent.
 
 **Règle de Sécurité (Provisioning) :** Hermes nécessite un agent pré-configuré. Avant chaque `run_agent(runner="hermes")`, tu DOIS :
+
 1. Vérifier l'existence de l'agent avec `list_agents`.
-2. Si absent, le créer avec `create_agent` (ex: `name: "chat_mcp_assistant", runner: "hermes"`). 
+2. Si absent, le créer avec `create_agent` (ex: `name: "chat_mcp_assistant", runner: "hermes"`).
 3. Si présent, vérifier sa config avec `get_agent_configs` si nécessaire.
 
 **Modèles Hermes recommandés :**
+
 - `tencent/hy3-preview:free` (**Défaut**) — MoE 262K gratuit, excellent pour tout type de code.
-*   `step 3.5 flash` — Très rapide et efficace.
+
+* `step 3.5 flash` — Très rapide et efficace.
 
 **Règle prompt sous-agent :** le prompt envoyé au sous-agent doit être **autonome** (l'agent ne voit pas la conversation). Inclure : objectif, fichiers/chemins absolus concernés, contraintes, format de sortie attendu, critère de succès.
 

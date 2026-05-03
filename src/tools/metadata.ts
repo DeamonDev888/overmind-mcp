@@ -81,7 +81,8 @@ async function buildTree(dir: string, depth: number, currentDepth = 0): Promise<
 
   const nodes: TreeNode[] = [];
   for (const entry of entries) {
-    if (IGNORED.has(entry.name) || entry.name.startsWith('.') && entry.name !== '.env.example') continue;
+    if (IGNORED.has(entry.name) || (entry.name.startsWith('.') && entry.name !== '.env.example'))
+      continue;
 
     if (entry.isDirectory()) {
       const children = await buildTree(join(dir, entry.name), depth, currentDepth + 1);
@@ -223,7 +224,9 @@ export async function metadataTool(args: z.infer<typeof metadataSchema>) {
   } catch (e) {
     return {
       isError: true,
-      content: [{ type: 'text' as const, text: `❌ ${e instanceof Error ? e.message : String(e)}` }],
+      content: [
+        { type: 'text' as const, text: `❌ ${e instanceof Error ? e.message : String(e)}` },
+      ],
     };
   }
   const projectName = basename(absPath);

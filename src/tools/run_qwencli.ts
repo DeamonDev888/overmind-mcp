@@ -15,20 +15,56 @@ export const runQwenCLISchema = z.object({
 
 export async function runQwenCLIAgent(args: z.infer<typeof runQwenCLISchema>) {
   const runner = new QwenCLIRunner();
-  const { prompt, agentName, autoResume, sessionId, path: argPath, config: argConfig, silent } = args;
+  const {
+    prompt,
+    agentName,
+    autoResume,
+    sessionId,
+    path: argPath,
+    config: argConfig,
+    silent,
+  } = args;
   const finalPath = argPath || getWorkspaceDir();
   const finalConfig = argConfig || getWorkspaceDir();
 
   const start = Date.now();
-  const result = await runner.runAgent({ prompt, agentName, autoResume, sessionId, cwd: finalPath, configPath: finalConfig, silent });
+  const result = await runner.runAgent({
+    prompt,
+    agentName,
+    autoResume,
+    sessionId,
+    cwd: finalPath,
+    configPath: finalConfig,
+    silent,
+  });
   const durationMs = Date.now() - start;
 
   try {
-    await storeRun({ runner: 'qwencli', agentName, prompt, result: result.result, error: result.error, durationMs, success: !result.error, sessionId: result.sessionId });
+    await storeRun({
+      runner: 'qwencli',
+      agentName,
+      prompt,
+      result: result.result,
+      error: result.error,
+      durationMs,
+      success: !result.error,
+      sessionId: result.sessionId,
+    });
   } catch (_e) {
     // Silent
   }
 
-  if (result.error) return { content: [{ type: 'text' as const, text: `❌ Erreur QwenCLI: ${result.error}` }], isError: true };
-  return { content: [{ type: 'text' as const, text: result.result }, ...(result.sessionId ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }] : [])] };
+  if (result.error)
+    return {
+      content: [{ type: 'text' as const, text: `❌ Erreur QwenCLI: ${result.error}` }],
+      isError: true,
+    };
+  return {
+    content: [
+      { type: 'text' as const, text: result.result },
+      ...(result.sessionId
+        ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }]
+        : []),
+    ],
+  };
 }

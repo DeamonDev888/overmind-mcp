@@ -93,10 +93,12 @@ export class PostgresMemoryProvider implements MemoryProvider {
   private async ensureDatabaseExists(dbName: string): Promise<void> {
     // Prevent race conditions: if this DB is already being created, wait a bit and check again
     if (this.dbCreationInProgress.has(dbName)) {
-      console.error(`[PostgresMemory] ⏳ Database ${dbName} creation already in progress, waiting...`);
+      console.error(
+        `[PostgresMemory] ⏳ Database ${dbName} creation already in progress, waiting...`,
+      );
       // Wait up to 5 seconds for the other process to finish
       for (let i = 0; i < 10; i++) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
         try {
           const testClient = new Client({
             host: process.env.POSTGRES_HOST || '127.0.0.1',
@@ -107,7 +109,9 @@ export class PostgresMemoryProvider implements MemoryProvider {
           });
           await testClient.connect();
           await testClient.end();
-          console.error(`[PostgresMemory] ✅ Database ${dbName} is now ready (was being created by another process).`);
+          console.error(
+            `[PostgresMemory] ✅ Database ${dbName} is now ready (was being created by another process).`,
+          );
           return;
         } catch {
           // DB not ready yet, continue waiting
@@ -160,12 +164,16 @@ export class PostgresMemoryProvider implements MemoryProvider {
     } catch (err: unknown) {
       // Handle duplicate database error (code 42P04)
       if (err instanceof Error && (err as { code?: string }).code === '42P04') {
-        console.error(`[PostgresMemory] ℹ️  Database ${dbName} already exists (duplicate creation attempted).`);
+        console.error(
+          `[PostgresMemory] ℹ️  Database ${dbName} already exists (duplicate creation attempted).`,
+        );
         return;
       }
       // Handle authentication errors more gracefully
       if (err instanceof Error && err.message.includes('password authentication failed')) {
-        console.error(`[PostgresMemory] ⚠️  Authentication failed for ${dbName}, but database may already exist. Continuing...`);
+        console.error(
+          `[PostgresMemory] ⚠️  Authentication failed for ${dbName}, but database may already exist. Continuing...`,
+        );
         return;
       }
       console.error(`[PostgresMemory] ❌ Critical: Failed to create database ${dbName}:`, err);
