@@ -217,8 +217,12 @@ export class GeminiRunner {
       let stdout = '';
       let stderr = '';
 
-      child.stdout?.on('data', (data) => { stdout += data.toString(); });
-      child.stderr?.on('data', (data) => { stderr += data.toString(); });
+      child.stdout?.on('data', (data) => {
+        stdout += data.toString();
+      });
+      child.stderr?.on('data', (data) => {
+        stderr += data.toString();
+      });
 
       const timeout = setTimeout(() => {
         child.kill();
@@ -237,17 +241,17 @@ export class GeminiRunner {
         clearTimeout(timeout);
 
         if (code !== 0 && !stdout) {
-          return safeResolve({ 
-            result: '', 
-            error: code === 41 ? '🔑 Erreur Auth/API Key (OAuth/GCloud)' : `EXIT_CODE_${code}`, 
-            rawOutput: stderr 
+          return safeResolve({
+            result: '',
+            error: code === 41 ? '🔑 Erreur Auth/API Key (OAuth/GCloud)' : `EXIT_CODE_${code}`,
+            rawOutput: stderr,
           });
         }
 
         try {
           let jsonOutput: Record<string, unknown> | null = null;
           const trimmedStdout = stdout.trim();
-          
+
           try {
             jsonOutput = JSON.parse(trimmedStdout);
           } catch (_) {
@@ -263,13 +267,14 @@ export class GeminiRunner {
           }
 
           if (jsonOutput) {
-            const resultText = (jsonOutput.reply as string) || (jsonOutput.result as string) || stdout.trim();
+            const resultText =
+              (jsonOutput.reply as string) || (jsonOutput.result as string) || stdout.trim();
             const newSessionId = (jsonOutput.session_id as string) || sessionId;
-            
+
             if (newSessionId && agentName) {
               await saveSessionId(agentName, newSessionId, options.configPath, 'gemini');
             }
-            
+
             return safeResolve({
               result: resultText,
               sessionId: newSessionId,

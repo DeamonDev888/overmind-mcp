@@ -12,12 +12,22 @@ vi.mock('../src/memory/PostgresMemoryProvider.js', () => ({
   PostgresMemoryProvider: class {
     async initializeDb() {}
     async ensureDbExists() {}
-    async storeRun() { return 'run_mock'; }
-    async storeKnowledge() { return 'k_mock'; }
-    async searchMemory() { return []; }
-    async getRecentRuns() { return []; }
-    async getStats() { return { totalRuns: 0, totalKnowledge: 0, byRunner: [] }; }
-  }
+    async storeRun() {
+      return 'run_mock';
+    }
+    async storeKnowledge() {
+      return 'k_mock';
+    }
+    async searchMemory() {
+      return [];
+    }
+    async getRecentRuns() {
+      return [];
+    }
+    async getStats() {
+      return { totalRuns: 0, totalKnowledge: 0, byRunner: [] };
+    }
+  },
 }));
 
 describe('MCP Tools Unit Tests', () => {

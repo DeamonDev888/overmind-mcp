@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { PassThrough } from 'stream';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,7 +65,7 @@ function autoFormatEnvFile(envPath: string) {
         if (usedKeys.has(key)) continue;
         const matches = exactMatch
           ? prefixes.includes(key)
-          : prefixes.some(p => key.startsWith(p));
+          : prefixes.some((p) => key.startsWith(p));
         if (matches) {
           res.push([key, envVars[key]]);
           usedKeys.add(key);
@@ -76,52 +77,225 @@ function autoFormatEnvFile(envPath: string) {
     // ─── SECTIONS ──────────────────────────────────────────────────────────────
     const sections: { title: string; vars: [string, string][] }[] = [
       // ── Overmind Infrastructure ──
-      { title: "🌐 OVERMIND CORE & INFRASTRUCTURE",      vars: extract(["OVERMIND_WORKSPACE", "OVERMIND_MEMORY_TYPE"], true) },
-      { title: "⚙️  GLOBAL SETTINGS",                    vars: extract(["API_TIMEOUT_MS"], true) },
-      { title: "🗄️  DATABASE (PostgreSQL / pgvector)",    vars: extract("POSTGRES_") },
-      { title: "🧠 EMBEDDINGS & VECTOR MEMORY",           vars: extract("OVERMIND_EMBEDDING_") },
+      {
+        title: '🌐 OVERMIND CORE & INFRASTRUCTURE',
+        vars: extract(['OVERMIND_WORKSPACE', 'OVERMIND_MEMORY_TYPE'], true),
+      },
+      { title: '⚙️  GLOBAL SETTINGS', vars: extract(['API_TIMEOUT_MS'], true) },
+      { title: '🗄️  DATABASE (PostgreSQL / pgvector)', vars: extract('POSTGRES_') },
+      { title: '🧠 EMBEDDINGS & VECTOR MEMORY', vars: extract('OVERMIND_EMBEDDING_') },
 
       // ── LLM Providers (Europe / USA) ──
-      { title: "🤖 LLM PROVIDER - Mistral AI 🇫🇷",       vars: extract("MISTRAL_") },
-      { title: "🤖 LLM PROVIDER - OpenAI 🇺🇸",            vars: extract("OPENAI_") },
-      { title: "🤖 LLM PROVIDER - Anthropic 🇺🇸",         vars: extract("ANTHROPIC_") },
-      { title: "🤖 LLM PROVIDER - Google Gemini 🇺🇸",     vars: extract(["GEMINI_API_KEY", "GEMINI_MODEL", "GOOGLE_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"], true) },
-      { title: "🤖 LLM PROVIDER - NVIDIA NIM 🇺🇸",        vars: [...extract(["NVAPI_KEY", "NVIDIA_API_KEY", "NVIDIA_API_BASE"], true), ...extract("NVIDIA_")] },
-      { title: "🤖 LLM PROVIDER - OpenRouter 🇺🇸",        vars: extract(["OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OPENROUTER_MODEL"], true) },
-      { title: "🤖 LLM PROVIDER - xAI / Grok 🇺🇸",       vars: extract(["XAI_API_KEY", "XAI_BASE_URL", "GROK_API_KEY", "GROK_MODEL"], true) },
-      { title: "🤖 LLM PROVIDER - Groq 🇺🇸",              vars: extract("GROQ_") },
-      { title: "🤖 LLM PROVIDER - Together AI 🇺🇸",       vars: extract("TOGETHER_") },
-      { title: "🤖 LLM PROVIDER - Cohere 🇺🇸",            vars: extract("COHERE_") },
-      { title: "🤖 LLM PROVIDER - Replicate 🇺🇸",         vars: extract("REPLICATE_") },
-      { title: "🤖 LLM PROVIDER - HuggingFace 🇺🇸",       vars: extract(["HUGGINGFACE_API_KEY", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"], true) },
-      { title: "🤖 LLM PROVIDER - Perplexity 🇺🇸",        vars: extract("PERPLEXITY_") },
-      { title: "🤖 LLM PROVIDER - SambaNova 🇺🇸",         vars: extract("SAMBANOVA_") },
-      { title: "🤖 LLM PROVIDER - Azure OpenAI ☁️",       vars: extract(["AZURE_API_KEY", "AZURE_API_BASE", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_VERSION"], true) },
-      { title: "🤖 LLM PROVIDER - ElevenLabs 🎙️",        vars: extract(["ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_MODEL_ID"], true) },
-      { title: "🤖 LLM PROVIDER - AWS Bedrock ☁️",        vars: extract(["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_REGION", "AWS_DEFAULT_REGION", "AWS_ENDPOINT_URL"], true) },
+      { title: '🤖 LLM PROVIDER - Mistral AI 🇫🇷', vars: extract('MISTRAL_') },
+      { title: '🤖 LLM PROVIDER - OpenAI 🇺🇸', vars: extract('OPENAI_') },
+      { title: '🤖 LLM PROVIDER - Anthropic 🇺🇸', vars: extract('ANTHROPIC_') },
+      {
+        title: '🤖 LLM PROVIDER - Google Gemini 🇺🇸',
+        vars: extract(
+          ['GEMINI_API_KEY', 'GEMINI_MODEL', 'GOOGLE_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY'],
+          true,
+        ),
+      },
+      {
+        title: '🤖 LLM PROVIDER - NVIDIA NIM 🇺🇸',
+        vars: [
+          ...extract(['NVAPI_KEY', 'NVIDIA_API_KEY', 'NVIDIA_API_BASE'], true),
+          ...extract('NVIDIA_'),
+        ],
+      },
+      {
+        title: '🤖 LLM PROVIDER - OpenRouter 🇺🇸',
+        vars: extract(['OPENROUTER_API_KEY', 'OPENROUTER_BASE_URL', 'OPENROUTER_MODEL'], true),
+      },
+      {
+        title: '🤖 LLM PROVIDER - xAI / Grok 🇺🇸',
+        vars: extract(['XAI_API_KEY', 'XAI_BASE_URL', 'GROK_API_KEY', 'GROK_MODEL'], true),
+      },
+      { title: '🤖 LLM PROVIDER - Groq 🇺🇸', vars: extract('GROQ_') },
+      { title: '🤖 LLM PROVIDER - Together AI 🇺🇸', vars: extract('TOGETHER_') },
+      { title: '🤖 LLM PROVIDER - Cohere 🇺🇸', vars: extract('COHERE_') },
+      { title: '🤖 LLM PROVIDER - Replicate 🇺🇸', vars: extract('REPLICATE_') },
+      {
+        title: '🤖 LLM PROVIDER - HuggingFace 🇺🇸',
+        vars: extract(['HUGGINGFACE_API_KEY', 'HF_TOKEN', 'HUGGING_FACE_HUB_TOKEN'], true),
+      },
+      { title: '🤖 LLM PROVIDER - Perplexity 🇺🇸', vars: extract('PERPLEXITY_') },
+      { title: '🤖 LLM PROVIDER - SambaNova 🇺🇸', vars: extract('SAMBANOVA_') },
+      {
+        title: '🤖 LLM PROVIDER - Azure OpenAI ☁️',
+        vars: extract(
+          [
+            'AZURE_API_KEY',
+            'AZURE_API_BASE',
+            'AZURE_OPENAI_API_KEY',
+            'AZURE_OPENAI_ENDPOINT',
+            'AZURE_OPENAI_API_VERSION',
+          ],
+          true,
+        ),
+      },
+      {
+        title: '🤖 LLM PROVIDER - ElevenLabs 🎙️',
+        vars: extract(['ELEVENLABS_API_KEY', 'ELEVENLABS_VOICE_ID', 'ELEVENLABS_MODEL_ID'], true),
+      },
+      {
+        title: '🤖 LLM PROVIDER - AWS Bedrock ☁️',
+        vars: extract(
+          [
+            'AWS_ACCESS_KEY_ID',
+            'AWS_SECRET_ACCESS_KEY',
+            'AWS_SESSION_TOKEN',
+            'AWS_REGION',
+            'AWS_DEFAULT_REGION',
+            'AWS_ENDPOINT_URL',
+          ],
+          true,
+        ),
+      },
 
       // ── LLM Providers (Chine / Asie) ──
-      { title: "🤖 LLM PROVIDER - DeepSeek 🇨🇳",          vars: extract("DEEPSEEK_") },
-      { title: "🤖 LLM PROVIDER - Alibaba DashScope 🇨🇳",  vars: extract("ALIBABA_") },
-      { title: "🤖 LLM PROVIDER - Qwen (DashScope) 🇨🇳",   vars: extract(["QWEN_API_KEY", "QWEN_BASE_URL", "QWEN_MODEL", "DASHSCOPE_API_KEY", "DASHSCOPE_BASE_URL"], true) },
-      { title: "🤖 LLM PROVIDER - SiliconFlow 🇨🇳",        vars: extract("SILICONFLOW_") },
-      { title: "🤖 LLM PROVIDER - Minimax 🇨🇳",            vars: [...extract("MINIMAXI_"), ...extract("MINIMAX_")] },
-      { title: "🤖 LLM PROVIDER - Ilmu AI / Z.AI 🇨🇳",    vars: extract("Z_AI_") },
-      { title: "🤖 LLM PROVIDER - Moonshot / Kimi 🇨🇳",    vars: extract(["MOONSHOT_API_KEY", "MOONSHOT_BASE_URL", "MOONSHOT_MODEL", "KIMI_API_KEY"], true) },
-      { title: "🤖 LLM PROVIDER - Baidu / ERNIE 🇨🇳",      vars: extract(["BAIDU_API_KEY", "ERNIE_API_KEY", "WENXIN_API_KEY"], true) },
-      { title: "🤖 LLM PROVIDER - ZhipuAI / GLM 🇨🇳",      vars: [...extract(["ZHIPU_API_KEY", "GLM_API_KEY"], true), ...extract("ZHIPUAI_")] },
+      { title: '🤖 LLM PROVIDER - DeepSeek 🇨🇳', vars: extract('DEEPSEEK_') },
+      { title: '🤖 LLM PROVIDER - Alibaba DashScope 🇨🇳', vars: extract('ALIBABA_') },
+      {
+        title: '🤖 LLM PROVIDER - Qwen (DashScope) 🇨🇳',
+        vars: extract(
+          [
+            'QWEN_API_KEY',
+            'QWEN_BASE_URL',
+            'QWEN_MODEL',
+            'DASHSCOPE_API_KEY',
+            'DASHSCOPE_BASE_URL',
+          ],
+          true,
+        ),
+      },
+      { title: '🤖 LLM PROVIDER - SiliconFlow 🇨🇳', vars: extract('SILICONFLOW_') },
+      {
+        title: '🤖 LLM PROVIDER - Minimax 🇨🇳',
+        vars: [...extract('MINIMAXI_'), ...extract('MINIMAX_')],
+      },
+      { title: '🤖 LLM PROVIDER - Ilmu AI / Z.AI 🇨🇳', vars: extract('Z_AI_') },
+      {
+        title: '🤖 LLM PROVIDER - Moonshot / Kimi 🇨🇳',
+        vars: extract(
+          ['MOONSHOT_API_KEY', 'MOONSHOT_BASE_URL', 'MOONSHOT_MODEL', 'KIMI_API_KEY'],
+          true,
+        ),
+      },
+      {
+        title: '🤖 LLM PROVIDER - Baidu / ERNIE 🇨🇳',
+        vars: extract(['BAIDU_API_KEY', 'ERNIE_API_KEY', 'WENXIN_API_KEY'], true),
+      },
+      {
+        title: '🤖 LLM PROVIDER - ZhipuAI / GLM 🇨🇳',
+        vars: [...extract(['ZHIPU_API_KEY', 'GLM_API_KEY'], true), ...extract('ZHIPUAI_')],
+      },
 
       // ── Services & Intégrations ──
-      { title: "💬 SERVICE - Discord",                    vars: extract(["DISCORD_TOKEN", "DISCORD_BOT_TOKEN", "DISCORD_CHANNEL_ID", "DISCORD_GUILD_ID", "DISCORD_WEBHOOK_URL", "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"], true) },
-      { title: "🐦 SERVICE - Twitter / X",                vars: extract(["TWITTER_API_KEY", "TWITTER_API_SECRET", "TWITTER_ACCESS_TOKEN", "TWITTER_ACCESS_SECRET", "TWITTER_BEARER_TOKEN", "X_API_KEY", "X_BEARER_TOKEN", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"], true) },
-      { title: "📱 SERVICE - Telegram",                   vars: extract(["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"], true) },
-      { title: "📱 SERVICE - Twilio / SMS",               vars: extract(["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "TWILIO_API_KEY", "TWILIO_API_SECRET"], true) },
-      { title: "🐙 SERVICE - GitHub",                     vars: extract(["GITHUB_TOKEN", "GITHUB_API_KEY", "GH_TOKEN", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"], true) },
-      { title: "▲ SERVICE - Vercel",                      vars: extract(["VERCEL_TOKEN", "VERCEL_API_TOKEN", "VERCEL_PROJECT_ID", "VERCEL_ORG_ID", "VERCEL_TEAM_ID"], true) },
-      { title: "🔺 SERVICE - Supabase",                   vars: extract(["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_JWT_SECRET"], true) },
-      { title: "🎮 SERVICE - Riot Games",                 vars: extract(["RIOT_API_KEY", "RIOT_REGION"], true) },
-      { title: "🔍 SERVICE - Search (Serper/Tavily)",     vars: extract(["SERPER_API_KEY", "TAVILY_API_KEY", "SERPAPI_KEY", "BRAVE_SEARCH_API_KEY"], true) },
-      { title: "📰 SERVICE - Market Data & News",         vars: extract(["FINNHUB_API_KEY", "NEWSAPI_KEY", "ALPHAVANTAGE_API_KEY", "POLYGON_API_KEY", "TIINGO_API_KEY"], true) },
+      {
+        title: '💬 SERVICE - Discord',
+        vars: extract(
+          [
+            'DISCORD_TOKEN',
+            'DISCORD_BOT_TOKEN',
+            'DISCORD_CHANNEL_ID',
+            'DISCORD_GUILD_ID',
+            'DISCORD_WEBHOOK_URL',
+            'DISCORD_CLIENT_ID',
+            'DISCORD_CLIENT_SECRET',
+          ],
+          true,
+        ),
+      },
+      {
+        title: '🐦 SERVICE - Twitter / X',
+        vars: extract(
+          [
+            'TWITTER_API_KEY',
+            'TWITTER_API_SECRET',
+            'TWITTER_ACCESS_TOKEN',
+            'TWITTER_ACCESS_SECRET',
+            'TWITTER_BEARER_TOKEN',
+            'X_API_KEY',
+            'X_BEARER_TOKEN',
+            'X_API_SECRET',
+            'X_ACCESS_TOKEN',
+            'X_ACCESS_SECRET',
+          ],
+          true,
+        ),
+      },
+      {
+        title: '📱 SERVICE - Telegram',
+        vars: extract(['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'], true),
+      },
+      {
+        title: '📱 SERVICE - Twilio / SMS',
+        vars: extract(
+          [
+            'TWILIO_ACCOUNT_SID',
+            'TWILIO_AUTH_TOKEN',
+            'TWILIO_PHONE_NUMBER',
+            'TWILIO_API_KEY',
+            'TWILIO_API_SECRET',
+          ],
+          true,
+        ),
+      },
+      {
+        title: '🐙 SERVICE - GitHub',
+        vars: extract(
+          [
+            'GITHUB_TOKEN',
+            'GITHUB_API_KEY',
+            'GH_TOKEN',
+            'GITHUB_CLIENT_ID',
+            'GITHUB_CLIENT_SECRET',
+          ],
+          true,
+        ),
+      },
+      {
+        title: '▲ SERVICE - Vercel',
+        vars: extract(
+          [
+            'VERCEL_TOKEN',
+            'VERCEL_API_TOKEN',
+            'VERCEL_PROJECT_ID',
+            'VERCEL_ORG_ID',
+            'VERCEL_TEAM_ID',
+          ],
+          true,
+        ),
+      },
+      {
+        title: '🔺 SERVICE - Supabase',
+        vars: extract(
+          ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_JWT_SECRET'],
+          true,
+        ),
+      },
+      { title: '🎮 SERVICE - Riot Games', vars: extract(['RIOT_API_KEY', 'RIOT_REGION'], true) },
+      {
+        title: '🔍 SERVICE - Search (Serper/Tavily)',
+        vars: extract(
+          ['SERPER_API_KEY', 'TAVILY_API_KEY', 'SERPAPI_KEY', 'BRAVE_SEARCH_API_KEY'],
+          true,
+        ),
+      },
+      {
+        title: '📰 SERVICE - Market Data & News',
+        vars: extract(
+          [
+            'FINNHUB_API_KEY',
+            'NEWSAPI_KEY',
+            'ALPHAVANTAGE_API_KEY',
+            'POLYGON_API_KEY',
+            'TIINGO_API_KEY',
+          ],
+          true,
+        ),
+      },
     ];
 
     // Clés restantes non classifiées → section fourre-tout
@@ -130,7 +304,7 @@ function autoFormatEnvFile(envPath: string) {
       if (!usedKeys.has(key)) uncategorized.push([key, envVars[key]]);
     }
     if (uncategorized.length > 0) {
-      sections.push({ title: "📁 AUTRES / NON-CLASSIFIÉS", vars: naturalSort(uncategorized) });
+      sections.push({ title: '📁 AUTRES / NON-CLASSIFIÉS', vars: naturalSort(uncategorized) });
     }
 
     // ─── RENDU ──────────────────────────────────────────────────────────────────
@@ -155,7 +329,6 @@ function autoFormatEnvFile(envPath: string) {
     // Ignorer silencieusement pour ne pas crasher le boot
   }
 }
-
 
 const localEnvPath = path.resolve(__dirname, '../../.env');
 
@@ -189,42 +362,59 @@ function checkMissingConfigs() {
   const missingDb = [];
 
   // Vérification CORE
-  if (!process.env.OVERMIND_WORKSPACE) missingCore.push("OVERMIND_WORKSPACE");
-  if (!process.env.OVERMIND_MEMORY_TYPE) missingCore.push("OVERMIND_MEMORY_TYPE");
+  if (!process.env.OVERMIND_WORKSPACE) missingCore.push('OVERMIND_WORKSPACE');
+  if (!process.env.OVERMIND_MEMORY_TYPE) missingCore.push('OVERMIND_MEMORY_TYPE');
 
   // Vérification DB
-  if (!process.env.POSTGRES_HOST) missingDb.push("POSTGRES_HOST");
-  if (!process.env.POSTGRES_DATABASE) missingDb.push("POSTGRES_DATABASE");
-  if (!process.env.POSTGRES_USER) missingDb.push("POSTGRES_USER");
-  if (!process.env.POSTGRES_PASSWORD) missingDb.push("POSTGRES_PASSWORD");
+  if (!process.env.POSTGRES_HOST) missingDb.push('POSTGRES_HOST');
+  if (!process.env.POSTGRES_DATABASE) missingDb.push('POSTGRES_DATABASE');
+  if (!process.env.POSTGRES_USER) missingDb.push('POSTGRES_USER');
+  if (!process.env.POSTGRES_PASSWORD) missingDb.push('POSTGRES_PASSWORD');
 
   if (missingCore.length > 0) {
     console.error(`\n[Overmind] ⚠️ ATTENTION : Configuration 'CORE & INFRASTRUCTURE' incomplète !`);
     console.error(`[Overmind] ❌ Il manque : ${missingCore.join(', ')}\n`);
   }
   if (missingDb.length > 0) {
-    console.error(`\n[Overmind] ⚠️ ATTENTION : Configuration 'DATABASE' incomplète (Imported from postgresql-server) !`);
+    console.error(
+      `\n[Overmind] ⚠️ ATTENTION : Configuration 'DATABASE' incomplète (Imported from postgresql-server) !`,
+    );
     console.error(`[Overmind] ❌ Il manque : ${missingDb.join(', ')}\n`);
   }
 }
 checkMissingConfigs();
 
-// Suppress experimental warnings (like node:sqlite) to avoid breaking MCP handshake
-process.removeAllListeners('warning');
+import { rootLogger } from '../lib/logger.js';
 
 // 💥 ERROR HANDLING: Catch everything to avoid silent EOFs
 process.on('uncaughtException', (err) => {
-  console.error('💥 UNCAUGHT EXCEPTION:', err);
+  rootLogger.fatal({ err }, '💥 UNCAUGHT EXCEPTION');
+  rootLogger.flush();
+  process.exit(1);
 });
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
+  rootLogger.fatal({ reason, promise }, '💥 UNHANDLED REJECTION');
+  rootLogger.flush();
+});
+
+// Ensure logs are flushed on exit
+process.on('SIGINT', () => {
+  rootLogger.info('🛑 Received SIGINT, flushing logs...');
+  rootLogger.flush();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  rootLogger.info('🛑 Received SIGTERM, flushing logs...');
+  rootLogger.flush();
+  process.exit(0);
 });
 
 // 🛡️ SHIELD: Prevent any library from logging to stdout during initialization
 // This is critical for MCP servers because any non-JSON output on stdout kills the handshake (EOF).
-console.log = (...args) => console.error(...args);
-console.info = (...args) => console.error(...args);
-console.warn = (...args) => console.error(...args);
+console.log = (...args) => rootLogger.info(args.length > 1 ? { args } : args[0]);
+console.info = (...args) => rootLogger.info(args.length > 1 ? { args } : args[0]);
+console.warn = (...args) => rootLogger.warn(args.length > 1 ? { args } : args[0]);
+console.error = (...args) => rootLogger.error(args.length > 1 ? { args } : args[0]);
 
 // 🛡️ ULTIMATE SHIELD: Proxy process.stdout.write to redirect non-JSON data to stderr
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
@@ -242,14 +432,90 @@ process.stdout.write = function (
     encoding = undefined;
   }
 
-  // Allow JSON-RPC (starts with {) and empty/newline chunks (often used by transport)
-  if (trimmed.startsWith('{') || trimmed === '') {
-    return originalStdoutWrite(chunk, encoding as BufferEncoding, callback);
+  // Skip empty chunks or pure whitespace (often used as delimiters/keep-alive)
+  if (trimmed === '') {
+    return originalStdoutWrite(chunk, encoding as BufferEncoding | undefined, callback);
   }
 
-  // Redirect everything else to stderr
-  return process.stderr.write(chunk, encoding as BufferEncoding, callback);
+  // Allow JSON-RPC (starts with { or [)
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+
+      // BLOCK ARRAYS on stdout (Batch responses are not standard in MCP)
+      if (Array.isArray(parsed)) {
+        rootLogger.warn({ raw: str }, '🛡️ [SHIELD] Blocked array-as-JSON-RPC on stdout');
+        return process.stderr.write(chunk, encoding as BufferEncoding | undefined, callback);
+      }
+
+      // Check for JSON-RPC (Response or Notification)
+      if (parsed.jsonrpc === '2.0') {
+        return originalStdoutWrite(chunk, encoding as BufferEncoding | undefined, callback);
+      }
+
+      // Block non-RPC JSON
+      rootLogger.warn({ raw: str }, '🛡️ [SHIELD] Blocked non-JSON-RPC (Object) on stdout');
+        return process.stderr.write(chunk, encoding as BufferEncoding | undefined, callback);
+    } catch (e) {
+      // Malformed JSON-like content
+      rootLogger.debug(
+        { raw: str, err: (e as Error).message },
+        '🛡️ [SHIELD] Blocked malformed JSON-like content on stdout',
+      );
+      return process.stderr.write(chunk, encoding as BufferEncoding | undefined, callback);
+    }
+  }
+
+  // Redirect everything else to stderr (via Pino)
+  rootLogger.debug({ raw: trimmed }, '🛡️ [SHIELD] Intercepted non-JSON stdout write');
+  return process.stderr.write(chunk, encoding as BufferEncoding | undefined, callback);
 } as typeof process.stdout.write;
+
+// 🛡️ STDIN INTERCEPTOR: Detect and unroll JSON-RPC Batches [req1, req2]
+// FastMCP/Zod only support single objects. Intercepting before FastMCP starts.
+const originalStdin = process.stdin;
+const stdinProxy = new PassThrough();
+
+originalStdin.on('data', (chunk: Buffer) => {
+  const str = chunk.toString();
+  const trimmed = str.trim();
+
+  // 🔍 [DEBUG] Log every incoming chunk that looks like JSON
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    rootLogger.debug(
+      {
+        length: trimmed.length,
+        preview: trimmed.substring(0, 100),
+        isBatch: trimmed.startsWith('['),
+      },
+      '[SHIELD] STDIN chunk received',
+    );
+  }
+
+  // If it's a batch, unroll it into separate JSON chunks
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        rootLogger.warn({ count: parsed.length }, '[SHIELD] Unrolling JSON-RPC BATCH on STDIN');
+        for (const item of parsed) {
+          stdinProxy.write(JSON.stringify(item) + '\n');
+        }
+        return;
+      }
+    } catch (_e) {
+      // Not a valid batch or partial JSON, pass through as-is
+    }
+  }
+  stdinProxy.write(chunk);
+});
+
+// Hijack process.stdin for FastMCP and any other consumers
+Object.defineProperty(process, 'stdin', {
+  value: stdinProxy,
+  writable: false,
+  configurable: true,
+});
 
 // Setup completed - Dynamically import server components AFTER process.env is configured
 const { createServer } = await import('../server.js');
@@ -274,6 +540,6 @@ if (settingsPath || mcpPath) {
 }
 
 const server = createServer();
-console.error(`[Overmind] 🚀 Démarrage du serveur...`);
+rootLogger.info('[Overmind] [START] Démarrage du serveur...');
 server.start({ transportType: 'stdio' });
-console.error(`[Overmind] ✅ Serveur prêt sur STDIO.`);
+rootLogger.info('[Overmind] [READY] Serveur prêt sur STDIO.');

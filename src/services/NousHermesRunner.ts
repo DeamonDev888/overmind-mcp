@@ -4,6 +4,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
+import { resolveKiloModel } from '../lib/modelMapping.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -21,6 +22,8 @@ export interface RunAgentResult {
   sessionId?: string;
   error?: string;
   rawOutput?: string;
+  model?: string; // resolved real model ID
+  nickname?: string; // original value from config (if different)
 }
 
 export class NousHermesRunner {
@@ -62,9 +65,14 @@ export class NousHermesRunner {
     const debugLogs: string[] = [];
 
     // --- Isolation / Settings / Prompt ---
-    const overmindHermesPath = path.resolve(process.cwd(), '.overmind', 'hermes', agentName ? `agent_${agentName}` : 'central');
+    const overmindHermesPath = path.resolve(
+      process.cwd(),
+      '.overmind',
+      'hermes',
+      agentName ? `agent_${agentName}` : 'central',
+    );
     const overmindHermesSubPath = path.join(overmindHermesPath, '.hermes');
-    
+
     if (!fs.existsSync(overmindHermesSubPath)) {
       fs.mkdirSync(overmindHermesSubPath, { recursive: true });
     }
@@ -72,7 +80,7 @@ export class NousHermesRunner {
     // On définit l'environnement pour Hermes
     // IMPORTANT: HERMES_HOME doit pointer vers le dossier contenant config.yaml
     agentCustomEnv.HERMES_HOME = overmindHermesSubPath;
-    
+
     if (process.platform === 'win32') {
       agentCustomEnv.USERPROFILE = overmindHermesPath;
     } else {
@@ -138,7 +146,7 @@ export class NousHermesRunner {
             'MISTRAL_API_KEY_7',
           ];
           let envCopy = { ...settings.env };
-          
+
           // --- ENV VARIABLE SUBSTITUTION ($VAR_NAME) ---
           envCopy = interpolateEnvVars(envCopy);
 
@@ -174,10 +182,10 @@ export class NousHermesRunner {
 
             const mcpJsonPath = path.join(hermesConfigDir, 'mcp.json');
             const configYamlPath = path.join(hermesConfigDir, 'config.yaml');
-            
+
             // Helper pour convertir le format MCP JSON vers le format mcp.json Hermes (identique à Claude Desktop)
             fs.writeFileSync(mcpJsonPath, JSON.stringify(mcpConfig, null, 2), 'utf8');
-            
+
             // Generer aussi config.yaml (format snake_case attendu par Hermes)
             let yamlContent = 'mcp_servers:\n';
             for (const [name, server] of Object.entries(mcpConfig.mcpServers || {})) {
@@ -200,7 +208,10 @@ export class NousHermesRunner {
             }
             fs.writeFileSync(configYamlPath, yamlContent, 'utf8');
 
-            if (!silent) console.error(`[NousHermesRunner] 🛠️  Hermes configs (mcp.json & config.yaml) generated in ${hermesConfigDir}`);
+            if (!silent)
+              console.error(
+                `[NousHermesRunner] 🛠️  Hermes configs (mcp.json & config.yaml) generated in ${hermesConfigDir}`,
+              );
           } catch (err) {
             console.error(`[NousHermesRunner] ❌ Error translating MCP config: ${err}`);
           }
@@ -219,23 +230,34 @@ export class NousHermesRunner {
 
     // Check command line length (Windows limit 8191)
     if (cliPrompt.length > 7000) {
-      console.warn(`[NousHermesRunner] ⚠️  Prompt is very long (${cliPrompt.length} chars). This might fail on Windows.`);
+      console.warn(
+        `[NousHermesRunner] ⚠️  Prompt is very long (${cliPrompt.length} chars). This might fail on Windows.`,
+      );
     }
 
-    const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool', '-Q', '-t', 'all,mcp-overmind'];
+    // En version 0.11.0, on simplifie pour éviter les erreurs d'arguments
+    const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool', '-Q'];
     if (!silent) cleanArgs.push('-v');
 
     // --- Model & Provider selection ---
     const DEFAULT_MODEL = 'tencent/hy3-preview:free'; // Modèle OpenRouter gratuit
-    const model = options.model || DEFAULT_MODEL;
+    const originalModel = options.model || DEFAULT_MODEL;
+    const model = resolveKiloModel(originalModel);
 
     const isNvidiaModel = model.includes('deepseek') || model.includes('nvidia');
     const hasNvidiaKey = !!(agentCustomEnv.NVIDIA_API_KEY || agentCustomEnv.NVAPI_KEY);
 
-    const isOpenAIModel = model.includes('gpt') || model.includes('o1') || model.includes('o3');
+    const lowModel = model.toLowerCase();
+    const isOpenAIModel =
+      lowModel.includes('gpt') ||
+      lowModel.includes('o1') ||
+      lowModel.includes('o3') ||
+      lowModel.includes('minimax') ||
+      lowModel.includes('glm');
     const hasOpenAIKey = !!agentCustomEnv.OPENAI_API_KEY;
 
-    const isMistralModel = model.includes('mistral') || model.includes('codestral') || model.includes('devstral');
+    const isMistralModel =
+      model.includes('mistral') || model.includes('codestral') || model.includes('devstral');
     const hasMistralKey = !!agentCustomEnv.MISTRAL_API_KEY;
 
     cleanArgs.push('--model', model);
@@ -268,12 +290,15 @@ export class NousHermesRunner {
     } else {
       // Fallback OpenRouter pour tout le reste ou si clé NIM manquante
       if (!silent) console.error(`[NousHermesRunner] 🌐 Using OpenRouter for ${model}`);
-      debugLogs.push(`🌐 Using OpenRouter for ${model} (isMistral: ${isMistralModel}, hasKey: ${hasMistralKey})`);
+      debugLogs.push(
+        `🌐 Using OpenRouter for ${model} (isMistral: ${isMistralModel}, hasKey: ${hasMistralKey})`,
+      );
       cleanArgs.push('--provider', 'openrouter');
     }
 
     // --- OS Specific Spawn ---
-    const spawnCommand = 'hermes';
+    const spawnCommand =
+      'C:\\Users\\Deamon\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\hermes.exe';
 
     if (!silent) {
       console.error(
@@ -328,6 +353,8 @@ export class NousHermesRunner {
           result: stdout.trim(),
           error: 'TIMEOUT',
           rawOutput: stdout + '\n\n' + stderr,
+          model,
+          nickname: originalModel !== model ? originalModel : undefined,
         });
       }, this.timeoutMs);
 
@@ -339,6 +366,8 @@ export class NousHermesRunner {
             result: '',
             error: `EXIT_CODE_${code}`,
             rawOutput: stderr || stdout,
+            model,
+            nickname: originalModel !== model ? originalModel : undefined,
           });
         }
 
@@ -346,6 +375,8 @@ export class NousHermesRunner {
           result: stdout.trim(),
           sessionId: sessionId,
           rawOutput: stdout,
+          model,
+          nickname: originalModel !== model ? originalModel : undefined,
         });
       });
 

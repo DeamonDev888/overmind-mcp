@@ -45,12 +45,19 @@ const argv = process.argv.slice(2);
 let mode: 'lib' | 'mcp' = 'lib'; // défaut : lib
 let rest = argv;
 
-if (argv[0] === '--lib') { mode = 'lib'; rest = argv.slice(1); }
-else if (argv[0] === '--mcp') { mode = 'mcp'; rest = argv.slice(1); }
+if (argv[0] === '--lib') {
+  mode = 'lib';
+  rest = argv.slice(1);
+} else if (argv[0] === '--mcp') {
+  mode = 'mcp';
+  rest = argv.slice(1);
+}
 
 if (rest.length < 3) {
   console.error('\n❌ Paramètres manquants !');
-  console.error('Usage: npx tsx src/tools/run_agent_cli.ts [--lib|--mcp] <runner> <agentName> <prompt> [model]\n');
+  console.error(
+    'Usage: npx tsx src/tools/run_agent_cli.ts [--lib|--mcp] <runner> <agentName> <prompt> [model]\n',
+  );
   console.error('Modes:');
   console.error('  --lib  (défaut) : appel direct à runAgent() — rapide, sans serveur');
   console.error('  --mcp           : spawn du serveur MCP + appel via SDK officiel\n');
@@ -62,7 +69,9 @@ const [runner, agentName, prompt, model] = rest;
 
 // ─── MODE LIB ────────────────────────────────────────────────────────────────
 async function runViaLib() {
-  console.error(`\n[CLI:lib] 🤖 runner="${runner}"  agent="${agentName}"${model ? `  modèle="${model}"` : ''}`);
+  console.error(
+    `\n[CLI:lib] 🤖 runner="${runner}"  agent="${agentName}"${model ? `  modèle="${model}"` : ''}`,
+  );
 
   const result = await runAgent({
     runner: runner as Parameters<typeof runAgent>[0]['runner'],
@@ -85,12 +94,14 @@ async function runViaMcp() {
 
   if (!fs.existsSync(serverBin)) {
     console.error(`\n❌ Binaire serveur introuvable : ${serverBin}`);
-    console.error('   Lancez d\'abord : pnpm run build\n');
+    console.error("   Lancez d'abord : pnpm run build\n");
     process.exit(1);
   }
 
   console.error(`\n[CLI:mcp] 🚀 Démarrage du serveur MCP : node ${serverBin}`);
-  console.error(`[CLI:mcp] 🤖 runner="${runner}"  agent="${agentName}"${model ? `  modèle="${model}"` : ''}\n`);
+  console.error(
+    `[CLI:mcp] 🤖 runner="${runner}"  agent="${agentName}"${model ? `  modèle="${model}"` : ''}\n`,
+  );
 
   // Le serveur hérite de process.env (donc du .env déjà chargé)
   const transport = new StdioClientTransport({
@@ -109,9 +120,17 @@ async function runViaMcp() {
 
     // Listing des outils disponibles (optionnel, utile pour le debug)
     const { tools } = await client.listTools();
-    console.error(`[CLI:mcp] ✅ Connecté — ${tools.length} outil(s) disponible(s) : ${tools.map(t => t.name).join(', ')}\n`);
+    console.error(
+      `[CLI:mcp] ✅ Connecté — ${tools.length} outil(s) disponible(s) : ${tools.map((t) => t.name).join(', ')}\n`,
+    );
 
-    const args: Record<string, unknown> = { runner, agentName, prompt, autoResume: true, silent: false };
+    const args: Record<string, unknown> = {
+      runner,
+      agentName,
+      prompt,
+      autoResume: true,
+      silent: false,
+    };
     if (model) args.model = model;
 
     console.error(`[CLI:mcp] 📤 Appel run_agent…`);

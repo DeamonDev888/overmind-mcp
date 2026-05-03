@@ -18,7 +18,9 @@ function buildKey(runner: string | undefined, agentName: string): string {
   return runner ? `${runner}:${agentName}` : agentName;
 }
 
-async function purgeExpired(sessions: Record<string, SessionEntry | string>): Promise<Record<string, SessionEntry | string>> {
+async function purgeExpired(
+  sessions: Record<string, SessionEntry | string>,
+): Promise<Record<string, SessionEntry | string>> {
   const now = Date.now();
   const purged: Record<string, SessionEntry | string> = {};
   let changed = false;
@@ -36,14 +38,17 @@ async function purgeExpired(sessions: Record<string, SessionEntry | string>): Pr
   return changed ? purged : sessions;
 }
 
-
 function extractId(val: SessionEntry | string | null | undefined): string | null {
   if (!val) return null;
   if (typeof val === 'string') return val;
   return val.id || null;
 }
 
-export async function getLastSessionId(agentName: string, workspaceDir?: string, runner?: string): Promise<string | null> {
+export async function getLastSessionId(
+  agentName: string,
+  workspaceDir?: string,
+  runner?: string,
+): Promise<string | null> {
   try {
     const filePath = getSessionsPath(workspaceDir);
     const content = await fs.readFile(filePath, 'utf-8');
@@ -60,7 +65,12 @@ export async function getLastSessionId(agentName: string, workspaceDir?: string,
   }
 }
 
-export async function saveSessionId(agentName: string, sessionId: string, workspaceDir?: string, runner?: string): Promise<void> {
+export async function saveSessionId(
+  agentName: string,
+  sessionId: string,
+  workspaceDir?: string,
+  runner?: string,
+): Promise<void> {
   const filePath = getSessionsPath(workspaceDir);
   const dir = path.dirname(filePath);
 
@@ -84,7 +94,11 @@ export async function saveSessionId(agentName: string, sessionId: string, worksp
   }
 }
 
-export async function deleteSessionId(agentName: string, workspaceDir?: string, runner?: string): Promise<void> {
+export async function deleteSessionId(
+  agentName: string,
+  workspaceDir?: string,
+  runner?: string,
+): Promise<void> {
   const filePath = getSessionsPath(workspaceDir);
   try {
     const content = await fs.readFile(filePath, 'utf-8');

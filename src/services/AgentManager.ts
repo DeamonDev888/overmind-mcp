@@ -58,10 +58,10 @@ export class AgentManager {
       try {
         const settingsContent = await fs.readFile(settingsPath, 'utf-8');
         let settings = JSON.parse(settingsContent);
-        
+
         // --- New interpolation logic ---
         settings = interpolateEnvVars(settings);
-        
+
         const model = settings.env?.ANTHROPIC_MODEL || settings.model || 'settings-default';
         const runner = settings.runner || 'claude';
         const servers = settings.enabledMcpjsonServers || [];
@@ -73,7 +73,12 @@ export class AgentManager {
           else if (settings.env?.OPENAI_API_KEY) provider = 'openai';
           else if (settings.env?.NVIDIA_API_KEY || settings.env?.NVAPI_KEY) provider = 'nvidia';
           else if (settings.env?.GEMINI_API_KEY) provider = 'google';
-          else if (model.includes('mistral') || model.includes('codestral') || model.includes('devstral')) provider = 'mistral';
+          else if (
+            model.includes('mistral') ||
+            model.includes('codestral') ||
+            model.includes('devstral')
+          )
+            provider = 'mistral';
           else if (model.includes('gpt-')) provider = 'openai';
           else if (model.includes('gemini')) provider = 'google';
           else if (model.includes('claude')) provider = 'anthropic';
@@ -314,7 +319,13 @@ Tu es jugé sur ta capacité à transmettre ton savoir. FOUILLIE ta mémoire et 
 - **Recherche Intensive** : Pour chaque nouveau concept ou bug rencontré, fais systématiquement un \`memory_search\`. Ne présume jamais que tu sais tout.
 - **Pattern & Décision** : Si tu identifies une règle métier ou si tu prends une décision architecturale, utilise \`memory_store\` avec \`source: "decision"\` ou \`source: "pattern"\`.
 - **Identité Auto-Gérée** : OverMind détecte automatiquement ton identité (\`${name}\`). Ne spécifie plus le paramètre \`agent_name\` sauf si tu souhaites explicitement consulter ou écrire dans la mémoire d'un AUTRE agent spécifique.
-- **Transmission Éternelle** : Si tu termines une tâche, résume les points clés via \`memory_store\` pour que ton futur "soi" ne reparte pas de zéro.`;
+- **Transmission Éternelle** : Si tu termines une tâche, résume les points clés via \`memory_store\` pour que ton futur "soi" ne reparte pas de zéro.
+
+### 🌐 Architecture Polyglotte & Multi-Runner
+Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini, Hermes, etc.).
+- **Compatibilité** : Ton prompt et tes compétences sont agnostiques au runner.
+- **Orchestration** : Tu peux être sollicité dans des workflows parallèles (\`run_agents_parallel\`) ou séquentiels.
+- **Auto-Adaptation** : Adapte tes réponses au format attendu par le runner actuel (JSON pour Claude Code, texte brut pour Kilo, etc.).`;
 
     const finalPrompt = prompt + memoryInstructions;
 
@@ -322,14 +333,23 @@ Tu es jugé sur ta capacité à transmettre ton savoir. FOUILLIE ta mémoire et 
     await fs.writeFile(promptPath, finalPrompt, 'utf-8');
 
     // Default mandatory environment variables according to user request
-    let envVars = {
+    let envVars: Record<string, string> = {
       ANTHROPIC_MODEL: model,
-      ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN || 'VOTRE_TOKEN_Z_AI',
-      ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL || 'https://api.z.ai/api/anthropic',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || 'claude-sonnet-4-6',
-      ANTHROPIC_DEFAULT_OPUS_MODEL: process.env.ANTHROPIC_DEFAULT_OPUS_MODEL || 'claude-opus-4-7',
-      ANTHROPIC_DEFAULT_SONNET_MODEL: process.env.ANTHROPIC_DEFAULT_SONNET_MODEL || 'claude-sonnet-4-6',
+      ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN || 'VOTRE_TOKEN_ANTHROPIC',
+      ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL:
+        process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || 'claude-3-5-haiku-20241022',
+      ANTHROPIC_DEFAULT_OPUS_MODEL:
+        process.env.ANTHROPIC_DEFAULT_OPUS_MODEL || 'claude-3-opus-20240229',
+      ANTHROPIC_DEFAULT_SONNET_MODEL:
+        process.env.ANTHROPIC_DEFAULT_SONNET_MODEL || 'claude-3-5-sonnet-20241022',
       API_TIMEOUT_MS: process.env.API_TIMEOUT_MS || '3000000',
+      MISTRAL_API_KEY: process.env.MISTRAL_API_KEY || '',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+      ALIBABA_API_KEY: process.env.ALIBABA_API_KEY || '',
+      SILICONFLOW_API_KEY: process.env.SILICONFLOW_API_KEY || '',
+      MINIMAXI_API_KEY: process.env.MINIMAXI_API_KEY || '',
+      Z_AI_API_KEY: process.env.Z_AI_API_KEY || '',
       agent: name,
     };
 

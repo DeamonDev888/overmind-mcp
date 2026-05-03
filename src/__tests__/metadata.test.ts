@@ -118,7 +118,11 @@ describe('metadata — chemins absolus hors CWD', () => {
 
   // file:// URL
   it('file:///etc/passwd → erreur (traité comme dossier inexistant/refusé)', async () => {
-    const result = await metadataTool({ path: 'file:///etc/passwd', depth: 2, includeStats: false });
+    const result = await metadataTool({
+      path: 'file:///etc/passwd',
+      depth: 2,
+      includeStats: false,
+    });
     expect(result.isError).toBe(true);
   });
 });
