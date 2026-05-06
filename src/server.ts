@@ -21,7 +21,7 @@ import {
 } from './tools/manage_agents.js';
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
-import { metadataTool, metadataSchema } from './tools/metadata.js';
+// import { metadataTool, metadataSchema } from './tools/metadata.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -121,9 +121,9 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: deleteAgent,
   });
 
-  // Outil : Mettre à jour la config d'un agent
+  // Outil : Éditer la config d'un agent
   server.addTool({
-    name: 'update_agent_config',
+    name: 'edit_agent_config',
     description:
       "Modifie la configuration technique d'un agent (Runner, Modèle, Serveurs MCP, Variables d'environnement) OU réécrit entièrement l'un des 4 fichiers (prompt, settings, mcp, skill)",
     parameters: updateAgentConfigSchema,
@@ -189,22 +189,22 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: configExample,
   });
 
-  // ─── METADATA ────────────────────────────────────────────────────────────────
+  // ─── METADATA (STANDBY - Will be moved to separate MCP) ──────────────────
+// NOTE: Commenté en attendant recreation dans un MCP dédié
+// server.addTool({
+//   name: 'metadata',
+//   description: `Retourne les métadonnées projet instantanément : arborescence, fichiers de config, statistiques (fichiers, lignes, langages).
+//
+// **Paramètres:**
+// - path: Chemin du projet (défaut: répertoire courant)
+// - depth: Profondeur de l'arborescence (défaut: 3)
+// - includeStats: Inclure les statistiques de code (défaut: true)
+//
+// **Exemple:**
+// metadata(path: "./my-project", depth: 4, includeStats: true)`,
+//   parameters: metadataSchema,
+//   execute: metadataTool,
+// });
 
-  server.addTool({
-    name: 'metadata',
-    description: `Retourne les métadonnées projet instantanément : arborescence, fichiers de config, statistiques (fichiers, lignes, langages).
-
-**Paramètres:**
-- path: Chemin du projet (défaut: répertoire courant)
-- depth: Profondeur de l'arborescence (défaut: 3)
-- includeStats: Inclure les statistiques de code (défaut: true)
-
-**Exemple:**
-metadata(path: "./my-project", depth: 4, includeStats: true)`,
-    parameters: metadataSchema,
-    execute: metadataTool,
-  });
-
-  return server;
+return server;
 }

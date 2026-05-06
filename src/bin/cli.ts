@@ -473,8 +473,43 @@ process.stdout.write = function (
 
 // 🛡️ STDIN INTERCEPTOR: Detect and unroll JSON-RPC Batches [req1, req2]
 // FastMCP/Zod only support single objects. Intercepting before FastMCP starts.
+// FIX: batch chunks may arrive split across multiple data events — buffer until
+// bracket-balanced so endsWith(']') is reliable even for large/fragmented batches.
 const originalStdin = process.stdin;
 const stdinProxy = new PassThrough();
+
+let stdinBuffer = '';
+
+function tryFlushBatch(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('[')) return false;
+  // Count brackets to detect a complete batch (handles nested objects inside items)
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (const ch of trimmed) {
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '[' || ch === '{') depth++;
+    else if (ch === ']' || ch === '}') depth--;
+  }
+  if (depth !== 0) return false; // incomplete — keep buffering
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      rootLogger.warn({ count: parsed.length }, '[SHIELD] Unrolling JSON-RPC BATCH on STDIN');
+      for (const item of parsed) {
+        stdinProxy.write(JSON.stringify(item) + '\n');
+      }
+      return true;
+    }
+  } catch (_e) {
+    // Malformed JSON — fall through, pass raw to FastMCP
+  }
+  return false;
+}
 
 originalStdin.on('data', (chunk: Buffer) => {
   const str = chunk.toString();
@@ -492,21 +527,22 @@ originalStdin.on('data', (chunk: Buffer) => {
     );
   }
 
-  // If it's a batch, unroll it into separate JSON chunks
-  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        rootLogger.warn({ count: parsed.length }, '[SHIELD] Unrolling JSON-RPC BATCH on STDIN');
-        for (const item of parsed) {
-          stdinProxy.write(JSON.stringify(item) + '\n');
-        }
-        return;
-      }
-    } catch (_e) {
-      // Not a valid batch or partial JSON, pass through as-is
+  // Accumulate batch fragments until bracket-balanced
+  if (stdinBuffer.length > 0 || trimmed.startsWith('[')) {
+    stdinBuffer += str;
+    if (tryFlushBatch(stdinBuffer)) {
+      stdinBuffer = '';
+      return;
     }
+    // Still incomplete — keep buffering (but cap to 1MB to avoid unbounded growth)
+    if (stdinBuffer.length < 1_048_576) return;
+    // Overflow: flush raw and reset
+    rootLogger.warn({ length: stdinBuffer.length }, '[SHIELD] STDIN batch buffer overflow — flushing raw');
+    stdinProxy.write(stdinBuffer);
+    stdinBuffer = '';
+    return;
   }
+
   stdinProxy.write(chunk);
 });
 

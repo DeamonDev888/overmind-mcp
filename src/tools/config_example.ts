@@ -74,7 +74,7 @@ ${interpolationNotice}`;
 \`\`\`json
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "https://api.minimax.io/anthropic",
+    "ANTHROPIC_BASE_URL": "$MINIMAX_BASE_URL",
     "ANTHROPIC_AUTH_TOKEN": "$MINIMAX_API_KEY", // Utilisez une variable .env
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
@@ -97,7 +97,7 @@ ${interpolationNotice}`;
 \`\`\`json
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api/v1",
+    "ANTHROPIC_BASE_URL": "$OPENROUTER_BASE_URL",
     "ANTHROPIC_AUTH_TOKEN": "$OPENROUTER_API_KEY", // Utilisez une variable .env
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
