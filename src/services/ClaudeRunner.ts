@@ -5,6 +5,7 @@ import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { resolveModel } from '../lib/modelMapping.js';
+import { classifyError, formatError } from '../lib/errorClassifier.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -279,7 +280,8 @@ export class ClaudeRunner {
       child.on('error', (err: Error) => {
         clearAllTimers();
         cleanupTmpFiles();
-        safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
+        const classified = classifyError(err.message, null);
+        safeResolve({ result: '', error: formatError(classified), rawOutput: '' });
       });
 
       child.on('close', async (code: number | null) => {
@@ -338,11 +340,23 @@ export class ClaudeRunner {
             });
           }
 
-          safeResolve({
-            result: '',
-            error: code !== 0 ? `EXIT_CODE_${code}` : 'JSON_PARSE_ERROR',
-            rawOutput: fullRaw,
-          });
+          // Use unified error classifier for all failure cases
+            const classified = classifyError(fullRaw, code, { timeoutMs: customTimeoutMs });
+            if (classified.code === 'EXIT_CODE_0') {
+              // Edge case: code=0 but no JSON parsed — treat as success
+              return safeResolve({
+                result: stdout.trim(),
+                sessionId,
+                rawOutput: stdout,
+                model: modelUsed ?? undefined,
+                nickname: originalModel !== modelUsed ? originalModel : undefined,
+              });
+            }
+            safeResolve({
+              result: '',
+              error: formatError(classified),
+              rawOutput: fullRaw,
+            });
         } catch (error) {
           safeResolve({
             result: '',

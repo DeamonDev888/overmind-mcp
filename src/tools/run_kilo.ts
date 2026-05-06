@@ -3,6 +3,7 @@ import { KiloRunner } from '../services/KiloRunner.js';
 import { storeRun } from '../memory/MemoryFactory.js';
 import { getWorkspaceDir } from '../lib/config.js';
 import { deleteSessionId } from '../lib/sessions.js';
+import { classifyError } from '../lib/errorClassifier.js';
 
 export const runKiloSchema = z
   .object({
@@ -47,23 +48,23 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>) {
     silent,
   });
 
-  if (
-    result.error?.includes('session') ||
-    result.error?.includes('EXIT_CODE_1') ||
-    result.error === 'JSON_PARSE_ERROR'
-  ) {
-    if (agentName) await deleteSessionId(agentName, finalConfig, 'kilo');
-    result = await runner.runAgent({
-      prompt,
-      agentName,
-      autoResume: false,
-      sessionId: undefined,
-      mode,
-      model,
-      cwd: finalPath,
-      configPath: finalConfig,
-      silent,
-    });
+  if (result.error) {
+    const classified = classifyError(result.error, null);
+    // Auto-retry for retryable session errors
+    if (classified.code === 'SESSION_ERROR' || classified.code === 'RATE_LIMIT') {
+      if (agentName) await deleteSessionId(agentName, finalConfig, 'kilo');
+      result = await runner.runAgent({
+        prompt,
+        agentName,
+        autoResume: false,
+        sessionId: undefined,
+        mode,
+        model,
+        cwd: finalPath,
+        configPath: finalConfig,
+        silent,
+      });
+    }
   }
 
   const durationMs = Date.now() - start;
@@ -82,7 +83,7 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>) {
     // Memory store is secondary
   }
 
-  if (result.error?.startsWith('INVALID_AGENT')) {
+  if (result.error?.includes('INVALID_AGENT') || result.error?.includes('❌ **[INVALID_AGENT]**')) {
     return {
       content: [{ type: 'text' as const, text: `❌ Agent Kilo '${agentName}' introuvable.` }],
       isError: true,

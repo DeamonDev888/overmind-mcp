@@ -3,6 +3,7 @@ import { ClaudeRunner } from '../services/ClaudeRunner.js';
 import { storeRun } from '../memory/MemoryFactory.js';
 import { getWorkspaceDir } from '../lib/config.js';
 import { deleteSessionId } from '../lib/sessions.js';
+import { classifyError } from '../lib/errorClassifier.js';
 
 export const runClaudeSchema = z
   .object({
@@ -58,30 +59,25 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
     silent,
   });
 
-  if (
-    result.error?.includes('No conversation found') ||
-    result.error?.includes('session') ||
-    result.error?.includes('EXIT_CODE_1') ||
-    result.error === 'JSON_PARSE_ERROR'
-  ) {
-    if (!silent) {
-      console.warn(`[run_claude] Session invalide ou erreur JSON, création nouvelle session...`);
+  if (result.error) {
+    const classified = classifyError(result.error, null);
+    // Auto-retry for retryable session errors
+    if (classified.code === 'SESSION_ERROR' || classified.code === 'RATE_LIMIT') {
+      if (!silent) {
+        console.warn(`[run_claude] Erreur récurrent: ${classified.code}, création nouvelle session...`);
+      }
+      if (agentName) await deleteSessionId(agentName, finalConfig, 'claude');
+      result = await runner.runAgent({
+        prompt,
+        agentName,
+        autoResume: false,
+        sessionId: undefined,
+        model,
+        cwd: finalPath,
+        configPath: finalConfig,
+        silent,
+      });
     }
-
-    if (agentName) {
-      await deleteSessionId(agentName, finalConfig, 'claude');
-    }
-
-    result = await runner.runAgent({
-      prompt,
-      agentName,
-      autoResume: false,
-      sessionId: undefined,
-      model,
-      cwd: finalPath,
-      configPath: finalConfig,
-      silent,
-    });
   }
 
   const durationMs = Date.now() - start;
@@ -102,7 +98,7 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
     // Memory store is secondary, don't crash if it fails
   }
 
-  if (result.error?.startsWith('INVALID_AGENT')) {
+  if (result.error?.includes('INVALID_AGENT') || result.error?.includes('❌ **[INVALID_AGENT]**')) {
     return {
       content: [{ type: 'text' as const, text: `❌ Agent '${agentName}' introuvable.` }],
       isError: true,

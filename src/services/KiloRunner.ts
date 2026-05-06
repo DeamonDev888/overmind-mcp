@@ -6,6 +6,7 @@ import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { PromptManager } from './PromptManager.js';
 import { resolveKiloModel } from '../lib/modelMapping.js';
+import { classifyError, formatError } from '../lib/errorClassifier.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -325,12 +326,15 @@ export class KiloRunner {
 
       child.on('close', async (code: number | null) => {
         clearAllTimers();
-        if (code !== 0 && !finalResult && !stdout) {
-          process.stderr.write(`\x1b[31m[Kilo] ❌ Échec avec Code: ${code}\x1b[0m\n`);
+        const fullRaw = stderr + stdout;
+        if (code !== 0 || (!finalResult && !stdout.trim())) {
+          const classified = classifyError(fullRaw, code, { timeoutMs: customTimeoutMs });
+          const coloredCode = code === 0 ? '' : `\x1b[31m[Kilo] ❌ Échec avec Code: ${code}\x1b[0m\n`;
+          if (coloredCode) process.stderr.write(`${coloredCode}`);
           return safeResolve({
             result: '',
-            error: `EXIT_CODE_${code}`,
-            rawOutput: stderr || stdout,
+            error: formatError(classified),
+            rawOutput: fullRaw,
           });
         }
 
@@ -353,7 +357,8 @@ export class KiloRunner {
 
       child.on('error', (err: Error) => {
         clearAllTimers();
-        safeResolve({ result: '', error: err.message, rawOutput: '' });
+        const classified = classifyError(err.message, null);
+        safeResolve({ result: '', error: formatError(classified), rawOutput: '' });
       });
 
       if (child.stdin) {
