@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.9.0 (2026-05-07)
+
+### Minor Changes
+
+- **KiloRunner 401 fallback retry**: Same automatic retry logic as ClaudeRunner — `AUTH_FALLBACK_1` → `AUTH_FALLBACK_2` → `AUTH_FALLBACK_3`
+- **New `overmind` provider in `config_example` tool**: Complete guide on `$VAR` substitution and fallback token system with examples for both ClaudeRunner and KiloRunner
+
 ## 1.8.0 (2026-05-07)
 
 ### Minor Changes
