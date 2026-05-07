@@ -21,6 +21,7 @@ import {
 } from './tools/manage_agents.js';
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
+import { sessionManager, sessionManagerSchema } from './tools/session_manager.js';
 import { metadataTool, metadataSchema } from './tools/metadata.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
@@ -187,6 +188,37 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
       'Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).',
     parameters: configExampleSchema,
     execute: configExample,
+  });
+
+  // ─── GESTIONNAIRE DE SESSIONS UNIFIÉ ────────────────────────────────────────
+
+  server.addTool({
+    name: 'session_manager',
+    description: `🗂️ Gestionnaire unifié de sessions pour tous les runners (claude, gemini, kilo, qwencli, openclaw, cline, opencode, hermes).
+
+**Actions disponibles:**
+- 'list': Lister toutes les sessions (avec filtres optionnels)
+- 'copy': Copier une session vers un nouvel agent
+- 'delete': Supprimer une session spécifique
+- 'rename': Renommer une session existante
+- 'purge': Purger les sessions expirées (>30 jours)
+- 'stats': Afficher les statistiques des sessions
+
+**Paramètres communs:**
+- action: L'action à effectuer (requis)
+- runner: Runner cible (optionnel, selon l'action)
+- agentName: Nom de l'agent (optionnel, selon l'action)
+- sourceAgentName/targetAgentName: Pour l'action 'copy'
+- oldAgentName/newAgentName: Pour l'action 'rename'
+- includeExpired: Pour 'list' (défaut: false)
+
+**Exemples:**
+session_manager(action: "list", runner: "claude")
+session_manager(action: "copy", sourceAgentName: "expert", targetAgentName: "expert2")
+session_manager(action: "delete", agentName: "old_session")
+session_manager(action: "purge")`,
+    parameters: sessionManagerSchema,
+    execute: sessionManager,
   });
 
   // ─── METADATA ────────────────────────────────────────────────────────────────
