@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.8.0 (2026-05-07)
+
+### Minor Changes
+
+- **Automatic 401 retry with fallback tokens**: Overmind now detects auth errors (401) from Claude CLI and automatically retries with `AUTH_FALLBACK_1` → `AUTH_FALLBACK_2` → `AUTH_FALLBACK_3` tokens
+- Detection covers: `401`, `unauthorized`, `invalid api key`, `authentication failed`, `auth error`
+- Each fallback token is resolved via `$VAR` substitution from `.env`
+
 ## 1.7.0 (2026-05-07)
 
 ### Minor Changes
