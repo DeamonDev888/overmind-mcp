@@ -24,6 +24,7 @@ export interface RunAgentResult {
   rawOutput?: string;
   model?: string; // resolved real model ID (e.g. 'claude-opus-4-7')
   nickname?: string; // original value from config (e.g. 'The Data Alchemist')
+  fallbackUsed?: string; // which fallback token was used (e.g. 'AUTH_FALLBACK_1')
 }
 
 export class ClaudeRunner {
@@ -172,8 +173,80 @@ export class ClaudeRunner {
     if (modelUsed) argsSpawn.push('--model', modelUsed);
     if (agentName) argsSpawn.push('--name', agentName);
 
+    // ───────────────────────────────────────────────────────────────────────────
+    // 🔄 FALLBACK TOKEN RETRY LOGIC
+    //
+    // Overmind lit les tokens fallback depuis agentCustomEnv (résolus depuis $VAR).
+    // Si une erreur 401 (auth) survient, on tente chaque fallback séquentiellement :
+    //   AUTH_FALLBACK_1 → AUTH_FALLBACK_2 → AUTH_FALLBACK_3
+    //
+    // Settings exemple :
+    //   { "env": { "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_FALLBACK_1" } }
+    // ───────────────────────────────────────────────────────────────────────────
+    const FALLBACK_KEYS = ['AUTH_FALLBACK_1', 'AUTH_FALLBACK_2', 'AUTH_FALLBACK_3'];
+    const TOKEN_KEYS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E'];
+
+    /**
+     * Vérifie si le stderr contient une erreur d'authentification (401).
+     * Claude CLI affiche des messages explicites en cas d'auth failure.
+     */
+    const isAuthError = (stderr: string): boolean => {
+      const lower = stderr.toLowerCase();
+      return (
+        lower.includes('401') ||
+        lower.includes('unauthorized') ||
+        lower.includes('invalid api key') ||
+        lower.includes('api key invalid') ||
+        lower.includes('authentication failed') ||
+        lower.includes('auth error') ||
+        lower.includes('invalid authentication')
+      );
+    };
+
+    /**
+     * Extrait les tokens fallback disponibles depuis agentCustomEnv.
+     * Retourne un tableau de { key, value } pour chaque fallback non vide.
+     */
+    const getAvailableFallbacks = (): Array<{ key: string; value: string }> => {
+      const fallbacks: Array<{ key: string; value: string }> = [];
+      for (const key of FALLBACK_KEYS) {
+        const val = agentCustomEnv[key];
+        if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
+          fallbacks.push({ key, value: val });
+        }
+      }
+      return fallbacks;
+    };
+
+    /**
+     * Détermine quel token utiliser : le fallback à l'index donné,
+     * ou le primary token ANTHROPIC_AUTH_TOKEN / ANTHROPIC_AUTH_TOKEN_E.
+     */
+    const getTokenForIndex = (index: number): { tokenEnvKey: string; tokenValue: string } | null => {
+      // Essayer d'abord le primary token
+      for (const tk of TOKEN_KEYS) {
+        const val = agentCustomEnv[tk];
+        if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
+          return { tokenEnvKey: tk, tokenValue: val };
+        }
+      }
+      // Puis les fallbacks
+      const fallbacks = getAvailableFallbacks();
+      if (index < fallbacks.length) {
+        return { tokenEnvKey: fallbacks[index].key, tokenValue: fallbacks[index].value };
+      }
+      return null;
+    };
+
     return new Promise((resolve) => {
       let resolved = false;
+      let retryCount = 0;
+      const maxRetries = getAvailableFallbacks().length + 1; // primary + fallbacks
+      let currentChild: ChildProcess | null = null;
+      let currentStderr = '';
+      let currentStdout = '';
+      let currentSessionId: string | undefined = sessionId;
+
       const safeResolve = (value: RunAgentResult) => {
         if (!resolved) {
           resolved = true;
@@ -198,159 +271,224 @@ export class ClaudeRunner {
         }
       };
 
-      let command = 'claude';
-      let spawnArgs: string[] = [];
-
-      if (process.platform === 'win32') {
-        command = 'cmd.exe';
-        spawnArgs = ['/c', 'claude', ...argsSpawn, '-p'];
-      } else {
-        spawnArgs = [...argsSpawn, '-p'];
-      }
-
-      const child: ChildProcess = spawn(command, spawnArgs, {
-        cwd: options.cwd || process.cwd(),
-        windowsHide: true,
-        env: { ...process.env, ...agentCustomEnv },
-        shell: false,
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      if (child.stdout) {
-        child.stdout.on('data', (d: Buffer) => {
-          const chunk = d.toString();
-          stdout += chunk;
-          if (agentName && !options.silent)
-            process.stderr.write(`[ClaudeRunner:${agentName}] ${chunk}`);
-        });
-      }
-      if (child.stderr) {
-        child.stderr.on('data', (d: Buffer) => {
-          const chunk = d.toString();
-          stderr += chunk;
-          if (agentName && !options.silent)
-            process.stderr.write(`[ClaudeRunner:${agentName}:ERR] ${chunk}`);
-        });
-      }
-
-      if (child.stdin) {
-        child.stdin.write(prompt);
-        child.stdin.end(); // IMPORTANT: Claude CLI needs EOF to start processing in -p mode
-      }
-
       let killTimer: NodeJS.Timeout | null = null;
       let hardTimeoutTimer: NodeJS.Timeout | null = null;
 
-      const timeout = setTimeout(() => {
-        // 1. Send keep-alive input (\n)
-        if (child.stdin && !child.stdin.destroyed) {
-          try {
-            child.stdin.write('\n');
-            if (!options.silent) {
-              process.stderr.write(
-                `\n\x1b[33m[ClaudeRunner] [WARN] Agent stagnant (${customTimeoutMs}ms). Envoi d'un keep-alive (\\n)...\x1b[0m\n`,
-              );
-            }
-          } catch (_e) {
-            // Ignore write errors if stdin closed in the meantime
+      /**
+       * Fonction centrale qui spawn le processus Claude avec le bon token.
+       * Appelé initialement et après chaque retry.
+       */
+      const spawnWithToken = (tokenInfo: { tokenEnvKey: string; tokenValue: string } | null) => {
+        // Nettoyer les listeners/timers de la tentative précédente
+        if (hardTimeoutTimer) { clearTimeout(hardTimeoutTimer); hardTimeoutTimer = null; }
+        if (killTimer) { clearTimeout(killTimer); killTimer = null; }
+
+        // Construire l'env avec le bon token
+        // NOTE: Overmind gère la substitution des variables $VAR dans les settings.
+        // Les fallback tokens (AUTH_FALLBACK_1/2/3) sont résolus ici pour le retry 401.
+        const spawnEnv: Record<string, string> = {
+          ...(process.env as Record<string, string>),
+          ...agentCustomEnv,
+        };
+        if (tokenInfo) {
+          // Remplacer le token actif par celui du fallback
+          for (const tk of TOKEN_KEYS) {
+            delete spawnEnv[tk];
           }
+          spawnEnv[tokenInfo.tokenEnvKey] = tokenInfo.tokenValue;
         }
 
-        // 2. Schedule HARD timeout (default +1 minute)
-        const hardTimeoutDelay = CONFIG.HARD_TIMEOUT_MS || 60000;
-        hardTimeoutTimer = setTimeout(() => {
-          child.kill();
-          killTimer = setTimeout(() => {
-            if (!child.killed) child.kill('SIGKILL');
-          }, 5000);
+        currentStderr = '';
+        currentStdout = '';
+
+        let command = 'claude';
+        let spawnArgs: string[] = [];
+
+        if (process.platform === 'win32') {
+          command = 'cmd.exe';
+          spawnArgs = ['/c', 'claude', ...argsSpawn, '-p'];
+        } else {
+          spawnArgs = [...argsSpawn, '-p'];
+        }
+
+        if (!options.silent) {
+          const tokenLabel = tokenInfo ? ` (token: ${tokenInfo.tokenEnvKey})` : '';
+          process.stderr.write(
+            `\n\x1b[33m[ClaudeRunner]${tokenLabel} Spawning Claude CLI...\x1b[0m\n`,
+          );
+        }
+
+        currentChild = spawn(command, spawnArgs, {
+          cwd: options.cwd || process.cwd(),
+          windowsHide: true,
+          env: spawnEnv,
+          shell: false,
+        });
+
+        if (currentChild.stdout) {
+          currentChild.stdout.on('data', (d: Buffer) => {
+            const chunk = d.toString();
+            currentStdout += chunk;
+            if (agentName && !options.silent) {
+              process.stderr.write(`[ClaudeRunner:${agentName}] ${chunk}`);
+            }
+          });
+        }
+
+        if (currentChild.stderr) {
+          currentChild.stderr.on('data', (d: Buffer) => {
+            const chunk = d.toString();
+            currentStderr += chunk;
+            if (agentName && !options.silent) {
+              process.stderr.write(`[ClaudeRunner:${agentName}:ERR] ${chunk}`);
+            }
+          });
+        }
+
+        if (currentChild.stdin) {
+          currentChild.stdin.write(prompt);
+          currentChild.stdin.end();
+        }
+
+        const timeout = setTimeout(() => {
+          if (currentChild && currentChild.stdin && !currentChild.stdin.destroyed) {
+            try {
+              currentChild.stdin.write('\n');
+              if (!options.silent) {
+                process.stderr.write(
+                  `\n\x1b[33m[ClaudeRunner] [WARN] Agent stagnant (${customTimeoutMs}ms). Envoi d'un keep-alive (\\n)...\x1b[0m\n`,
+                );
+              }
+            } catch (_e) {
+              // Ignore
+            }
+          }
+
+          const hardTimeoutDelay = CONFIG.HARD_TIMEOUT_MS || 60000;
+          hardTimeoutTimer = setTimeout(() => {
+            if (currentChild) currentChild.kill();
+            killTimer = setTimeout(() => {
+              if (currentChild && !currentChild.killed) currentChild.kill('SIGKILL');
+            }, 5000);
+            cleanupTmpFiles();
+            safeResolve({ result: '', error: 'HARD_TIMEOUT', rawOutput: currentStdout + currentStderr });
+          }, hardTimeoutDelay);
+        }, customTimeoutMs);
+
+        currentChild.on('error', (err: Error) => {
+          clearTimeout(timeout);
+          if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
           cleanupTmpFiles();
-          safeResolve({ result: '', error: 'HARD_TIMEOUT', rawOutput: stdout + stderr });
-        }, hardTimeoutDelay);
-      }, customTimeoutMs);
+          safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
+        });
 
-      const clearAllTimers = () => {
-        clearTimeout(timeout);
-        if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
-        if (killTimer) clearTimeout(killTimer);
-      };
+        currentChild.on('close', async (code: number | null) => {
+          clearTimeout(timeout);
+          if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
 
-      child.on('error', (err: Error) => {
-        clearAllTimers();
-        cleanupTmpFiles();
-        safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
-      });
+          const fullRaw = currentStdout + (currentStderr ? `\n\n--- STDERR ---\n${currentStderr}` : '');
 
-      child.on('close', async (code: number | null) => {
-        clearAllTimers();
-        cleanupTmpFiles();
+          // ─── Vérification 401 / Auth Error → Retry avec fallback ───
+          if (code !== 0 && isAuthError(currentStderr)) {
+            const tokenInfo = getTokenForIndex(retryCount);
+            if (tokenInfo && retryCount < maxRetries) {
+              retryCount++;
+              if (!options.silent) {
+                process.stderr.write(
+                  `\n\x1b[41m\x1b[37m[ClaudeRunner] 🔄 Auth error (401). Retry ${retryCount}/${maxRetries} avec ${tokenInfo.tokenEnvKey}...\x1b[0m\n`,
+                );
+              }
+              // Relancer avec le fallback suivant
+              spawnWithToken(tokenInfo);
+              return;
+            } else {
+              if (!options.silent) {
+                process.stderr.write(
+                  `\n\x1b[41m\x1b[37m[ClaudeRunner] ❌ Tous les tokens fallback épuisés. Auth error finale.\x1b[0m\n`,
+                );
+              }
+              cleanupTmpFiles();
+              safeResolve({
+                result: '',
+                error: 'AUTH_ERROR_ALL_FALLBACKS_EXHAUSTED',
+                rawOutput: fullRaw,
+              });
+              return;
+            }
+          }
 
-        const fullRaw = stdout + (stderr ? `\n\n--- STDERR ---\n${stderr}` : '');
-
-        try {
-          let jsonEnvelope: Record<string, unknown> | null = null;
-          const trimmedStdout = stdout.trim();
+          cleanupTmpFiles();
 
           try {
-            jsonEnvelope = JSON.parse(trimmedStdout);
-          } catch {
-            const lastBrace = trimmedStdout.lastIndexOf('}');
-            const firstBrace = trimmedStdout.lastIndexOf('{', lastBrace);
-            if (firstBrace !== -1 && lastBrace !== -1) {
-              try {
-                jsonEnvelope = JSON.parse(trimmedStdout.substring(firstBrace, lastBrace + 1));
-              } catch {
-                // Ignored
+            let jsonEnvelope: Record<string, unknown> | null = null;
+            const trimmedStdout = currentStdout.trim();
+
+            try {
+              jsonEnvelope = JSON.parse(trimmedStdout);
+            } catch {
+              const lastBrace = trimmedStdout.lastIndexOf('}');
+              const firstBrace = trimmedStdout.lastIndexOf('{', lastBrace);
+              if (firstBrace !== -1 && lastBrace !== -1) {
+                try {
+                  jsonEnvelope = JSON.parse(trimmedStdout.substring(firstBrace, lastBrace + 1));
+                } catch {
+                  // Ignored
+                }
               }
             }
-          }
 
-          if (jsonEnvelope) {
-            let foundSessionId = sessionId;
-            if (jsonEnvelope.session_id && agentName) {
-              foundSessionId = jsonEnvelope.session_id as string;
-              await saveSessionId(
-                agentName,
-                jsonEnvelope.session_id as string,
-                options.configPath,
-                'claude',
-              );
+            if (jsonEnvelope) {
+              let foundSessionId = currentSessionId;
+              if (jsonEnvelope.session_id && agentName) {
+                foundSessionId = jsonEnvelope.session_id as string;
+                currentSessionId = foundSessionId;
+                await saveSessionId(
+                  agentName,
+                  jsonEnvelope.session_id as string,
+                  options.configPath,
+                  'claude',
+                );
+              }
+
+              return safeResolve({
+                result:
+                  (jsonEnvelope.reply as string) ||
+                  (jsonEnvelope.result as string) ||
+                  currentStdout.trim(),
+                sessionId: foundSessionId,
+                rawOutput: currentStdout,
+                model: modelUsed ?? undefined,
+                nickname: originalModel !== modelUsed ? originalModel : undefined,
+              });
             }
 
-            return safeResolve({
-              result:
-                (jsonEnvelope.reply as string) || (jsonEnvelope.result as string) || stdout.trim(),
-              sessionId: foundSessionId,
-              rawOutput: stdout,
-              model: modelUsed ?? undefined,
-              nickname: originalModel !== modelUsed ? originalModel : undefined,
+            if (code === 0) {
+              return safeResolve({
+                result: currentStdout.trim(),
+                sessionId: currentSessionId,
+                rawOutput: currentStdout,
+                model: modelUsed ?? undefined,
+                nickname: originalModel !== modelUsed ? originalModel : undefined,
+              });
+            }
+
+            safeResolve({
+              result: '',
+              error: code !== 0 ? `EXIT_CODE_${code}` : 'JSON_PARSE_ERROR',
+              rawOutput: fullRaw,
+            });
+          } catch (error) {
+            safeResolve({
+              result: '',
+              error: `INTERNAL_ERROR: ${error instanceof Error ? error.message : String(error)}`,
+              rawOutput: fullRaw,
             });
           }
+        });
+      };
 
-          if (code === 0) {
-            return safeResolve({
-              result: stdout.trim(),
-              sessionId,
-              rawOutput: stdout,
-              model: modelUsed ?? undefined,
-              nickname: originalModel !== modelUsed ? originalModel : undefined,
-            });
-          }
-
-          safeResolve({
-            result: '',
-            error: code !== 0 ? `EXIT_CODE_${code}` : 'JSON_PARSE_ERROR',
-            rawOutput: fullRaw,
-          });
-        } catch (error) {
-          safeResolve({
-            result: '',
-            error: `INTERNAL_ERROR: ${error instanceof Error ? error.message : String(error)}`,
-            rawOutput: fullRaw,
-          });
-        }
-      });
+      // ─── Démarrage initial avec le primary token ───
+      spawnWithToken(getTokenForIndex(0));
     });
   }
 }
