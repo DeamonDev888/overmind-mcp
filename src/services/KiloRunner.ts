@@ -26,6 +26,7 @@ export interface RunAgentResult {
   rawOutput?: string;
   model?: string; // resolved real model ID (e.g. 'minimax/MiniMax-Text-01')
   nickname?: string; // original value from config (e.g. 'mini-max-m2.7-highspeed')
+  fallbackUsed?: string; // which fallback token was used (e.g. 'AUTH_FALLBACK_1')
 }
 
 const CLAUDE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -191,8 +192,84 @@ export class KiloRunner {
       argsSpawn.push('--dir', cwd);
     }
 
+    // ───────────────────────────────────────────────────────────────────────────
+    // 🔄 FALLBACK TOKEN RETRY LOGIC
+    //
+    // Overmind lit les tokens fallback depuis agentCustomEnv (résolus depuis $VAR).
+    // Si une erreur 401 (auth) survient, on tente chaque fallback séquentiellement :
+    //   AUTH_FALLBACK_1 → AUTH_FALLBACK_2 → AUTH_FALLBACK_3
+    //
+    // Settings exemple :
+    //   { "env": { "OPENAI_API_KEY": "$ANTHROPIC_AUTH_FALLBACK_1" } }
+    // ───────────────────────────────────────────────────────────────────────────
+    const FALLBACK_KEYS = ['AUTH_FALLBACK_1', 'AUTH_FALLBACK_2', 'AUTH_FALLBACK_3'];
+
+    /**
+     * Vérifie si le stderr contient une erreur d'authentification (401).
+     * Kilo CLI affiche des messages explicites en cas d'auth failure.
+     */
+    const isAuthError = (stderr: string): boolean => {
+      const lower = stderr.toLowerCase();
+      return (
+        lower.includes('401') ||
+        lower.includes('unauthorized') ||
+        lower.includes('invalid api key') ||
+        lower.includes('api key invalid') ||
+        lower.includes('authentication failed') ||
+        lower.includes('auth error') ||
+        lower.includes('invalid authentication') ||
+        lower.includes('openai authenticationerror') ||
+        lower.includes('authenticationerror')
+      );
+    };
+
+    /**
+     * Extrait les tokens fallback disponibles depuis agentCustomEnv.
+     */
+    const getAvailableFallbacks = (): Array<{ key: string; value: string }> => {
+      const fallbacks: Array<{ key: string; value: string }> = [];
+      for (const key of FALLBACK_KEYS) {
+        const val = agentCustomEnv[key];
+        if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
+          fallbacks.push({ key, value: val });
+        }
+      }
+      return fallbacks;
+    };
+
+    /**
+     * Détermine quel token API utiliser (pour Kilo = OPENAI_API_KEY).
+     * Retourne le token du fallback à l'index donné.
+     */
+    const getTokenForIndex = (
+      index: number,
+    ): { tokenEnvKey: string; tokenValue: string } | null => {
+      // D'abord le token API primaire (OPENAI_API_KEY ou ANTHROPIC_AUTH_TOKEN)
+      const primaryKeys = ['OPENAI_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E'];
+      for (const tk of primaryKeys) {
+        const val = agentCustomEnv[tk];
+        if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
+          return { tokenEnvKey: tk, tokenValue: val };
+        }
+      }
+      // Puis les fallbacks
+      const fallbacks = getAvailableFallbacks();
+      if (index < fallbacks.length) {
+        return { tokenEnvKey: fallbacks[index].key, tokenValue: fallbacks[index].value };
+      }
+      return null;
+    };
+
     return new Promise((resolve) => {
       let resolved = false;
+      let retryCount = 0;
+      const maxRetries = getAvailableFallbacks().length + 1;
+      let currentChild: ChildProcess | null = null;
+      let currentStdout = '';
+      let currentStderr = '';
+      let finalResult = '';
+      let lastSessionId = sessionId;
+
       const safeResolve = (value: RunAgentResult) => {
         if (!resolved) {
           resolved = true;
@@ -200,165 +277,213 @@ export class KiloRunner {
         }
       };
 
-      const command = 'kilo';
-
-      if (!options.silent) {
-        process.stderr.write(
-          `\n\x1b[33m[Kilo] ⚡ Initialisation de l'agent: ${agentName || 'Anonyme'}\x1b[0m\n`,
-        );
-        process.stderr.write(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m\n`);
-        if (mode) process.stderr.write(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m\n`);
-        if (sessionId && !CLAUDE_UUID_RE.test(sessionId))
-          process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
-
-        process.stderr.write(
-          `\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m\n`,
-        );
-      }
-      const child: ChildProcess = spawn(command, argsSpawn, {
-        cwd: options.cwd || process.cwd(),
-        shell: false,
-        windowsHide: true,
-        env: {
-          ...process.env,
-          ...agentCustomEnv,
-          ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
-        },
-      });
-
-      let stdout = '';
-      let stderr = '';
-      let finalResult = '';
-      let lastSessionId = sessionId;
-
-      if (child.stdout) {
-        child.stdout.on('data', (d: Buffer) => {
-          const chunk = d.toString();
-          stdout += chunk;
-
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine) continue;
-
-            try {
-              const event = JSON.parse(trimmedLine);
-
-              if (event.sessionID && !lastSessionId) {
-                lastSessionId = event.sessionID;
-              }
-
-              if (event.type === 'text' && event.part && event.part.text) {
-                finalResult += event.part.text;
-              } else if (event.type === 'message' || event.type === 'reply') {
-                finalResult += event.content || event.text || '';
-              } else if (event.type === 'session') {
-                lastSessionId = event.id || event.sessionID || lastSessionId;
-              } else if (event.type === 'error') {
-                stderr += (event.message || JSON.stringify(event)) + '\n';
-              }
-            } catch (_e) {
-              if (!trimmedLine.startsWith('{') && !options.silent) {
-                process.stderr.write(`\x1b[36m[Kilo]\x1b[0m ${trimmedLine}\n`);
-              }
-            }
-          }
-        });
-      }
-
-      if (child.stderr) {
-        child.stderr.on('data', (d: Buffer) => {
-          const chunk = d.toString();
-          stderr += chunk;
-
-          const lowerChunk = chunk.toLowerCase();
-          if (
-            lowerChunk.includes('quota') ||
-            lowerChunk.includes('exhausted') ||
-            lowerChunk.includes('rate limit') ||
-            chunk.includes('429')
-          ) {
-            process.stderr.write(
-              `\n\x1b[41m\x1b[37m[Kilo ALERT] QUOTA ATTEINT / MODÈLE ÉPUISÉ\x1b[0m\n`,
-            );
-            process.stderr.write(`\x1b[31m[Détail] ${chunk.trim()}\x1b[0m\n`);
-          } else if (!options.silent) {
-            process.stderr.write(`\x1b[31m[Kilo STDERR]\x1b[0m ${chunk}`);
-          }
-        });
-      }
-
       let killTimer: NodeJS.Timeout | null = null;
       let hardTimeoutTimer: NodeJS.Timeout | null = null;
 
-      const timeout = setTimeout(() => {
-        // 1. Send keep-alive input (\n)
-        if (child.stdin && !child.stdin.destroyed) {
-          try {
-            child.stdin.write('\n');
-            if (!options.silent) {
-              process.stderr.write(
-                `\n\x1b[33m[Kilo] [WARN] Agent stagnant (${customTimeoutMs}ms). Envoi d'un keep-alive (\\n)...\x1b[0m\n`,
-              );
-            }
-          } catch (_e) {
-            // ignore
+      /**
+       * Fonction centrale qui spawn Kilo avec le bon token.
+       */
+      const spawnWithToken = (tokenInfo: { tokenEnvKey: string; tokenValue: string } | null) => {
+        if (hardTimeoutTimer) { clearTimeout(hardTimeoutTimer); hardTimeoutTimer = null; }
+        if (killTimer) { clearTimeout(killTimer); killTimer = null; }
+
+        // Construire l'env avec le bon token API
+        // NOTE: Overmind gère la substitution des variables $VAR dans les settings.
+        const spawnEnv: Record<string, string> = {
+          ...(process.env as Record<string, string>),
+          ...agentCustomEnv,
+        };
+        if (tokenInfo) {
+          // Remplacer le token API actif par le fallback
+          const apiKeys = ['OPENAI_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E'];
+          for (const tk of apiKeys) {
+            delete spawnEnv[tk];
           }
+          spawnEnv[tokenInfo.tokenEnvKey] = tokenInfo.tokenValue;
         }
 
-        // 2. Schedule HARD timeout
-        const hardTimeoutDelay = CONFIG.HARD_TIMEOUT_MS || 60000;
-        hardTimeoutTimer = setTimeout(() => {
-          child.kill();
-          killTimer = setTimeout(() => {
-            if (!child.killed) child.kill('SIGKILL');
-          }, 5000);
-          safeResolve({ result: finalResult || stdout, error: 'HARD_TIMEOUT', rawOutput: stdout });
-        }, hardTimeoutDelay);
-      }, customTimeoutMs);
+        currentStdout = '';
+        currentStderr = '';
+        finalResult = '';
 
-      const clearAllTimers = () => {
-        clearTimeout(timeout);
-        if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
-        if (killTimer) clearTimeout(killTimer);
-      };
+        const command = 'kilo';
 
-      child.on('close', async (code: number | null) => {
-        clearAllTimers();
-        if (code !== 0 && !finalResult && !stdout) {
-          process.stderr.write(`\x1b[31m[Kilo] ❌ Échec avec Code: ${code}\x1b[0m\n`);
-          return safeResolve({
-            result: '',
-            error: `EXIT_CODE_${code}`,
-            rawOutput: stderr || stdout,
+        if (!options.silent) {
+          const tokenLabel = tokenInfo ? ` (token: ${tokenInfo.tokenEnvKey})` : '';
+          process.stderr.write(
+            `\n\x1b[33m[Kilo]${tokenLabel} ⚡ Initialisation de l'agent: ${agentName || 'Anonyme'}\x1b[0m\n`,
+          );
+          process.stderr.write(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m\n`);
+          if (mode) process.stderr.write(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m\n`);
+          if (sessionId && !CLAUDE_UUID_RE.test(sessionId))
+            process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
+          process.stderr.write(
+            `\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m\n`,
+          );
+        }
+
+        currentChild = spawn(command, argsSpawn, {
+          cwd: options.cwd || process.cwd(),
+          shell: false,
+          windowsHide: true,
+          env: {
+            ...spawnEnv,
+            ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
+          },
+        });
+
+        if (currentChild.stdout) {
+          currentChild.stdout.on('data', (d: Buffer) => {
+            const chunk = d.toString();
+            currentStdout += chunk;
+
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              const trimmedLine = line.trim();
+              if (!trimmedLine) continue;
+
+              try {
+                const event = JSON.parse(trimmedLine);
+
+                if (event.sessionID && !lastSessionId) {
+                  lastSessionId = event.sessionID;
+                }
+
+                if (event.type === 'text' && event.part && event.part.text) {
+                  finalResult += event.part.text;
+                } else if (event.type === 'message' || event.type === 'reply') {
+                  finalResult += event.content || event.text || '';
+                } else if (event.type === 'session') {
+                  lastSessionId = event.id || event.sessionID || lastSessionId;
+                } else if (event.type === 'error') {
+                  currentStderr += (event.message || JSON.stringify(event)) + '\n';
+                }
+              } catch (_e) {
+                if (!trimmedLine.startsWith('{') && !options.silent) {
+                  process.stderr.write(`\x1b[36m[Kilo]\x1b[0m ${trimmedLine}\n`);
+                }
+              }
+            }
           });
         }
 
-        process.stderr.write(
-          `\x1b[32m[Kilo] ✅ Mission terminée (${((Date.now() - startTime) / 1000).toFixed(1)}s)\x1b[0m\n`,
-        );
+        if (currentChild.stderr) {
+          currentChild.stderr.on('data', (d: Buffer) => {
+            const chunk = d.toString();
+            currentStderr += chunk;
 
-        if (agentName && lastSessionId) {
-          await saveSessionId(agentName, lastSessionId, options.configPath, 'kilo');
+            const lowerChunk = chunk.toLowerCase();
+            if (
+              lowerChunk.includes('quota') ||
+              lowerChunk.includes('exhausted') ||
+              lowerChunk.includes('rate limit') ||
+              chunk.includes('429')
+            ) {
+              process.stderr.write(
+                `\n\x1b[41m\x1b[37m[Kilo ALERT] QUOTA ATTEINT / MODÈLE ÉPUISÉ\x1b[0m\n`,
+              );
+              process.stderr.write(`\x1b[31m[Détail] ${chunk.trim()}\x1b[0m\n`);
+            } else if (!options.silent) {
+              process.stderr.write(`\x1b[31m[Kilo STDERR]\x1b[0m ${chunk}`);
+            }
+          });
         }
 
-        safeResolve({
-          result: finalResult || stdout.trim(),
-          sessionId: lastSessionId,
-          rawOutput: stdout,
-          model: selectedModel,
-          nickname: originalModel !== selectedModel ? originalModel : undefined,
+        const timeout = setTimeout(() => {
+          if (currentChild && currentChild.stdin && !currentChild.stdin.destroyed) {
+            try {
+              currentChild.stdin.write('\n');
+              if (!options.silent) {
+                process.stderr.write(
+                  `\n\x1b[33m[Kilo] [WARN] Agent stagnant (${customTimeoutMs}ms). Envoi d'un keep-alive (\\n)...\x1b[0m\n`,
+                );
+              }
+            } catch (_e) {
+              // ignore
+            }
+          }
+
+          const hardTimeoutDelay = CONFIG.HARD_TIMEOUT_MS || 60000;
+          hardTimeoutTimer = setTimeout(() => {
+            if (currentChild) currentChild.kill();
+            killTimer = setTimeout(() => {
+              if (currentChild && !currentChild.killed) currentChild.kill('SIGKILL');
+            }, 5000);
+            safeResolve({
+              result: finalResult || currentStdout,
+              error: 'HARD_TIMEOUT',
+              rawOutput: currentStdout,
+            });
+          }, hardTimeoutDelay);
+        }, customTimeoutMs);
+
+        currentChild.on('error', (err: Error) => {
+          clearTimeout(timeout);
+          if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
+          safeResolve({ result: '', error: err.message, rawOutput: '' });
         });
-      });
 
-      child.on('error', (err: Error) => {
-        clearAllTimers();
-        safeResolve({ result: '', error: err.message, rawOutput: '' });
-      });
+        currentChild.on('close', async (code: number | null) => {
+          clearTimeout(timeout);
+          if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
 
-      if (child.stdin) {
-        // child.stdin.end(); // Keep open for keep-alive
-      }
+          // ─── Vérification 401 / Auth Error → Retry avec fallback ───
+          if (code !== 0 && isAuthError(currentStderr)) {
+            const tokenInfo = getTokenForIndex(retryCount);
+            if (tokenInfo && retryCount < maxRetries) {
+              retryCount++;
+              if (!options.silent) {
+                process.stderr.write(
+                  `\n\x1b[41m\x1b[37m[Kilo] 🔄 Auth error (401). Retry ${retryCount}/${maxRetries} avec ${tokenInfo.tokenEnvKey}...\x1b[0m\n`,
+                );
+              }
+              spawnWithToken(tokenInfo);
+              return;
+            } else {
+              if (!options.silent) {
+                process.stderr.write(
+                  `\n\x1b[41m\x1b[37m[Kilo] ❌ Tous les tokens fallback épuisés. Auth error finale.\x1b[0m\n`,
+                );
+              }
+              safeResolve({
+                result: '',
+                error: 'AUTH_ERROR_ALL_FALLBACKS_EXHAUSTED',
+                rawOutput: currentStdout + currentStderr,
+              });
+              return;
+            }
+          }
+
+          if (code !== 0 && !finalResult && !currentStdout) {
+            process.stderr.write(`\x1b[31m[Kilo] ❌ Échec avec Code: ${code}\x1b[0m\n`);
+            return safeResolve({
+              result: '',
+              error: `EXIT_CODE_${code}`,
+              rawOutput: currentStderr || currentStdout,
+            });
+          }
+
+          process.stderr.write(
+            `\x1b[32m[Kilo] ✅ Mission terminée (${((Date.now() - startTime) / 1000).toFixed(1)}s)\x1b[0m\n`,
+          );
+
+          if (agentName && lastSessionId) {
+            await saveSessionId(agentName, lastSessionId, options.configPath, 'kilo');
+          }
+
+          safeResolve({
+            result: finalResult || currentStdout.trim(),
+            sessionId: lastSessionId,
+            rawOutput: currentStdout,
+            model: selectedModel,
+            nickname: originalModel !== selectedModel ? originalModel : undefined,
+            fallbackUsed: retryCount > 0 ? FALLBACK_KEYS[retryCount - 1] : undefined,
+          });
+        });
+      };
+
+      // ─── Démarrage initial ───
+      spawnWithToken(getTokenForIndex(0));
     });
   }
 }

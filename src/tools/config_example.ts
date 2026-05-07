@@ -1,10 +1,12 @@
 import { z } from 'zod';
 
-export const configExampleSchema = z.object({
-  provider: z
-    .enum(['glm', 'minimax', 'openrouter', 'ilmu', 'minimaxi'])
-    .describe('Le fournisseur pour lequel vous voulez un exemple de configuration.'),
-});
+export const configExampleSchema = z
+  .object({
+    provider: z
+      .enum(['glm', 'minimax', 'openrouter', 'ilmu', 'minimaxi', 'overmind'])
+      .describe('Le fournisseur pour lequel vous voulez un exemple de configuration.'),
+  })
+  .passthrough();
 
 export async function configExample(args: z.infer<typeof configExampleSchema>) {
   const { provider } = args;
@@ -136,6 +138,113 @@ ${interpolationNotice}`;
 }
 \`\`\`
 ${interpolationNotice}`;
+      break;
+
+    // ─── OVERMIND: Guide complet $VAR + FALLBACK TOKENS ───
+    case 'overmind':
+      text = `🎯 **GUIDE COMPLET : SUBSTITUTION $VAR ET FALLBACK TOKENS**
+
+Overmind supporte deux mécanismes puissant pour vos agents :
+
+---
+
+### 1️⃣ SUBSTITUTION $VAR (tous les runners)
+
+Les settings de vos agents peuvent référencer des variables d'environnement du \`.env\` avec la syntaxe \`$NOM_VARIABLE\`.
+
+\`\`\`json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN_1",
+    "ANTHROPIC_BASE_URL": "$Z_AI_BASE_URL"
+  }
+}
+\`\`\`
+
+Au runtime, Overmind remplace automatiquement \`$ANTHROPIC_AUTH_TOKEN_1\` par sa valeur réelle depuis le \`.env\`.
+
+---
+
+### 2️⃣ RETRY AUTOMATIQUE SUR ERREUR 401 (ClaudeRunner + KiloRunner)
+
+Si une erreur d'authentification (401) se produit, Overmind peut RETENTER automatiquement avec des tokens de secours.
+
+**Détection :** \`401\`, \`unauthorized\`, \`invalid api key\`, \`authentication failed\`, \`auth error\`
+
+**Flow :** Token primaire → AUTH_FALLBACK_1 → AUTH_FALLBACK_2 → AUTH_FALLBACK_3 → ÉCHEC
+
+---
+
+### 📂 EXEMPLE COMPLET : ClaudeRunner avec fallback
+
+\`\`\`json
+{
+  "model": "claude-sonnet-4-20250514",
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_FALLBACK_1",
+    "AUTH_FALLBACK_1": "$ANTHROPIC_AUTH_TOKEN_1",
+    "AUTH_FALLBACK_2": "$ANTHROPIC_AUTH_TOKEN_2",
+    "AUTH_FALLBACK_3": "$ANTHROPIC_AUTH_TOKEN_3"
+  }
+}
+\`\`\`
+
+**.env associé :**
+\`\`\`
+ANTHROPIC_AUTH_TOKEN_1=sk-cp-xxx...   # Token #1
+ANTHROPIC_AUTH_TOKEN_2=sk-cp-yyy...   # Token #2 (fallback #1)
+ANTHROPIC_AUTH_TOKEN_3=sk-cp-zzz...   # Token #3 (fallback #2)
+\`\`\`
+
+**Comment ça marche :**
+1. L'agent commence avec \`ANTHROPIC_AUTH_TOKEN\` = \`$ANTHROPIC_AUTH_FALLBACK_1\` → résolu → \`sk-cp-xxx...\`
+2. Si erreur 401 → retry avec \`AUTH_FALLBACK_1\` → \`sk-cp-yyy...\`
+3. Si erreur 401 → retry avec \`AUTH_FALLBACK_2\` → \`sk-cp-zzz...\`
+4. Si erreur 401 → \`AUTH_ERROR_ALL_FALLBACKS_EXHAUSTED\`
+
+---
+
+### 📂 EXEMPLE COMPLET : KiloRunner avec fallback
+
+\`\`\`json
+{
+  "model": "claude-sonnet-4-20250514",
+  "env": {
+    "OPENAI_API_KEY": "$ANTHROPIC_AUTH_FALLBACK_1",
+    "AUTH_FALLBACK_1": "$ANTHROPIC_AUTH_TOKEN_1",
+    "AUTH_FALLBACK_2": "$ANTHROPIC_AUTH_TOKEN_2",
+    "AUTH_FALLBACK_3": "$ANTHROPIC_AUTH_TOKEN_3"
+  }
+}
+\`\`\`
+
+> Kilo utilise \`OPENAI_API_KEY\` comme clé primaire (compatible OpenAI-compatible API).
+
+---
+
+### 📂 EXEMPLE : Variable $VAR simple (sans fallback)
+
+\`\`\`json
+{
+  "model": "claude-sonnet-4-20250514",
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN_4",
+    "ANTHROPIC_BASE_URL": "$Z_AI_BASE_URL",
+    "API_TIMEOUT_MS": "$API_TIMEOUT_MS"
+  }
+}
+\`\`\`
+
+Les \`$VAR\` peuvent être sur n'importe quelle valeur de \`env\`.
+
+---
+
+### ⚠️ RÈGLES IMPORTANTES
+
+- Les clés \`AUTH_FALLBACK_1\`, \`AUTH_FALLBACK_2\`, \`AUTH_FALLBACK_3\` sont réservées par Overmind pour le retry 401.
+- La substitution est à **un seul niveau** : \`$MINIMAXI_API_KEY\` est remplacé, mais pas récursivement.
+- Les tokens sont résolution **avant** le spawn de l'agent.
+- Le retry ne fonctionne que sur erreur **401/auth** — pas sur les erreurs de réseau ou rate limit.`;
       break;
   }
 
