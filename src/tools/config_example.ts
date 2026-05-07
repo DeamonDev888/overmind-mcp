@@ -181,7 +181,7 @@ Si une erreur d'authentification (401) se produit, Overmind peut RETENTER automa
 {
   "model": "claude-sonnet-4-20250514",
   "env": {
-    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_FALLBACK_1",
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN",
     "AUTH_FALLBACK_1": "$ANTHROPIC_AUTH_TOKEN_1",
     "AUTH_FALLBACK_2": "$ANTHROPIC_AUTH_TOKEN_2",
     "AUTH_FALLBACK_3": "$ANTHROPIC_AUTH_TOKEN_3"
@@ -191,16 +191,18 @@ Si une erreur d'authentification (401) se produit, Overmind peut RETENTER automa
 
 **.env associé :**
 \`\`\`
-ANTHROPIC_AUTH_TOKEN_1=sk-cp-xxx...   # Token #1
-ANTHROPIC_AUTH_TOKEN_2=sk-cp-yyy...   # Token #2 (fallback #1)
-ANTHROPIC_AUTH_TOKEN_3=sk-cp-zzz...   # Token #3 (fallback #2)
+ANTHROPIC_AUTH_TOKEN=sk-cp-primary...    # Token principal ( utilisation normale )
+ANTHROPIC_AUTH_TOKEN_1=sk-cp-xxx...   # Fallback #1
+ANTHROPIC_AUTH_TOKEN_2=sk-cp-yyy...   # Fallback #2
+ANTHROPIC_AUTH_TOKEN_3=sk-cp-zzz...   # Fallback #3
 \`\`\`
 
 **Comment ça marche :**
-1. L'agent commence avec \`ANTHROPIC_AUTH_TOKEN\` = \`$ANTHROPIC_AUTH_FALLBACK_1\` → résolu → \`sk-cp-xxx...\`
-2. Si erreur 401 → retry avec \`AUTH_FALLBACK_1\` → \`sk-cp-yyy...\`
-3. Si erreur 401 → retry avec \`AUTH_FALLBACK_2\` → \`sk-cp-zzz...\`
-4. Si erreur 401 → \`AUTH_ERROR_ALL_FALLBACKS_EXHAUSTED\`
+1. L'agent commence avec \`ANTHROPIC_AUTH_TOKEN\` = \`$ANTHROPIC_AUTH_TOKEN\` → résolu → \`sk-cp-primary...\`
+2. Si erreur 401 → retry avec \`AUTH_FALLBACK_1\` → \`sk-cp-xxx...\`
+3. Si erreur 401 → retry avec \`AUTH_FALLBACK_2\` → \`sk-cp-yyy...\`
+4. Si erreur 401 → retry avec \`AUTH_FALLBACK_3\` → \`sk-cp-zzz...\`
+5. Si erreur 401 → \`AUTH_ERROR_ALL_FALLBACKS_EXHAUSTED\`
 
 ---
 
@@ -210,13 +212,15 @@ ANTHROPIC_AUTH_TOKEN_3=sk-cp-zzz...   # Token #3 (fallback #2)
 {
   "model": "claude-sonnet-4-20250514",
   "env": {
-    "OPENAI_API_KEY": "$ANTHROPIC_AUTH_FALLBACK_1",
+    "OPENAI_API_KEY": "$ANTHROPIC_AUTH_TOKEN",
     "AUTH_FALLBACK_1": "$ANTHROPIC_AUTH_TOKEN_1",
     "AUTH_FALLBACK_2": "$ANTHROPIC_AUTH_TOKEN_2",
     "AUTH_FALLBACK_3": "$ANTHROPIC_AUTH_TOKEN_3"
   }
 }
 \`\`\`
+
+> Kilo utilise \`OPENAI_API_KEY\` comme clé primaire (compatible OpenAI / OpenRouter /etc.).
 
 > Kilo utilise \`OPENAI_API_KEY\` comme clé primaire (compatible OpenAI-compatible API).
 
@@ -228,7 +232,7 @@ ANTHROPIC_AUTH_TOKEN_3=sk-cp-zzz...   # Token #3 (fallback #2)
 {
   "model": "claude-sonnet-4-20250514",
   "env": {
-    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN_4",
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN",
     "ANTHROPIC_BASE_URL": "$Z_AI_BASE_URL",
     "API_TIMEOUT_MS": "$API_TIMEOUT_MS"
   }
