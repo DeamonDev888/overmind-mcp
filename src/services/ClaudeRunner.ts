@@ -10,6 +10,7 @@ export interface RunAgentOptions {
   agentName?: string;
   sessionId?: string;
   autoResume?: boolean;
+  cwd?: string;
 }
 
 export interface RunAgentResult {
@@ -29,7 +30,7 @@ export class ClaudeRunner {
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
-    const { prompt, agentName, autoResume } = options;
+    const { prompt, agentName, autoResume, cwd = process.cwd() } = options;
     let { sessionId } = options;
     const { CORE, PERMISSIONS, PATHS } = this.config;
     const agentCustomEnv: Record<string, string> = {};
@@ -45,10 +46,9 @@ export class ClaudeRunner {
     let settingsPath = resolveConfigPath(PATHS.SETTINGS);
 
     if (agentName) {
-      const settingsDir = path.dirname(PATHS.SETTINGS);
-      const specificSettingsPath = resolveConfigPath(
-        path.join(settingsDir, `settings_${agentName}.json`),
-      );
+      // Utiliser le répertoire du settingsPath résolu, pas le raw PATHS.SETTINGS
+      const settingsDir = path.dirname(settingsPath);
+      const specificSettingsPath = path.join(settingsDir, `settings_${agentName}.json`);
 
       if (!fs.existsSync(specificSettingsPath)) {
         return {
@@ -59,7 +59,6 @@ export class ClaudeRunner {
       settingsPath = specificSettingsPath;
     }
 
-    const cwd = process.cwd();
     const relativeSettings = path.relative(cwd, settingsPath);
     if (!relativeSettings.startsWith('..') && !path.isAbsolute(relativeSettings)) {
       settingsPath = relativeSettings.startsWith('./') ? relativeSettings : `./${relativeSettings}`;
@@ -72,15 +71,25 @@ export class ClaudeRunner {
     // --- Isolation ---
     if (agentName) {
       try {
-        const agentSettingsPath = resolveConfigPath(
-          path.join(path.dirname(PATHS.SETTINGS), `settings_${agentName}.json`),
-        );
+        // settingsPath est déjà le bon chemin (résolu à la ligne 51)
+        const agentSettingsPath = settingsPath;
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
 
           if (settings.env) {
+            // ⚠️ OVERMIND GÈRE LA SUBSTITUTION DES VARIABLES $VAR
+            // Les valeurs comme "$ANTHROPIC_AUTH_TOKEN_2" sont résolues ici
+            // en utilisant process.env (qui contient les vars du .env chargé)
+            const resolvedEnv: Record<string, string> = {};
+            for (const [key, value] of Object.entries(settings.env)) {
+              if (typeof value === 'string') {
+                resolvedEnv[key] = value.replace(/\$(\w+)/g, (_, varName) => process.env[varName] ?? value);
+              } else if (value != null) {
+                resolvedEnv[key] = String(value);
+              }
+            }
             // Mémoriser l'env configuré pour l'injection
-            Object.assign(agentCustomEnv, settings.env);
+            Object.assign(agentCustomEnv, resolvedEnv);
 
             // --- SMART NICKNAME FALLBACK ---
             const currentModel = settings.env.ANTHROPIC_MODEL;
@@ -177,6 +186,20 @@ export class ClaudeRunner {
     const modelToUse = agentCustomEnv.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
     console.error(`[ClaudeRunner] 🛠️  Model override: ${modelToUse}`);
     argsSpawn.push('--model', modelToUse);
+
+    // Extraire les fallback tokens pour les retries automatiques
+    const fallbackTokens: string[] = [];
+    for (let i = 1; i <= 3; i++) {
+      const fallbackKey = `ANTHROPIC_AUTH_FALLBACK_${i}`;
+      const fallbackVal = process.env[fallbackKey];
+      if (fallbackVal) {
+        fallbackTokens.push(fallbackVal);
+        console.error(`[ClaudeRunner] 🔄 Fallback token ${i} disponible`);
+      }
+    }
+    if (fallbackTokens.length > 0) {
+      console.error(`[ClaudeRunner] 🔄 ${fallbackTokens.length} fallback token(s) configuré(s) pour retry automatique`);
+    }
     
     if (agentCustomEnv.AGENT_NICKNAME) {
       console.error(`[ClaudeRunner] 👤 Nickname: ${agentCustomEnv.AGENT_NICKNAME}`);
@@ -188,10 +211,10 @@ export class ClaudeRunner {
     return new Promise((resolve) => {
       const cleanupTmpFiles = () => {
         if (tmpMcpPathToDelete && fs.existsSync(tmpMcpPathToDelete)) {
-          try { fs.unlinkSync(tmpMcpPathToDelete); } catch (e) {}
+          try { fs.unlinkSync(tmpMcpPathToDelete); } catch { /* ignore */ }
         }
         if (tmpSettingsPathToDelete && fs.existsSync(tmpSettingsPathToDelete)) {
-          try { fs.unlinkSync(tmpSettingsPathToDelete); } catch (e) {}
+          try { fs.unlinkSync(tmpSettingsPathToDelete); } catch { /* ignore */ }
         }
       };
 
@@ -249,7 +272,7 @@ export class ClaudeRunner {
 
       const child: ChildProcess = spawn(command, spawnArgs, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        cwd: process.cwd(),
+        cwd,
         // shell: false explicitly (handled by command selection)
         windowsHide: true,
         env: {

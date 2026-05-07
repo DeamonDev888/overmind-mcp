@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { exec } from 'child_process';
+import { exec, ExecException } from 'child_process';
 import { promisify } from 'util';
 
 const execPromise = promisify(exec);
@@ -17,9 +17,10 @@ export async function shellExecute({ command, cwd }: { command: string; cwd?: st
     });
     
     return `SUCCESS:\nSTDOUT:\n${stdout}\n\nSTDERR:\n${stderr}`;
-  } catch (error: any) {
-    const out = error.stdout?.trim() || '';
-    const err = error.stderr?.trim() || error.message;
-    return `FAILURE (Exit Code: ${error.code}):\nSTDOUT:\n${out}\n\nSTDERR:\n${err}`;
+  } catch (error: unknown) {
+    const errObj = error as ExecException & { stdout?: string; stderr?: string };
+    const out = errObj.stdout?.trim() || '';
+    const err = errObj.stderr?.trim() || errObj.message;
+    return `FAILURE (Exit Code: ${errObj.code}):\nSTDOUT:\n${out}\n\nSTDERR:\n${err}`;
   }
 }

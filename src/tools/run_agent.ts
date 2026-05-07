@@ -37,13 +37,17 @@ export const runAgentSchema = z.object({
     .describe(
       'Mode spécifique pour Kilo (code, architect, ask, debug, orchestrator) ou Cline (plan, act)',
     ),
+  cwd: z
+    .string()
+    .optional()
+    .describe('Répertoire de travail pour lancer l\'agent'),
 });
 
 export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
 }> {
-  const { runner, prompt, agentName, autoResume, sessionId, mode } = args;
+  const { runner, prompt, agentName, autoResume, sessionId, mode, cwd } = args;
   const start = Date.now();
 
   // Sélection du runner approprié
@@ -58,7 +62,7 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
     switch (runner) {
       case 'claude': {
         const claudeRunner = new ClaudeRunner();
-        result = await claudeRunner.runAgent({ prompt, agentName, autoResume, sessionId });
+        result = await claudeRunner.runAgent({ prompt, agentName, autoResume, sessionId, cwd });
         break;
       }
 
@@ -76,6 +80,7 @@ export async function runAgent(args: z.infer<typeof runAgentSchema>): Promise<{
           autoResume,
           sessionId,
           mode: mode as 'code' | 'architect' | 'ask' | 'debug' | 'orchestrator' | undefined,
+          cwd,
         });
         break;
       }

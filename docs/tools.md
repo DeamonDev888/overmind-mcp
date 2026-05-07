@@ -32,6 +32,7 @@ Ce serveur MCP expose des outils d'orchestration multi-agents avec isolation de 
 - **`mode`** (enum, optionnel) : Mode spécifique pour certains runners :
   - **Kilo** : `code`, `architect`, `ask`, `debug`, `orchestrator`
   - **Cline** : `plan`, `act`
+- **`cwd`** (string, optionnel) : Répertoire de travail pour lancer l'agent. Si non fourni, utilise le répertoire courant du processus Overmind.
 
 **Exemple d'utilisation** :
 
@@ -41,6 +42,7 @@ run_agent({
   agentName: 'expert_python',
   prompt: 'Analyse ce code et corrige les bugs',
   autoResume: true,
+  cwd: '/path/to/project',  // Optionnel - répertoire de travail
 });
 
 run_agent({
@@ -56,6 +58,62 @@ run_agent({
 - `result` : Résultat de l'exécution (texte)
 - `SESSION_ID` : Identifiant de session (pour reprise)
 - `RUNNER` : Runner utilisé
+
+---
+
+### ⚠️ Substitution des Variables `$VAR` dans les Settings
+
+OverMind gère automatiquement la substitution des variables d'environnement dans les fichiers `settings_[agent].json`.
+
+**Exemple dans un fichier settings** :
+
+```json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN_2",
+    "ANTHROPIC_BASE_URL": "$ANTHROPIC_BASE_URL",
+    "ANTHROPIC_MODEL": "mini-max-m2.7-highspeed"
+  }
+}
+```
+
+Au chargement, OverMind remplace :
+- `$ANTHROPIC_AUTH_TOKEN_2` → valeur de `process.env.ANTHROPIC_AUTH_TOKEN_2`
+- `$ANTHROPIC_BASE_URL` → valeur de `process.env.ANTHROPIC_BASE_URL`
+
+---
+
+### 🔄 Fallback Tokens (ANTHROPIC_AUTH_FALLBACK)
+
+En cas d'erreur d'authentification, quota dépassé, rate limit ou modèle indisponible, OverMind peut automatiquement réessayer avec un token de fallback.
+
+**Configuration dans `.env`** :
+
+```bash
+ANTHROPIC_AUTH_TOKEN=sk-cp-primary-token...
+ANTHROPIC_AUTH_FALLBACK_1=sk-cp-fallback-token-1...
+ANTHROPIC_AUTH_FALLBACK_2=sk-cp-fallback-token-2...
+ANTHROPIC_AUTH_FALLBACK_3=sk-cp-fallback-token-3...
+```
+
+Ou via référence dans les settings :
+
+```json
+{
+  "env": {
+    "ANTHROPIC_AUTH_FALLBACK_1": "ANTHROPIC_AUTH_TOKEN_3",
+    "ANTHROPIC_AUTH_FALLBACK_2": "ANTHROPIC_AUTH_TOKEN"
+  }
+}
+```
+
+**Erreurs qui déclenchent le retry automatique** :
+- `401` / `api key` / `auth` — Clé invalide ou expirée
+- `429` / `quota` / `exceeded` — Limite API atteinte
+- `rate limit` — Trop de requêtes
+- `model busy` / `model unavailable` — Modèle temporairement indisponible
+
+Le retry est transparent — aucun message d'erreur n'est affiché à l'utilisateur si le fallback réussit.
 
 ---
 

@@ -10,6 +10,7 @@ export interface RunAgentOptions {
   sessionId?: string;
   autoResume?: boolean;
   mode?: 'code' | 'architect' | 'ask' | 'debug' | 'orchestrator';
+  cwd?: string;
 }
 
 export interface RunAgentResult {
@@ -29,7 +30,7 @@ export class KiloRunner {
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
-    const { prompt, agentName, autoResume, mode } = options;
+    const { prompt, agentName, autoResume, mode, cwd = process.cwd() } = options;
     let { sessionId } = options;
     const { PATHS } = this.config;
     const agentCustomEnv: Record<string, string> = {};
@@ -53,7 +54,18 @@ export class KiloRunner {
         if (fs.existsSync(agentSettingsPath)) {
           const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
           if (settings.env) {
-            Object.assign(agentCustomEnv, settings.env);
+            // ⚠️ OVERMIND GÈRE LA SUBSTITUTION DES VARIABLES $VAR
+            // Les valeurs comme "$ANTHROPIC_AUTH_TOKEN_2" sont résolues ici
+            // en utilisant process.env (qui contient les vars du .env chargé)
+            const resolvedEnv: Record<string, string> = {};
+            for (const [key, value] of Object.entries(settings.env)) {
+              if (typeof value === 'string') {
+                resolvedEnv[key] = value.replace(/\$(\w+)/g, (_, varName) => process.env[varName] ?? value);
+              } else if (value != null) {
+                resolvedEnv[key] = String(value);
+              }
+            }
+            Object.assign(agentCustomEnv, resolvedEnv);
             if (settings.env.AGENT_TIMEOUT_MS) {
               customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
             }
@@ -76,7 +88,7 @@ export class KiloRunner {
       const command = isWin ? 'kilocode.cmd' : 'kilocode';
 
       const child: ChildProcess = spawn(command, argsSpawn, {
-        cwd: process.cwd(),
+        cwd,
         shell: isWin,
         windowsHide: true,
         env: {

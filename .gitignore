@@ -38,3 +38,4 @@ embed-analytics.json
 create_test_agent.js
 run_mission.js
 verify_memory.js
+prompt/
