@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.7-alpha (2026-05-08)
+
+### Changed
+
+- **`config_example` tool**: Documentation complète des fallback tokens (401, 429, 5xx). Exemples clairs avec syntaxe `$ANTHROPIC_AUTH_TOKEN_2`, etc.
+
 ## 1.13.6-alpha (2026-05-08)
 
 ### Fixed
