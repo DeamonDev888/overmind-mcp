@@ -222,12 +222,22 @@ export class GeminiRunner {
 
         let stdout = '';
         let stderr = '';
+        const MAX_BUF = 10 * 1024 * 1024;
+        const cleanup = () => {
+          child.stdout?.removeAllListeners();
+          child.stderr?.removeAllListeners();
+          child.removeAllListeners();
+        };
 
         child.stdout?.on('data', (data) => {
-          stdout += data.toString();
+          const d = data.toString();
+          if (stdout.length + d.length > MAX_BUF) stdout = stdout.slice(-MAX_BUF);
+          else stdout += d;
         });
         child.stderr?.on('data', (data) => {
-          stderr += data.toString();
+          const d = data.toString();
+          if (stderr.length + d.length > MAX_BUF) stderr = stderr.slice(-MAX_BUF);
+          else stderr += d;
         });
 
         const timeout = setTimeout(() => {
@@ -235,6 +245,7 @@ export class GeminiRunner {
           setTimeout(() => {
             if (!child.killed) child.kill('SIGKILL');
           }, 5000);
+          cleanup();
           safeResolve({ result: '', error: 'TIMEOUT', rawOutput: stdout + stderr });
         }, this.timeoutMs);
 
@@ -245,6 +256,7 @@ export class GeminiRunner {
 
         child.on('close', async (code: number | null) => {
           clearTimeout(timeout);
+          cleanup();
 
           if (code !== 0 && !stdout) {
             return safeResolve({
