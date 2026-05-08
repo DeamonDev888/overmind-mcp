@@ -2,50 +2,65 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.5-alpha (2026-05-08)
+
+### Fixed
+
+- **`getDetailedConfigs` fallback path**: Les paths de fallback utilisaient `.overmind/agents/` hardcodé au lieu de passer par `getWorkspaceDir()` qui lit `OVERMIND_WORKSPACE`. Maintenant le fallback utilise le workspace dynamiques depuis la variable d'environnement, cohérence avec `listAgents`.
+
 ## 1.13.4-alpha (2026-05-08)
 
 ### Fixed
+
 - **OOM-1 (vrai)** : le cap stdout/stderr de 10 Mo n'était auparavant présent que dans `OpenClawRunner`. Désormais aussi appliqué dans `ClaudeRunner.ts`, `KiloRunner.ts`, `GeminiRunner.ts` (rotation `slice(-MAX_BUF)` quand l'accumulation dépasserait 10 Mo).
 - **ASYNC-3 (vrai)** : `GeminiRunner.ts` reçoit un helper `cleanup()` qui retire les listeners (`removeAllListeners()` sur stdout/stderr/child) et est appelé après timeout et après `close`.
 
 ### Changed
+
 - Corrections appliquées en parallèle par 3 agents Minimax (claude runner) via `dispatchAgents()` — preuve de bout en bout du parallélisme local.
 
 ## 1.13.3-alpha (2026-05-08)
 
 ### Fixed
+
 - **`tools/list` MCP error** : `runAgentSchema` exposait un champ `signal: z.custom<AbortSignal>()` que FastMCP ne pouvait pas sérialiser en JSON Schema (`Custom types cannot be represented in JSON Schema`), ce qui empêchait la découverte des outils côté client MCP. Le champ `signal` est désormais retiré du schéma public et passé en interne via le type `RunAgentInternalArgs`.
 
 ## 1.13.2-alpha (2026-05-08)
 
 ### Fixed
+
 - **Telemetry no-op span** : `withSpan()` retournait `{} as Span` quand `OTEL_ENABLED!=true`, ce qui plantait dès le premier `span.setAttribute(...)` (`TypeError: span.setAttribute is not a function`) et empêchait `runAgent` de s'exécuter sans OpenTelemetry. Désormais `withSpan()` passe systématiquement par `tracer.startActiveSpan(...)` — l'API OpenTelemetry fournit un `NonRecordingSpan` no-op valide quand le SDK n'est pas démarré.
 - **Chargement du `.env` utilisateur** : la binaire installée globalement (`npm i -g overmind-mcp`) ne lisait que son propre `.env` (`<install-dir>/.env`) et ignorait le `.env` du projet (`OVERMIND_WORKSPACE`, etc.). Ajout d'une cascade de chargement : `$OVERMIND_ENV_FILE` → `<process.cwd()>/.env` → fallback historique. Les valeurs déjà présentes dans `process.env` (injectées par le client MCP) restent prioritaires.
 
 ## 1.13.1-alpha (2026-05-08)
 
 ### Fixed
+
 - **Dispatcher Temporal fallback** : `dispatchAgents()` n'attendait pas la promesse retournée par `dispatchViaTemporal()` (`return` sans `await`), ce qui faisait fuir les rejets asynchrones hors du `try/catch` et provoquait un `uncaughtException` (`Failed to start Workflow`/`ECONNREFUSED ::1:7233`) lorsque Temporal n'était pas joignable. Désormais le fallback local est bien déclenché si Temporal est indisponible.
 
 ## 1.13.0-alpha (2026-05-08)
 
 ### Recovered
+
 - **Prompt files recovered**: Restored `Claude_code.md`, `Kilo.md`, `Kilo_Hermes.md`, `Minimax4.md` from git history (were deleted in commit 86ca1da).
 
 ## 1.12.1-alpha (2026-05-08)
 
 ### Changed
+
 - `preferGlobal: true` ajouté dans package.json (CLI tool — recommande install global)
 
 ## 1.12.0-alpha.1 (2026-05-08)
 
 ### Removed
+
 - Docker infrastructure files (out of scope, users wire their own RabbitMQ/Temporal/Jaeger)
 - `infra:up/down/logs` npm scripts
 
 ## 1.12.0-alpha (2026-05-08)
 
 ### Added
+
 - OpenTelemetry tracing : module `src/lib/telemetry.ts` (init no-op si OTEL_ENABLED!=true), spans sur ClaudeRunner/KiloRunner/GeminiRunner et tools clés
 - RabbitMQ broker : `src/lib/broker/rabbitmq.ts` (publisher/consumer queues durables) + `rabbitmqDispatch.ts` + worker `src/bin/rabbitmq-worker.ts`
 - Temporal workflow engine : activities/workflows/client/dispatch + worker `src/bin/temporal-worker.ts` (retry x2, timeout 15min)
@@ -55,6 +70,7 @@ All notable changes to this project will be documented in this file.
 - Dépendance `async-mutex` pour sérialisation d'écritures concurrentes
 
 ### Fixed
+
 - OOM-1 : stdout/stderr bornés à 10 MB dans ClaudeRunner, KiloRunner, GeminiRunner
 - OOM-2 : `run_agents_parallel` mode `waitAll:false` — abort des promesses perdantes via AbortController par agent
 - OOM-3 : `metadata` — `depth.max(8)` + skip des fichiers >1 MB
@@ -65,6 +81,7 @@ All notable changes to this project will be documented in this file.
 - ASYNC-4 : `sessions.ts` — race condition supprimée via `async-mutex` autour des read-modify-write
 
 ### Changed
+
 - `run_agents_parallel.ts` simplifié (38 lignes) — délègue toute la logique au dispatcher
 - Workers de tests validés : `tests/feature_flags.test.ts` (3 tests passants)
 
