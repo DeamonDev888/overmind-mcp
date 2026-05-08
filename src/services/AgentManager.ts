@@ -461,9 +461,28 @@ Serveurs MCP activés : ${mcpServers.join(', ')}.`,
       }
     };
 
+    // Fallback paths using workspace from OVERMIND_WORKSPACE env var
+    const workspaceDir = getWorkspaceDir();
+    const fallbackAgentsDir = path.join(workspaceDir, '.overmind', 'agents');
+    const fallbackPromptPath = path.join(fallbackAgentsDir, `${name}.md`);
+    const fallbackSettingsDir = path.join(workspaceDir, '.overmind', 'agents', name);
+    const fallbackSettingsPath = path.join(fallbackSettingsDir, 'settings.json');
+    const fallbackMcpPath = path.join(fallbackSettingsDir, '.mcp.json');
+
     result['prompt.md'] = await readFileSafe(promptPath);
+    if (result['prompt.md'] === 'MISSING') {
+      result['prompt.md'] = await readFileSafe(fallbackPromptPath);
+    }
+
     result['settings.json'] = await readFileSafe(settingsPath);
+    if (result['settings.json'] === 'MISSING') {
+      result['settings.json'] = await readFileSafe(fallbackSettingsPath);
+    }
+
     result['.mcp.json'] = await readFileSafe(mcpPath);
+    if (result['.mcp.json'] === 'MISSING') {
+      result['.mcp.json'] = await readFileSafe(fallbackMcpPath);
+    }
 
     const skillContent = await readFileSafe(skillPath);
     if (skillContent !== 'MISSING') {
