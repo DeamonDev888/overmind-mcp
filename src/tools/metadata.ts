@@ -4,7 +4,7 @@ import { join, extname, basename, resolve, sep } from 'path';
 
 export const metadataSchema = z.object({
   path: z.string().default('.').describe('Chemin du projet (défaut: répertoire courant)'),
-  depth: z.number().default(3).describe("Profondeur de l'arborescence (défaut: 3)"),
+  depth: z.number().min(1).max(8).default(3).describe("Profondeur de l'arborescence (défaut: 3)"),
   includeStats: z.boolean().default(true).describe('Inclure les statistiques (défaut: true)'),
 });
 
@@ -163,7 +163,13 @@ async function getConfigs(dir: string): Promise<Record<string, string>> {
   const result: Record<string, string> = {};
   for (const file of CONFIG_FILES) {
     try {
-      const content = await readFile(join(dir, file), 'utf8');
+      const filePath = join(dir, file);
+      const s = await stat(filePath);
+      if (s.size > 1024 * 1024) {
+        result[file] = '[FILE TOO LARGE >1MB — skipped]';
+        continue;
+      }
+      const content = await readFile(filePath, 'utf8');
       result[file] = content.length > 2000 ? content.slice(0, 2000) + '\n…(tronqué)' : content;
     } catch {
       // file absent

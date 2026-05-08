@@ -1,5 +1,5 @@
 ---
-"overmind-mcp": minor
+'overmind-mcp': minor
 ---
 
 - Add `cwd` parameter to run_agent for ClaudeRunner and KiloRunner

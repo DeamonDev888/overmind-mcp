@@ -1,6 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { Mutex } from 'async-mutex';
 import { getWorkspaceDir } from './config.js';
+
+const sessionMutex = new Mutex();
 
 const SESSIONS_FILE = '.claude/sessions.json';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -49,20 +52,22 @@ export async function getLastSessionId(
   workspaceDir?: string,
   runner?: string,
 ): Promise<string | null> {
-  try {
-    const filePath = getSessionsPath(workspaceDir);
-    const content = await fs.readFile(filePath, 'utf-8');
-    let sessions: Record<string, SessionEntry | string> = JSON.parse(content);
-    sessions = await purgeExpired(sessions);
+  return sessionMutex.runExclusive(async () => {
+    try {
+      const filePath = getSessionsPath(workspaceDir);
+      const content = await fs.readFile(filePath, 'utf-8');
+      let sessions: Record<string, SessionEntry | string> = JSON.parse(content);
+      sessions = await purgeExpired(sessions);
 
-    const namespacedKey = buildKey(runner, agentName);
-    if (sessions[namespacedKey]) {
-      return extractId(sessions[namespacedKey]);
+      const namespacedKey = buildKey(runner, agentName);
+      if (sessions[namespacedKey]) {
+        return extractId(sessions[namespacedKey]);
+      }
+      return extractId(sessions[agentName]) || null;
+    } catch (_error) {
+      return null;
     }
-    return extractId(sessions[agentName]) || null;
-  } catch (_error) {
-    return null;
-  }
+  });
 }
 
 export async function saveSessionId(
@@ -71,27 +76,29 @@ export async function saveSessionId(
   workspaceDir?: string,
   runner?: string,
 ): Promise<void> {
-  const filePath = getSessionsPath(workspaceDir);
-  const dir = path.dirname(filePath);
+  return sessionMutex.runExclusive(async () => {
+    const filePath = getSessionsPath(workspaceDir);
+    const dir = path.dirname(filePath);
 
-  try {
-    await fs.mkdir(dir, { recursive: true });
-
-    let sessions: Record<string, SessionEntry | string> = {};
     try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      sessions = JSON.parse(content);
-      sessions = await purgeExpired(sessions);
-    } catch (_e) {
-      // Ignore error (file new)
-    }
+      await fs.mkdir(dir, { recursive: true });
 
-    const key = buildKey(runner, agentName);
-    sessions[key] = { id: sessionId, ts: Date.now() };
-    await fs.writeFile(filePath, JSON.stringify(sessions, null, 2), 'utf-8');
-  } catch (error) {
-    console.error(`Failed to save session ID for ${agentName}:`, error);
-  }
+      let sessions: Record<string, SessionEntry | string> = {};
+      try {
+        const content = await fs.readFile(filePath, 'utf-8');
+        sessions = JSON.parse(content);
+        sessions = await purgeExpired(sessions);
+      } catch (_e) {
+        // Ignore error (file new)
+      }
+
+      const key = buildKey(runner, agentName);
+      sessions[key] = { id: sessionId, ts: Date.now() };
+      await fs.writeFile(filePath, JSON.stringify(sessions, null, 2), 'utf-8');
+    } catch (error) {
+      console.error(`Failed to save session ID for ${agentName}:`, error);
+    }
+  });
 }
 
 export async function deleteSessionId(
@@ -99,27 +106,29 @@ export async function deleteSessionId(
   workspaceDir?: string,
   runner?: string,
 ): Promise<void> {
-  const filePath = getSessionsPath(workspaceDir);
-  try {
-    const content = await fs.readFile(filePath, 'utf-8');
-    let sessions: Record<string, SessionEntry | string> = JSON.parse(content);
+  return sessionMutex.runExclusive(async () => {
+    const filePath = getSessionsPath(workspaceDir);
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      let sessions: Record<string, SessionEntry | string> = JSON.parse(content);
 
-    const namespacedKey = buildKey(runner, agentName);
-    let deleted = false;
-    if (sessions[namespacedKey]) {
-      delete sessions[namespacedKey];
-      deleted = true;
-    }
-    if (sessions[agentName]) {
-      delete sessions[agentName];
-      deleted = true;
-    }
+      const namespacedKey = buildKey(runner, agentName);
+      let deleted = false;
+      if (sessions[namespacedKey]) {
+        delete sessions[namespacedKey];
+        deleted = true;
+      }
+      if (sessions[agentName]) {
+        delete sessions[agentName];
+        deleted = true;
+      }
 
-    if (deleted) {
-      sessions = await purgeExpired(sessions);
-      await fs.writeFile(filePath, JSON.stringify(sessions, null, 2), 'utf-8');
+      if (deleted) {
+        sessions = await purgeExpired(sessions);
+        await fs.writeFile(filePath, JSON.stringify(sessions, null, 2), 'utf-8');
+      }
+    } catch (_e) {
+      // Ignore
     }
-  } catch (_e) {
-    // Ignore
-  }
+  });
 }
