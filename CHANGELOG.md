@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.12.1-alpha (2026-05-08)
+
+### Changed
+- `preferGlobal: true` ajouté dans package.json (CLI tool — recommande install global)
+
 ## 1.12.0-alpha.1 (2026-05-08)
 
 ### Removed
