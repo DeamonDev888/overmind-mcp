@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.11.0 (2026-05-07)
+
+### Patch Changes
+
+- **Fix 401 detection in JSON result**: Claude CLI can exit with code 0 while embedding `api_error_status: 401` in the JSON response. Retry now triggers on both stderr patterns AND `jsonEnvelope.api_error_status === 401` AND auth error strings in `result` field.
+
 ## 1.9.0 (2026-05-07)
 
 ### Minor Changes
