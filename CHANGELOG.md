@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.0-alpha (2026-05-08)
+
+### Recovered
+- **Prompt files recovered**: Restored `Claude_code.md`, `Kilo.md`, `Kilo_Hermes.md`, `Minimax4.md` from git history (were deleted in commit 86ca1da).
+
+## 1.12.1-alpha (2026-05-08)
+
+### Changed
+- `preferGlobal: true` ajouté dans package.json (CLI tool — recommande install global)
+
+## 1.12.0-alpha.1 (2026-05-08)
+
+### Removed
+- Docker infrastructure files (out of scope, users wire their own RabbitMQ/Temporal/Jaeger)
+- `infra:up/down/logs` npm scripts
+
 ## 1.12.0-alpha (2026-05-08)
 
 ### Added
@@ -10,8 +26,7 @@ All notable changes to this project will be documented in this file.
 - Temporal workflow engine : activities/workflows/client/dispatch + worker `src/bin/temporal-worker.ts` (retry x2, timeout 15min)
 - Orchestration dispatcher : `src/lib/orchestration/dispatcher.ts` route vers Temporal/RabbitMQ/local selon flags (fallback automatique)
 - AbortSignal propagé à ClaudeRunner pour annulation propre
-- Infra Docker Compose : `docker-compose.infra.yml` (postgres + temporal + temporal-ui + rabbitmq + jaeger)
-- Scripts npm : `infra:up/down/logs`, `worker:rabbitmq`, `worker:temporal`
+- Scripts npm : `worker:rabbitmq`, `worker:temporal`
 - Dépendance `async-mutex` pour sérialisation d'écritures concurrentes
 
 ### Fixed
