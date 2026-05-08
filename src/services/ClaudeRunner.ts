@@ -286,12 +286,31 @@ export class ClaudeRunner {
         let currentStdout = '';
         const MAX_BUF = 10 * 1024 * 1024;
         let currentSessionId: string | undefined = sessionId;
+        let earlyExitTriggered = false; // Prevent double-exit on early retry
 
         const safeResolve = (value: RunAgentResult) => {
           if (!resolved) {
             resolved = true;
             resolve(value);
           }
+        };
+
+        const triggerRetry = (tokenInfo: { tokenEnvKey: string; tokenValue: string } | null) => {
+          if (earlyExitTriggered) return;
+          earlyExitTriggered = true;
+          if (currentChildRef && !currentChildRef.killed) {
+            currentChildRef.kill();
+          }
+          if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
+          if (killTimer) clearTimeout(killTimer);
+          if (timeout) clearTimeout(timeout);
+          retryCount++;
+          if (!options.silent) {
+            process.stderr.write(
+              `\n\x1b[41m\x1b[37m[ClaudeRunner] 🔄 Retry ${retryCount}/${maxRetries} avec ${tokenInfo?.tokenEnvKey || 'UNKNOWN'}...\x1b[0m\n`,
+            );
+          }
+          setImmediate(() => spawnWithToken(tokenInfo));
         };
 
         const cleanupTmpFiles = () => {
@@ -313,6 +332,7 @@ export class ClaudeRunner {
 
         let killTimer: NodeJS.Timeout | null = null;
         let hardTimeoutTimer: NodeJS.Timeout | null = null;
+        const timeout: NodeJS.Timeout | null = null;
 
         /**
          * Fonction centrale qui spawn le processus Claude avec le bon token.
@@ -477,15 +497,7 @@ export class ClaudeRunner {
             if (isFailure) {
               const tokenInfo = getTokenForIndex(retryCount);
               if (tokenInfo && retryCount < maxRetries) {
-                retryCount++;
-                if (!options.silent) {
-                  const errType = jsonEnvelope?.api_error_status || (isRetryable ? 'DETECTED' : 'UNKNOWN');
-                  process.stderr.write(
-                    `\n\x1b[41m\x1b[37m[ClaudeRunner] 🔄 Retryable error (${errType}). Retry ${retryCount}/${maxRetries} avec ${tokenInfo.tokenEnvKey}...\x1b[0m\n`,
-                  );
-                }
-                // Relancer avec le fallback suivant
-                spawnWithToken(tokenInfo);
+                triggerRetry(tokenInfo);
                 return;
               } else {
                 if (!options.silent) {
