@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.2-alpha (2026-05-08)
+
+### Fixed
+- **Telemetry no-op span** : `withSpan()` retournait `{} as Span` quand `OTEL_ENABLED!=true`, ce qui plantait dès le premier `span.setAttribute(...)` (`TypeError: span.setAttribute is not a function`) et empêchait `runAgent` de s'exécuter sans OpenTelemetry. Désormais `withSpan()` passe systématiquement par `tracer.startActiveSpan(...)` — l'API OpenTelemetry fournit un `NonRecordingSpan` no-op valide quand le SDK n'est pas démarré.
+- **Chargement du `.env` utilisateur** : la binaire installée globalement (`npm i -g overmind-mcp`) ne lisait que son propre `.env` (`<install-dir>/.env`) et ignorait le `.env` du projet (`OVERMIND_WORKSPACE`, etc.). Ajout d'une cascade de chargement : `$OVERMIND_ENV_FILE` → `<process.cwd()>/.env` → fallback historique. Les valeurs déjà présentes dans `process.env` (injectées par le client MCP) restent prioritaires.
+
 ## 1.13.1-alpha (2026-05-08)
 
 ### Fixed

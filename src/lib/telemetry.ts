@@ -31,8 +31,6 @@ export async function withSpan<T>(
   fn: (span: Span) => Promise<T>,
   attributes?: Record<string, string>,
 ): Promise<T> {
-  if (process.env.OTEL_ENABLED !== 'true') return fn({} as Span);
-
   const tracer = trace.getTracer('overmind-mcp');
   return tracer.startActiveSpan(name, async (span: Span) => {
     if (attributes) {
