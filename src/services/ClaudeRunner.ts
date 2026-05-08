@@ -190,11 +190,19 @@ export class ClaudeRunner {
     const TOKEN_KEYS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E'];
 
     /**
-     * Vérifie si le stderr contient une erreur d'authentification (401).
-     * Claude CLI affiche des messages explicites en cas d'auth failure.
+     * Vérifie si une erreur est retryable (fallback recommended).
+     * 401 = auth error (token invalide/expiré)
+     * 429 = rate limit / quota exhausted
+     * 500/502/503 = server error
      */
-    const isAuthError = (stderr: string): boolean => {
+    const isRetryableError = (stderr: string, jsonEnv: Record<string, unknown> | null): boolean => {
       const lower = stderr.toLowerCase();
+      const status = jsonEnv?.api_error_status as number | undefined;
+
+      if (status === 401) return true;
+      if (status === 429) return true;
+      if (status === 500 || status === 502 || status === 503) return true;
+
       return (
         lower.includes('401') ||
         lower.includes('unauthorized') ||
@@ -202,7 +210,15 @@ export class ClaudeRunner {
         lower.includes('api key invalid') ||
         lower.includes('authentication failed') ||
         lower.includes('auth error') ||
-        lower.includes('invalid authentication')
+        lower.includes('invalid authentication') ||
+        lower.includes('429') ||
+        lower.includes('rate limit') ||
+        lower.includes('quota exhausted') ||
+        lower.includes('limit exhausted') ||
+        lower.includes('503') ||
+        lower.includes('service unavailable') ||
+        lower.includes('500') ||
+        lower.includes('internal server error')
       );
     };
 
@@ -355,7 +371,8 @@ export class ClaudeRunner {
           if (currentChildRef.stdout) {
             currentChildRef.stdout.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              if (currentStdout.length + chunk.length > MAX_BUF) currentStdout = currentStdout.slice(-MAX_BUF);
+              if (currentStdout.length + chunk.length > MAX_BUF)
+                currentStdout = currentStdout.slice(-MAX_BUF);
               else currentStdout += chunk;
               if (agentName && !options.silent) {
                 process.stderr.write(`[ClaudeRunner:${agentName}] ${chunk}`);
@@ -366,7 +383,8 @@ export class ClaudeRunner {
           if (currentChildRef.stderr) {
             currentChildRef.stderr.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              if (currentStderr.length + chunk.length > MAX_BUF) currentStderr = currentStderr.slice(-MAX_BUF);
+              if (currentStderr.length + chunk.length > MAX_BUF)
+                currentStderr = currentStderr.slice(-MAX_BUF);
               else currentStderr += chunk;
               if (agentName && !options.silent) {
                 process.stderr.write(`[ClaudeRunner:${agentName}:ERR] ${chunk}`);
@@ -440,22 +458,26 @@ export class ClaudeRunner {
               }
             }
 
-            // ─── Vérification 401 / Auth Error → Retry avec fallback ───
-            // Le 401 peut apparaître dans stderr OU dans le JSON résultat (api_error_status: 401)
-            const has401InStderr = isAuthError(currentStderr);
-            const has401InResult =
+            // ─── Vérification Error Retryable → Retry avec fallback ───
+            // 401 (auth), 429 (rate limit/quota), 500/502/503 (server error)
+            const isRetryable = isRetryableError(currentStderr, jsonEnvelope);
+            const hasRetryableStatus =
               jsonEnvelope !== null &&
               (jsonEnvelope.api_error_status === 401 ||
-                (typeof jsonEnvelope.result === 'string' && isAuthError(jsonEnvelope.result)));
-            const isAuthFailure = (code !== 0 && has401InStderr) || has401InResult;
+                jsonEnvelope.api_error_status === 429 ||
+                jsonEnvelope.api_error_status === 500 ||
+                jsonEnvelope.api_error_status === 502 ||
+                jsonEnvelope.api_error_status === 503);
+            const isFailure = (code !== 0 && isRetryable) || hasRetryableStatus;
 
-            if (isAuthFailure) {
+            if (isFailure) {
               const tokenInfo = getTokenForIndex(retryCount);
               if (tokenInfo && retryCount < maxRetries) {
                 retryCount++;
                 if (!options.silent) {
+                  const errType = jsonEnvelope?.api_error_status || (isRetryable ? 'DETECTED' : 'UNKNOWN');
                   process.stderr.write(
-                    `\n\x1b[41m\x1b[37m[ClaudeRunner] 🔄 Auth error (401). Retry ${retryCount}/${maxRetries} avec ${tokenInfo.tokenEnvKey}...\x1b[0m\n`,
+                    `\n\x1b[41m\x1b[37m[ClaudeRunner] 🔄 Retryable error (${errType}). Retry ${retryCount}/${maxRetries} avec ${tokenInfo.tokenEnvKey}...\x1b[0m\n`,
                   );
                 }
                 // Relancer avec le fallback suivant
@@ -464,13 +486,13 @@ export class ClaudeRunner {
               } else {
                 if (!options.silent) {
                   process.stderr.write(
-                    `\n\x1b[41m\x1b[37m[ClaudeRunner] ❌ Tous les tokens fallback épuisés. Auth error finale.\x1b[0m\n`,
+                    `\n\x1b[41m\x1b[37m[ClaudeRunner] ❌ Tous les tokens fallback épuisés. Error retryable finale.\x1b[0m\n`,
                   );
                 }
                 cleanupTmpFiles();
                 safeResolve({
                   result: '',
-                  error: 'AUTH_ERROR_ALL_FALLBACKS_EXHAUSTED',
+                  error: 'RETRYABLE_ERROR_ALL_FALLBACKS_EXHAUSTED',
                   rawOutput: fullRaw,
                 });
                 return;
