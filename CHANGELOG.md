@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.10-alpha (2026-05-08)
+
+### Fixed
+
+- **triggerRetry targetRetryCount bug**: `triggerRetry()` était appelé sans argument, le tokenInfo était obtenu après. Du coup `retryCount` était toujours 0 lors du `getTokenForIndex(0)` → primary token au lieu du fallback. Maintenant `triggerRetry(targetRetryCount)` passe le bon index directement.
+
 ## 1.13.9-alpha (2026-05-08)
 
 ### Fixed
