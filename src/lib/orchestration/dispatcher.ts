@@ -136,7 +136,7 @@ export async function dispatchAgents(agents: AgentSpec[], opts: DispatchOptions)
     try {
       const m = await import('../workflow/temporal/dispatch.js');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return m.dispatchViaTemporal(agents, opts as any);
+      return await m.dispatchViaTemporal(agents, opts as any);
     } catch (err) {
       console.warn(
         '[dispatcher] Temporal dispatch failed, falling back to local:',

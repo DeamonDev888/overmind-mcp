@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.1-alpha (2026-05-08)
+
+### Fixed
+- **Dispatcher Temporal fallback** : `dispatchAgents()` n'attendait pas la promesse retournée par `dispatchViaTemporal()` (`return` sans `await`), ce qui faisait fuir les rejets asynchrones hors du `try/catch` et provoquait un `uncaughtException` (`Failed to start Workflow`/`ECONNREFUSED ::1:7233`) lorsque Temporal n'était pas joignable. Désormais le fallback local est bien déclenché si Temporal est indisponible.
+
 ## 1.13.0-alpha (2026-05-08)
 
 ### Recovered
