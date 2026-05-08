@@ -332,16 +332,29 @@ function autoFormatEnvFile(envPath: string) {
 
 const localEnvPath = path.resolve(__dirname, '../../.env');
 
-// Auto-détection et injection de OVERMIND_WORKSPACE s'il est manquant
+// Auto-détection et injection de OVERMIND_WORKSPACE s'il est manquant — NE PAS écraser s'il existe déjà
 try {
-  const workspacePath = path.resolve(__dirname, '../../');
   if (!fs.existsSync(localEnvPath)) {
+    const workspacePath = path.resolve(__dirname, '../../');
     fs.writeFileSync(localEnvPath, `OVERMIND_WORKSPACE=${workspacePath}\n`, 'utf8');
   } else {
     const currentContent = fs.readFileSync(localEnvPath, 'utf8');
-    if (!currentContent.includes('OVERMIND_WORKSPACE=')) {
-      fs.appendFileSync(localEnvPath, `\nOVERMIND_WORKSPACE=${workspacePath}\n`, 'utf8');
+    // Vérifier que OVERMIND_WORKSPACE n'existe pas OU n'a pas de valeur (ligne vide)
+    const match = currentContent.match(/^OVERMIND_WORKSPACE=(.*)$/m);
+    if (!match || !match[1]?.trim()) {
+      const workspacePath = path.resolve(__dirname, '../../');
+      if (!currentContent.includes('OVERMIND_WORKSPACE=')) {
+        fs.appendFileSync(localEnvPath, `\nOVERMIND_WORKSPACE=${workspacePath}\n`, 'utf8');
+      } else {
+        // Remplacer la ligne vide/videuse
+        const newContent = currentContent.replace(
+          /^OVERMIND_WORKSPACE=.*$/m,
+          `OVERMIND_WORKSPACE=${workspacePath}`,
+        );
+        fs.writeFileSync(localEnvPath, newContent, 'utf8');
+      }
     }
+    // Si OVERMIND_WORKSPACE a déjà une valeur → ne rien faire, ne pas écraser
   }
 } catch (_e) {
   // Ignorer l'erreur silencieusement
@@ -455,7 +468,7 @@ process.stdout.write = function (
 
       // Block non-RPC JSON
       rootLogger.warn({ raw: str }, '🛡️ [SHIELD] Blocked non-JSON-RPC (Object) on stdout');
-        return process.stderr.write(chunk, encoding as BufferEncoding | undefined, callback);
+      return process.stderr.write(chunk, encoding as BufferEncoding | undefined, callback);
     } catch (e) {
       // Malformed JSON-like content
       rootLogger.debug(
@@ -518,6 +531,9 @@ Object.defineProperty(process, 'stdin', {
 });
 
 // Setup completed - Dynamically import server components AFTER process.env is configured
+const { initTelemetry } = await import('../lib/telemetry.js');
+initTelemetry();
+
 const { createServer } = await import('../server.js');
 const { updateConfig } = await import('../lib/config.js');
 
