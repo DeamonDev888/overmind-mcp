@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.11-alpha (2026-05-08)
+
+### Fixed
+
+- **Fallback tokens $VAR resolution**: `getTokenForIndex` retournait les valeurs `$VAR` brutes (ex: `"$ANTHROPIC_AUTH_TOKEN_E"`) au lieu des tokens résolus pour les retry. Ajout de la résolution `$VAR` dans `spawnWithToken` : si `tokenValue` commence par `$`, on résout via `process.env[envKey]`. Le primary token (index=0) accepte aussi les `$VAR` non résolus (le check `!val.startsWith('$')` a été retiré).
+
 ## 1.13.10-alpha (2026-05-08)
 
 ### Fixed

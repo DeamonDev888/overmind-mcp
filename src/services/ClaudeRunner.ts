@@ -247,9 +247,12 @@ export class ClaudeRunner {
     ): { tokenEnvKey: string; tokenValue: string } | null => {
       if (index === 0) {
         // Tentative initiale : utiliser le primary token
+        // NOTE: si la valeur est un $VAR non résolu (interpolateEnvVars n'a pas trouvé
+        // la variable dans process.env à ce moment), on le passe quand même à spawnWithToken
+        // qui fera la résolution finale via process.env.
         for (const tk of TOKEN_KEYS) {
           const val = agentCustomEnv[tk];
-          if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
+          if (val && typeof val === 'string' && val.length > 0) {
             return { tokenEnvKey: tk, tokenValue: val };
           }
         }
@@ -359,10 +362,18 @@ export class ClaudeRunner {
           };
           if (tokenInfo) {
             // Remplacer le token actif par celui du fallback
+            // NOTE: Les tokens peuvent encore contenir des $VAR non résolus
+            // (interpolateEnvVars n'a pas trouvé ces vars dans process.env au moment du load).
+            // On résout ici via process.env (qui a été peuplé par loadEnvQuietly).
             for (const tk of TOKEN_KEYS) {
               delete spawnEnv[tk];
             }
-            spawnEnv[tokenInfo.tokenEnvKey] = tokenInfo.tokenValue;
+            let resolvedToken = tokenInfo.tokenValue;
+            if (resolvedToken.startsWith('$')) {
+              const envKey = resolvedToken.slice(1);
+              resolvedToken = process.env[envKey] || resolvedToken;
+            }
+            spawnEnv[tokenInfo.tokenEnvKey] = resolvedToken;
           }
 
           currentStderr = '';

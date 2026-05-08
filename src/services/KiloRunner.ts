@@ -349,7 +349,8 @@ export class KiloRunner {
           if (currentChild.stdout) {
             currentChild.stdout.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              if (currentStdout.length + chunk.length > MAX_BUF) currentStdout = currentStdout.slice(-MAX_BUF);
+              if (currentStdout.length + chunk.length > MAX_BUF)
+                currentStdout = currentStdout.slice(-MAX_BUF);
               else currentStdout += chunk;
 
               const lines = chunk.split('\n');
@@ -385,7 +386,8 @@ export class KiloRunner {
           if (currentChild.stderr) {
             currentChild.stderr.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              if (currentStderr.length + chunk.length > MAX_BUF) currentStderr = currentStderr.slice(-MAX_BUF);
+              if (currentStderr.length + chunk.length > MAX_BUF)
+                currentStderr = currentStderr.slice(-MAX_BUF);
               else currentStderr += chunk;
 
               const lowerChunk = chunk.toLowerCase();
