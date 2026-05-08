@@ -2,11 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.0.2-alpha (2026-05-08)
+## 0.0.3-alpha (2026-05-08)
 
 ### Recovered
 
 - **Prompt files recovered**: Restored `Claude_code.md`, `Kilo.md`, `Kilo_Hermes.md`, `Minimax4.md` from git history (were deleted in commit 86ca1da).
+
+## 0.0.2-alpha (2026-05-08)
 
 ### Fixes
 
