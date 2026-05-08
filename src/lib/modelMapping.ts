@@ -12,7 +12,9 @@
 
 export const NICKNAME_TO_MODEL: Record<string, string> = {
   // ── Anthropic / z.ai ──────────────────────────────────────────────────────────
-  'claude-3-5-sonnet-20241022': 'claude-3-5-sonnet-20241022',
+  // Z.AI endpoint: claude-3-5-sonnet-20241022 n'est pas reconnu,
+  // mais claude-sonnet-4-6 l'est (même modèle, nom différent côté Z.AI).
+  'claude-3-5-sonnet-20241022': 'claude-sonnet-4-6',
   'claude-opus-4-7': 'claude-opus-4-7',
   'claude-sonnet-4-6': 'claude-sonnet-4-6',
   // z.ai custom nicknames
