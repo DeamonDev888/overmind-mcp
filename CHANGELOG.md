@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.3-alpha (2026-05-08)
+
+### Fixed
+- **`tools/list` MCP error** : `runAgentSchema` exposait un champ `signal: z.custom<AbortSignal>()` que FastMCP ne pouvait pas sérialiser en JSON Schema (`Custom types cannot be represented in JSON Schema`), ce qui empêchait la découverte des outils côté client MCP. Le champ `signal` est désormais retiré du schéma public et passé en interne via le type `RunAgentInternalArgs`.
+
 ## 1.13.2-alpha (2026-05-08)
 
 ### Fixed

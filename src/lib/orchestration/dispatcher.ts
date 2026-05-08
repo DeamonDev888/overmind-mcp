@@ -1,11 +1,14 @@
 import { z } from 'zod';
-import { runAgent, runAgentSchema } from '../../tools/run_agent.js';
+import { runAgent, runAgentSchema, type RunAgentInternalArgs } from '../../tools/run_agent.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type AgentSpec = z.infer<typeof runAgentSchema> & {
   taskId?: string;
 };
+
+// Reexport pour les consommateurs qui propagent un AbortSignal
+export type { RunAgentInternalArgs };
 
 export interface DispatchOptions {
   waitAll: boolean;
