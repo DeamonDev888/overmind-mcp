@@ -34,10 +34,7 @@
     "format": "prettier --write .",
     "check-types": "tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "pnpm run rebuild",
-    "infra:up": "docker compose -f docker-compose.infra.yml up -d",
-    "infra:down": "docker compose -f docker-compose.infra.yml down",
-    "infra:logs": "docker compose -f docker-compose.infra.yml logs -f"
+    "prepublishOnly": "pnpm run rebuild"
   },
   "keywords": [
     "mcp",

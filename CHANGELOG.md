@@ -10,8 +10,7 @@ All notable changes to this project will be documented in this file.
 - Temporal workflow engine : activities/workflows/client/dispatch + worker `src/bin/temporal-worker.ts` (retry x2, timeout 15min)
 - Orchestration dispatcher : `src/lib/orchestration/dispatcher.ts` route vers Temporal/RabbitMQ/local selon flags (fallback automatique)
 - AbortSignal propagé à ClaudeRunner pour annulation propre
-- Infra Docker Compose : `docker-compose.infra.yml` (postgres + temporal + temporal-ui + rabbitmq + jaeger)
-- Scripts npm : `infra:up/down/logs`, `worker:rabbitmq`, `worker:temporal`
+- Scripts npm : `worker:rabbitmq`, `worker:temporal`
 - Dépendance `async-mutex` pour sérialisation d'écritures concurrentes
 
 ### Fixed
