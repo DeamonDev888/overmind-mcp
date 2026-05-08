@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.4-alpha (2026-05-08)
+
+### Fixed
+- **OOM-1 (vrai)** : le cap stdout/stderr de 10 Mo n'était auparavant présent que dans `OpenClawRunner`. Désormais aussi appliqué dans `ClaudeRunner.ts`, `KiloRunner.ts`, `GeminiRunner.ts` (rotation `slice(-MAX_BUF)` quand l'accumulation dépasserait 10 Mo).
+- **ASYNC-3 (vrai)** : `GeminiRunner.ts` reçoit un helper `cleanup()` qui retire les listeners (`removeAllListeners()` sur stdout/stderr/child) et est appelé après timeout et après `close`.
+
+### Changed
+- Corrections appliquées en parallèle par 3 agents Minimax (claude runner) via `dispatchAgents()` — preuve de bout en bout du parallélisme local.
+
 ## 1.13.3-alpha (2026-05-08)
 
 ### Fixed

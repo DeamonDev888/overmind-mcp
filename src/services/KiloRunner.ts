@@ -274,6 +274,7 @@ export class KiloRunner {
         let currentChild: ChildProcess | null = null;
         let currentStdout = '';
         let currentStderr = '';
+        const MAX_BUF = 10 * 1024 * 1024;
         let finalResult = '';
         let lastSessionId = sessionId;
 
@@ -348,7 +349,8 @@ export class KiloRunner {
           if (currentChild.stdout) {
             currentChild.stdout.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              currentStdout += chunk;
+              if (currentStdout.length + chunk.length > MAX_BUF) currentStdout = currentStdout.slice(-MAX_BUF);
+              else currentStdout += chunk;
 
               const lines = chunk.split('\n');
               for (const line of lines) {
@@ -383,7 +385,8 @@ export class KiloRunner {
           if (currentChild.stderr) {
             currentChild.stderr.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              currentStderr += chunk;
+              if (currentStderr.length + chunk.length > MAX_BUF) currentStderr = currentStderr.slice(-MAX_BUF);
+              else currentStderr += chunk;
 
               const lowerChunk = chunk.toLowerCase();
               if (

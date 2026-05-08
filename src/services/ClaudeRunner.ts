@@ -264,6 +264,7 @@ export class ClaudeRunner {
         currentChildRef = null;
         let currentStderr = '';
         let currentStdout = '';
+        const MAX_BUF = 10 * 1024 * 1024;
         let currentSessionId: string | undefined = sessionId;
 
         const safeResolve = (value: RunAgentResult) => {
@@ -354,7 +355,8 @@ export class ClaudeRunner {
           if (currentChildRef.stdout) {
             currentChildRef.stdout.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              currentStdout += chunk;
+              if (currentStdout.length + chunk.length > MAX_BUF) currentStdout = currentStdout.slice(-MAX_BUF);
+              else currentStdout += chunk;
               if (agentName && !options.silent) {
                 process.stderr.write(`[ClaudeRunner:${agentName}] ${chunk}`);
               }
@@ -364,7 +366,8 @@ export class ClaudeRunner {
           if (currentChildRef.stderr) {
             currentChildRef.stderr.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              currentStderr += chunk;
+              if (currentStderr.length + chunk.length > MAX_BUF) currentStderr = currentStderr.slice(-MAX_BUF);
+              else currentStderr += chunk;
               if (agentName && !options.silent) {
                 process.stderr.write(`[ClaudeRunner:${agentName}:ERR] ${chunk}`);
               }
