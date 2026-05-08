@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.9-alpha (2026-05-08)
+
+### Fixed
+
+- **ClaudeRunner fast-fail on retryable errors**: Le retry n'attendait plus la fermeture complète du processus (slow). Ajout de `triggerRetry()` qui kill immédiatement le processus, clear tous les timers, et relance via `setImmediate`. Flag `earlyExitTriggered` empêche le double-exit.
+
 ## 1.13.8-alpha (2026-05-08)
 
 ### Fixed
