@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.12.0-alpha.1 (2026-05-08)
+
+### Removed
+- Docker infrastructure files (out of scope, users wire their own RabbitMQ/Temporal/Jaeger)
+- `infra:up/down/logs` npm scripts
+
 ## 1.12.0-alpha (2026-05-08)
 
 ### Added
