@@ -1,4 +1,5 @@
 import { FastMCP } from 'fastmcp';
+import { withSpan } from './lib/telemetry.js';
 import { runAgent, runAgentSchema } from './tools/run_agent.js';
 import { runAgentsParallel, runAgentsParallelSchema } from './tools/run_agents_parallel.js';
 import { memorySearchTool, memorySearchSchema } from './tools/memory_search.js';
@@ -22,6 +23,12 @@ import {
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
 import { metadataTool, metadataSchema } from './tools/metadata.js';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ToolExecute = (...args: any[]) => Promise<any>;
+function wrapExecute(toolName: string, fn: ToolExecute) {
+  return (...args: Parameters<ToolExecute>) => withSpan(`tool.${toolName}`, () => fn(...args));
+}
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -64,7 +71,7 @@ run_agent(runner: "claude", agentName: "expert_python", prompt: "Analyse ce code
 run_agent(runner: "kilo", agentName: "architect", mode: "architect", prompt: "Conçois une API REST", path: "./my-project")
 run_agent(runner: "cline", agentName: "planner", mode: "plan", prompt: "Planifie l'implémentation")`,
     parameters: runAgentSchema,
-    execute: runAgent,
+    execute: wrapExecute('run_agent', runAgent),
   });
 
   // ─── OUTIL PARALLÈLE MULTI-AGENTS ──────────────────────────────────────────
@@ -86,7 +93,7 @@ run_agents_parallel(agents: [
 - waitAll (défaut: true) : attend tous les agents avant de retourner.
 - waitAll: false : retourne dès que le premier agent réussit (race mode).`,
     parameters: runAgentsParallelSchema,
-    execute: runAgentsParallel,
+    execute: wrapExecute('run_agents_parallel', runAgentsParallel),
   });
 
   // Outil : Créer un nouvel agent (tous runners supportés)

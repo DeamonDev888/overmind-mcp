@@ -3,6 +3,13 @@ import { ClaudeRunner } from '../services/ClaudeRunner.js';
 import { spawn } from 'child_process';
 import path from 'path';
 import { getWorkspaceDir, resetWorkspaceCache } from '../lib/config.js';
+
+// Mock telemetry — withSpan just calls fn() with a fake span to avoid OTel dependency
+vi.mock('../lib/telemetry.js', () => ({
+  withSpan: vi.fn((_name, fn) => fn({ setAttribute: vi.fn(), setStatus: vi.fn(), recordException: vi.fn(), end: vi.fn() })),
+  initTelemetry: vi.fn(),
+  getTracer: vi.fn(),
+}));
 // Mock fs to bypass file existence checks in tests
 vi.mock('fs', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;

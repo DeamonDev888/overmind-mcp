@@ -35,6 +35,7 @@ export const runAgentSchema = z
       .describe(
         "Nom du modèle. Pour Hermes : priorité OpenAI ou NVIDIA. Pour Kilo (gratuits) : 'tencent/hy3-preview:free' ou 'step 3.5 flash'.",
       ),
+    signal: z.custom<AbortSignal>().optional().describe("AbortSignal pour annuler l'agent"),
   })
   .passthrough();
 

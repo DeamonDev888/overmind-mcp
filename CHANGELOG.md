@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.12.0-alpha (2026-05-08)
+
+### Added
+- OpenTelemetry tracing : module `src/lib/telemetry.ts` (init no-op si OTEL_ENABLED!=true), spans sur ClaudeRunner/KiloRunner/GeminiRunner et tools clés
+- RabbitMQ broker : `src/lib/broker/rabbitmq.ts` (publisher/consumer queues durables) + `rabbitmqDispatch.ts` + worker `src/bin/rabbitmq-worker.ts`
+- Temporal workflow engine : activities/workflows/client/dispatch + worker `src/bin/temporal-worker.ts` (retry x2, timeout 15min)
+- Orchestration dispatcher : `src/lib/orchestration/dispatcher.ts` route vers Temporal/RabbitMQ/local selon flags (fallback automatique)
+- AbortSignal propagé à ClaudeRunner pour annulation propre
+- Infra Docker Compose : `docker-compose.infra.yml` (postgres + temporal + temporal-ui + rabbitmq + jaeger)
+- Scripts npm : `infra:up/down/logs`, `worker:rabbitmq`, `worker:temporal`
+- Dépendance `async-mutex` pour sérialisation d'écritures concurrentes
+
+### Fixed
+- OOM-1 : stdout/stderr bornés à 10 MB dans ClaudeRunner, KiloRunner, GeminiRunner
+- OOM-2 : `run_agents_parallel` mode `waitAll:false` — abort des promesses perdantes via AbortController par agent
+- OOM-3 : `metadata` — `depth.max(8)` + skip des fichiers >1 MB
+- OOM-4 : OpenClawRunner — SIGTERM→SIGKILL fallback 5s + cleanup listeners + cap stdout/stderr
+- ASYNC-1 : ClaudeRunner — détection deconnexion MCP via AbortSignal, kill propre du child process
+- ASYNC-2 : KiloRunner — fuite killTimer corrigée (clearTimeout avant retry 401)
+- ASYNC-3 : GeminiRunner — helper `cleanup()` retire tous les listeners après timeout/close
+- ASYNC-4 : `sessions.ts` — race condition supprimée via `async-mutex` autour des read-modify-write
+
+### Changed
+- `run_agents_parallel.ts` simplifié (38 lignes) — délègue toute la logique au dispatcher
+- Workers de tests validés : `tests/feature_flags.test.ts` (3 tests passants)
+
 ## 0.0.2-alpha (2026-05-08)
 
 ### Fixes
