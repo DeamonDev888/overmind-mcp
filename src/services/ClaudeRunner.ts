@@ -238,23 +238,27 @@ export class ClaudeRunner {
     };
 
     /**
-     * Détermine quel token utiliser : le fallback à l'index donné,
-     * ou le primary token ANTHROPIC_AUTH_TOKEN / ANTHROPIC_AUTH_TOKEN_E.
+     * Détermine quel token utiliser selon l'index de retry.
+     * - index 0 = tentative initiale → use primary token (ANTHROPIC_AUTH_TOKEN)
+     * - index 1+ = retry → skip primary, use fallbacks directly
      */
     const getTokenForIndex = (
       index: number,
     ): { tokenEnvKey: string; tokenValue: string } | null => {
-      // Essayer d'abord le primary token
-      for (const tk of TOKEN_KEYS) {
-        const val = agentCustomEnv[tk];
-        if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
-          return { tokenEnvKey: tk, tokenValue: val };
+      if (index === 0) {
+        // Tentative initiale : utiliser le primary token
+        for (const tk of TOKEN_KEYS) {
+          const val = agentCustomEnv[tk];
+          if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
+            return { tokenEnvKey: tk, tokenValue: val };
+          }
         }
       }
-      // Puis les fallbacks
+      // Retry (index >= 1) : skip primary, use fallbacks directly
       const fallbacks = getAvailableFallbacks();
-      if (index < fallbacks.length) {
-        return { tokenEnvKey: fallbacks[index].key, tokenValue: fallbacks[index].value };
+      const fallbackIndex = index - 1; // index 1 → fallback[0] (AUTH_FALLBACK_1)
+      if (fallbackIndex < fallbacks.length) {
+        return { tokenEnvKey: fallbacks[fallbackIndex].key, tokenValue: fallbacks[fallbackIndex].value };
       }
       return null;
     };
