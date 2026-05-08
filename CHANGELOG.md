@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.8-alpha (2026-05-08)
+
+### Fixed
+
+- **ClaudeRunner retry token switch**: Le retry ne changeait pas de token correctement (utilisait encore le primary après 429). Logique corrigée : index 0 = primary, index 1+ = AUTH_FALLBACK_1/2/3 directement.
+
 ## 1.13.7-alpha (2026-05-08)
 
 ### Changed
