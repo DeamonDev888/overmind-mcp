@@ -2,20 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
-## 1.11.0 (2026-05-07)
+## 0.0.2-alpha (2026-05-08)
 
-### Patch Changes
+### Fixes
 
+- **OVERMIND_WORKSPACE protection**: Fixed auto-injection in cli.ts that was overwriting `OVERMIND_WORKSPACE` on every boot. Now preserves existing value if already set.
+
+### Maintenance
+
+- **Overmind MCP cleanup**: Removed duplicate `overmind-mcp` from root `node_modules` — now uses only the Workflow repo instance.
+- **Lint fix**: Installed missing `tinyglobby` dependency.
+
+## 0.0.0.1a (2026-05-07)
+
+### Alpha Release — Versioning Switch
+
+- **Switch to alpha versioning**: Abandoned semantic versioning (`1.x.0`) in favor of alpha format (`0.0.0.1a`)
 - **Fix 401 detection in JSON result**: Claude CLI can exit with code 0 while embedding `api_error_status: 401` in the JSON response. Retry now triggers on both stderr patterns AND `jsonEnvelope.api_error_status === 401` AND auth error strings in `result` field.
-
-## 1.9.0 (2026-05-07)
-
-### Minor Changes
-
 - **KiloRunner 401 fallback retry**: Same automatic retry logic as ClaudeRunner — `AUTH_FALLBACK_1` → `AUTH_FALLBACK_2` → `AUTH_FALLBACK_3`
 - **New `overmind` provider in `config_example` tool**: Complete guide on `$VAR` substitution and fallback token system with examples for both ClaudeRunner and KiloRunner
 
-## 1.8.0 (2026-05-07)
+## 1.11.0 (2026-05-07)
 
 ### Minor Changes
 

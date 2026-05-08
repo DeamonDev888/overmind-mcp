@@ -15,6 +15,7 @@ export interface RunAgentOptions {
   cwd?: string;
   configPath?: string;
   silent?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface RunAgentResult {
@@ -238,11 +239,18 @@ export class ClaudeRunner {
       return null;
     };
 
+    // ─── AbortSignal support ─────────────────────────────────────────────────────
+    let currentChildRef: ChildProcess | null = null;
+    if (options.signal?.aborted) {
+      return Promise.reject(new Error('ABORTED'));
+    }
+    options.signal?.addEventListener('abort', () => { if (currentChildRef) currentChildRef.kill('SIGTERM'); });
+
     return new Promise((resolve) => {
       let resolved = false;
       let retryCount = 0;
       const maxRetries = getAvailableFallbacks().length + 1; // primary + fallbacks
-      let currentChild: ChildProcess | null = null;
+      currentChildRef = null;
       let currentStderr = '';
       let currentStdout = '';
       let currentSessionId: string | undefined = sessionId;
@@ -318,15 +326,16 @@ export class ClaudeRunner {
           );
         }
 
-        currentChild = spawn(command, spawnArgs, {
+        currentChildRef = spawn(command, spawnArgs, {
           cwd: options.cwd || process.cwd(),
           windowsHide: true,
           env: spawnEnv,
           shell: false,
+          signal: options.signal,
         });
 
-        if (currentChild.stdout) {
-          currentChild.stdout.on('data', (d: Buffer) => {
+        if (currentChildRef.stdout) {
+          currentChildRef.stdout.on('data', (d: Buffer) => {
             const chunk = d.toString();
             currentStdout += chunk;
             if (agentName && !options.silent) {
@@ -335,8 +344,8 @@ export class ClaudeRunner {
           });
         }
 
-        if (currentChild.stderr) {
-          currentChild.stderr.on('data', (d: Buffer) => {
+        if (currentChildRef.stderr) {
+          currentChildRef.stderr.on('data', (d: Buffer) => {
             const chunk = d.toString();
             currentStderr += chunk;
             if (agentName && !options.silent) {
@@ -345,15 +354,15 @@ export class ClaudeRunner {
           });
         }
 
-        if (currentChild.stdin) {
-          currentChild.stdin.write(prompt);
-          currentChild.stdin.end();
+        if (currentChildRef.stdin) {
+          currentChildRef.stdin.write(prompt);
+          currentChildRef.stdin.end();
         }
 
         const timeout = setTimeout(() => {
-          if (currentChild && currentChild.stdin && !currentChild.stdin.destroyed) {
+          if (currentChildRef && currentChildRef.stdin && !currentChildRef.stdin.destroyed) {
             try {
-              currentChild.stdin.write('\n');
+              currentChildRef.stdin.write('\n');
               if (!options.silent) {
                 process.stderr.write(
                   `\n\x1b[33m[ClaudeRunner] [WARN] Agent stagnant (${customTimeoutMs}ms). Envoi d'un keep-alive (\\n)...\x1b[0m\n`,
@@ -366,23 +375,23 @@ export class ClaudeRunner {
 
           const hardTimeoutDelay = CONFIG.HARD_TIMEOUT_MS || 60000;
           hardTimeoutTimer = setTimeout(() => {
-            if (currentChild) currentChild.kill();
+            if (currentChildRef) currentChildRef.kill();
             killTimer = setTimeout(() => {
-              if (currentChild && !currentChild.killed) currentChild.kill('SIGKILL');
+              if (currentChildRef && !currentChildRef.killed) currentChildRef.kill('SIGKILL');
             }, 5000);
             cleanupTmpFiles();
             safeResolve({ result: '', error: 'HARD_TIMEOUT', rawOutput: currentStdout + currentStderr });
           }, hardTimeoutDelay);
         }, customTimeoutMs);
 
-        currentChild.on('error', (err: Error) => {
+        currentChildRef.on('error', (err: Error) => {
           clearTimeout(timeout);
           if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
           cleanupTmpFiles();
           safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
         });
 
-        currentChild.on('close', async (code: number | null) => {
+        currentChildRef.on('close', async (code: number | null) => {
           clearTimeout(timeout);
           if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
 
