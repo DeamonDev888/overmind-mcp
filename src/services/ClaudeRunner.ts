@@ -388,8 +388,34 @@ export class ClaudeRunner {
 
           const fullRaw = currentStdout + (currentStderr ? `\n\n--- STDERR ---\n${currentStderr}` : '');
 
+          // ─── Parser le JSON en premier (pour extraire api_error_status) ───
+          let jsonEnvelope: Record<string, unknown> | null = null;
+          const trimmedStdout = currentStdout.trim();
+
+          try {
+            jsonEnvelope = JSON.parse(trimmedStdout);
+          } catch {
+            const lastBrace = trimmedStdout.lastIndexOf('}');
+            const firstBrace = trimmedStdout.lastIndexOf('{', lastBrace);
+            if (firstBrace !== -1 && lastBrace !== -1) {
+              try {
+                jsonEnvelope = JSON.parse(trimmedStdout.substring(firstBrace, lastBrace + 1));
+              } catch {
+                // Ignored
+              }
+            }
+          }
+
           // ─── Vérification 401 / Auth Error → Retry avec fallback ───
-          if (code !== 0 && isAuthError(currentStderr)) {
+          // Le 401 peut apparaître dans stderr OU dans le JSON résultat (api_error_status: 401)
+          const has401InStderr = isAuthError(currentStderr);
+          const has401InResult =
+            jsonEnvelope !== null &&
+            ((jsonEnvelope.api_error_status === 401) ||
+              (typeof jsonEnvelope.result === 'string' && isAuthError(jsonEnvelope.result)));
+          const isAuthFailure = (code !== 0 && has401InStderr) || has401InResult;
+
+          if (isAuthFailure) {
             const tokenInfo = getTokenForIndex(retryCount);
             if (tokenInfo && retryCount < maxRetries) {
               retryCount++;
@@ -420,23 +446,6 @@ export class ClaudeRunner {
           cleanupTmpFiles();
 
           try {
-            let jsonEnvelope: Record<string, unknown> | null = null;
-            const trimmedStdout = currentStdout.trim();
-
-            try {
-              jsonEnvelope = JSON.parse(trimmedStdout);
-            } catch {
-              const lastBrace = trimmedStdout.lastIndexOf('}');
-              const firstBrace = trimmedStdout.lastIndexOf('{', lastBrace);
-              if (firstBrace !== -1 && lastBrace !== -1) {
-                try {
-                  jsonEnvelope = JSON.parse(trimmedStdout.substring(firstBrace, lastBrace + 1));
-                } catch {
-                  // Ignored
-                }
-              }
-            }
-
             if (jsonEnvelope) {
               let foundSessionId = currentSessionId;
               if (jsonEnvelope.session_id && agentName) {
