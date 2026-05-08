@@ -295,7 +295,7 @@ export class ClaudeRunner {
           }
         };
 
-        const triggerRetry = (tokenInfo: { tokenEnvKey: string; tokenValue: string } | null) => {
+        const triggerRetry = (targetRetryCount: number) => {
           if (earlyExitTriggered) return;
           earlyExitTriggered = true;
           if (currentChildRef && !currentChildRef.killed) {
@@ -304,7 +304,8 @@ export class ClaudeRunner {
           if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
           if (killTimer) clearTimeout(killTimer);
           if (timeout) clearTimeout(timeout);
-          retryCount++;
+          retryCount = targetRetryCount;
+          const tokenInfo = getTokenForIndex(retryCount);
           if (!options.silent) {
             process.stderr.write(
               `\n\x1b[41m\x1b[37m[ClaudeRunner] 🔄 Retry ${retryCount}/${maxRetries} avec ${tokenInfo?.tokenEnvKey || 'UNKNOWN'}...\x1b[0m\n`,
@@ -495,9 +496,8 @@ export class ClaudeRunner {
             const isFailure = (code !== 0 && isRetryable) || hasRetryableStatus;
 
             if (isFailure) {
-              const tokenInfo = getTokenForIndex(retryCount);
-              if (tokenInfo && retryCount < maxRetries) {
-                triggerRetry(tokenInfo);
+              if (retryCount < maxRetries) {
+                triggerRetry(retryCount + 1);
                 return;
               } else {
                 if (!options.silent) {
