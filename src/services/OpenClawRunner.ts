@@ -87,17 +87,37 @@ export class OpenClawRunner {
 
       let stdout = '';
       let stderr = '';
+      const MAX_BUF = 10 * 1024 * 1024;
 
-      if (child.stdout) child.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
-      if (child.stderr) child.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+      const cleanup = () => {
+        child.stdout?.removeAllListeners();
+        child.stderr?.removeAllListeners();
+        child.removeAllListeners();
+      };
+
+      if (child.stdout)
+        child.stdout.on('data', (d: Buffer) => {
+          if (stdout.length + d.length > MAX_BUF) stdout = stdout.slice(-MAX_BUF);
+          else stdout += d.toString();
+        });
+      if (child.stderr)
+        child.stderr.on('data', (d: Buffer) => {
+          if (stderr.length + d.length > MAX_BUF) stderr = stderr.slice(-MAX_BUF);
+          else stderr += d.toString();
+        });
 
       const timeout = setTimeout(() => {
-        child.kill();
+        child.kill('SIGTERM');
+        setTimeout(() => {
+          if (!child.killed) child.kill('SIGKILL');
+        }, 5000);
+        cleanup();
         resolve({ result: '', error: 'TIMEOUT', rawOutput: stdout });
       }, customTimeoutMs);
 
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
+        cleanup();
 
         if (code !== 0 && !stdout) {
           return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr });

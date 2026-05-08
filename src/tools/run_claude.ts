@@ -23,6 +23,7 @@ export const runClaudeSchema = z
     path: z.string().optional().describe('Répertoire de travail'),
     config: z.string().optional().describe('Répertoire racine Overmind'),
     silent: z.boolean().optional().default(false).describe('Mode silencieux'),
+    signal: z.custom<AbortSignal>().optional().describe("AbortSignal pour annuler l'agent"),
   })
   .passthrough();
 
@@ -40,6 +41,7 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
     path: argPath,
     config: argConfig,
     silent,
+    signal,
   } = args;
 
   const finalPath = argPath || getWorkspaceDir();
@@ -56,6 +58,7 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
     cwd: finalPath,
     configPath: finalConfig,
     silent,
+    signal,
   });
 
   if (
@@ -81,6 +84,7 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
       cwd: finalPath,
       configPath: finalConfig,
       silent,
+      signal,
     });
   }
 

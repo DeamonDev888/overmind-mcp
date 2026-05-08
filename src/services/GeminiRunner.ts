@@ -4,6 +4,8 @@ import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
+import { withSpan } from '../lib/telemetry.js';
+import { Span } from '@opentelemetry/api';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -198,107 +200,117 @@ export class GeminiRunner {
       argsSpawn.push('--resume', 'latest');
     }
 
-    return new Promise((resolve) => {
-      let resolved = false;
-      const safeResolve = (value: RunAgentResult) => {
-        if (!resolved) {
-          resolved = true;
-          resolve(value);
-        }
-      };
+    const runImpl = async (span: Span): Promise<RunAgentResult> => {
+      span.setAttribute('agentName', agentName || '');
+      span.setAttribute('runner', 'gemini');
 
-      const child: ChildProcess = spawn(command, argsSpawn, {
-        cwd: options.cwd || process.cwd(),
-        shell: useNodeDirectly ? false : isWin,
-        windowsHide: true,
-        env: agentCustomEnv as NodeJS.ProcessEnv,
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      child.stdout?.on('data', (data) => {
-        stdout += data.toString();
-      });
-      child.stderr?.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      const timeout = setTimeout(() => {
-        child.kill();
-        setTimeout(() => {
-          if (!child.killed) child.kill('SIGKILL');
-        }, 5000);
-        safeResolve({ result: '', error: 'TIMEOUT', rawOutput: stdout + stderr });
-      }, this.timeoutMs);
-
-      child.on('error', (err: Error) => {
-        clearTimeout(timeout);
-        safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
-      });
-
-      child.on('close', async (code: number | null) => {
-        clearTimeout(timeout);
-
-        if (code !== 0 && !stdout) {
-          return safeResolve({
-            result: '',
-            error: code === 41 ? '🔑 Erreur Auth/API Key (OAuth/GCloud)' : `EXIT_CODE_${code}`,
-            rawOutput: stderr,
-          });
-        }
-
-        try {
-          let jsonOutput: Record<string, unknown> | null = null;
-          const trimmedStdout = stdout.trim();
-
-          try {
-            jsonOutput = JSON.parse(trimmedStdout);
-          } catch (_) {
-            const lastBrace = trimmedStdout.lastIndexOf('}');
-            const firstBrace = trimmedStdout.lastIndexOf('{', lastBrace);
-            if (firstBrace !== -1 && lastBrace !== -1) {
-              try {
-                jsonOutput = JSON.parse(trimmedStdout.substring(firstBrace, lastBrace + 1));
-              } catch {
-                // Ignore parsing errors for partial extraction
-              }
-            }
+      return new Promise((resolve) => {
+        let resolved = false;
+        const safeResolve = (value: RunAgentResult) => {
+          if (!resolved) {
+            resolved = true;
+            resolve(value);
           }
+        };
 
-          if (jsonOutput) {
-            const resultText =
-              (jsonOutput.reply as string) || (jsonOutput.result as string) || stdout.trim();
-            const newSessionId = (jsonOutput.session_id as string) || sessionId;
+        const child: ChildProcess = spawn(command, argsSpawn, {
+          cwd: options.cwd || process.cwd(),
+          shell: useNodeDirectly ? false : isWin,
+          windowsHide: true,
+          env: agentCustomEnv as NodeJS.ProcessEnv,
+        });
 
-            if (newSessionId && agentName) {
-              await saveSessionId(agentName, newSessionId, options.configPath, 'gemini');
-            }
+        let stdout = '';
+        let stderr = '';
 
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        const timeout = setTimeout(() => {
+          child.kill();
+          setTimeout(() => {
+            if (!child.killed) child.kill('SIGKILL');
+          }, 5000);
+          safeResolve({ result: '', error: 'TIMEOUT', rawOutput: stdout + stderr });
+        }, this.timeoutMs);
+
+        child.on('error', (err: Error) => {
+          clearTimeout(timeout);
+          safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
+        });
+
+        child.on('close', async (code: number | null) => {
+          clearTimeout(timeout);
+
+          if (code !== 0 && !stdout) {
             return safeResolve({
-              result: resultText,
-              sessionId: newSessionId,
-              rawOutput: stdout,
+              result: '',
+              error: code === 41 ? '🔑 Erreur Auth/API Key (OAuth/GCloud)' : `EXIT_CODE_${code}`,
+              rawOutput: stderr,
             });
           }
 
-          safeResolve({
-            result: stdout.trim(),
-            sessionId: sessionId,
-            rawOutput: stdout,
-          });
-        } catch {
-          safeResolve({
-            result: stdout.trim(),
-            sessionId: sessionId,
-            rawOutput: stdout,
-          });
+          try {
+            let jsonOutput: Record<string, unknown> | null = null;
+            const trimmedStdout = stdout.trim();
+
+            try {
+              jsonOutput = JSON.parse(trimmedStdout);
+            } catch (_) {
+              const lastBrace = trimmedStdout.lastIndexOf('}');
+              const firstBrace = trimmedStdout.lastIndexOf('{', lastBrace);
+              if (firstBrace !== -1 && lastBrace !== -1) {
+                try {
+                  jsonOutput = JSON.parse(trimmedStdout.substring(firstBrace, lastBrace + 1));
+                } catch {
+                  // Ignore parsing errors for partial extraction
+                }
+              }
+            }
+
+            if (jsonOutput) {
+              const resultText =
+                (jsonOutput.reply as string) || (jsonOutput.result as string) || stdout.trim();
+              const newSessionId = (jsonOutput.session_id as string) || sessionId;
+
+              if (newSessionId && agentName) {
+                await saveSessionId(agentName, newSessionId, options.configPath, 'gemini');
+              }
+
+              return safeResolve({
+                result: resultText,
+                sessionId: newSessionId,
+                rawOutput: stdout,
+              });
+            }
+
+            safeResolve({
+              result: stdout.trim(),
+              sessionId: sessionId,
+              rawOutput: stdout,
+            });
+          } catch {
+            safeResolve({
+              result: stdout.trim(),
+              sessionId: sessionId,
+              rawOutput: stdout,
+            });
+          }
+        });
+
+        if (child.stdin) {
+          child.stdin.end();
         }
       });
+    };
 
-      if (child.stdin) {
-        child.stdin.end();
-      }
+    return withSpan('gemini.runAgent', runImpl, {
+      agentName: agentName || '',
+      runner: 'gemini',
     });
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "overmind-mcp",
-  "version": "0.0.2-alpha",
+  "version": "1.12.0-alpha",
   "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut le protocole 'Custom-Nickname' pour identifier vos agents avec des surnoms originaux (The Chaos Prophet, Shadow Sniper, etc.), l'isolation mémoire (Private Memory Context) et le support pour QwenCli et Nous Hermes.",
   "type": "module",
   "main": "dist/index.js",
@@ -25,6 +25,8 @@
     "rebuild": "rimraf dist && tsc",
     "clean": "rimraf dist",
     "start": "node --no-warnings --env-file=.env dist/bin/cli.js",
+    "worker:rabbitmq": "node --no-warnings --env-file=.env dist/bin/rabbitmq-worker.js",
+    "worker:temporal": "node --no-warnings --env-file=.env dist/bin/temporal-worker.js",
     "dev": "node --no-warnings --watch --env-file=.env dist/bin/cli.js",
     "build:fix": "pnpm run clean && pnpm install && pnpm run build",
     "lint": "eslint .",
@@ -32,7 +34,10 @@
     "format": "prettier --write .",
     "check-types": "tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "pnpm run rebuild"
+    "prepublishOnly": "pnpm run rebuild",
+    "infra:up": "docker compose -f docker-compose.infra.yml up -d",
+    "infra:down": "docker compose -f docker-compose.infra.yml down",
+    "infra:logs": "docker compose -f docker-compose.infra.yml logs -f"
   },
   "keywords": [
     "mcp",
@@ -73,6 +78,17 @@
     "vitest": "^4.1.4"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/auto-instrumentations-node": "^0.75.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.217.0",
+    "@opentelemetry/resources": "^2.7.1",
+    "@opentelemetry/sdk-node": "^0.217.0",
+    "@opentelemetry/semantic-conventions": "^1.40.0",
+    "@temporalio/activity": "^1.17.1",
+    "@temporalio/client": "^1.17.1",
+    "@temporalio/worker": "^1.17.1",
+    "@temporalio/workflow": "^1.17.1",
+    "async-mutex": "^0.5.0",
     "dotenv": "^17.4.2",
     "fastmcp": "^3.35.0",
     "overmind-postgres-mcp": "^1.1.6",
