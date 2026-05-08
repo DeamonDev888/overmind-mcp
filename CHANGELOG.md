@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.6-alpha (2026-05-08)
+
+### Fixed
+
+- **`ClaudeRunner fallback retry`**: Le fallback ne se déclenchait que sur les erreurs 401 (auth). Ajout de la détection des erreurs retryable : 429 (rate limit/quota exhausted), 500/502/503 (server errors) et leurs messages correspondants dans stderr. Les tokens fallback (AUTH_FALLBACK_1/2/3) sont désormais essayés pour toutes ces erreurs.
+
 ## 1.13.5-alpha (2026-05-08)
 
 ### Fixed
