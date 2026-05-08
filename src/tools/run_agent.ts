@@ -35,13 +35,16 @@ export const runAgentSchema = z
       .describe(
         "Nom du modèle. Pour Hermes : priorité OpenAI ou NVIDIA. Pour Kilo (gratuits) : 'tencent/hy3-preview:free' ou 'step 3.5 flash'.",
       ),
-    signal: z.custom<AbortSignal>().optional().describe("AbortSignal pour annuler l'agent"),
   })
   .passthrough();
 
+// AbortSignal n'est pas serialisable en JSON Schema (FastMCP rejette z.custom<>).
+// On le passe en interne via un type augmente, hors schema MCP.
+export type RunAgentInternalArgs = z.infer<typeof runAgentSchema> & { signal?: AbortSignal };
+
 import { verifyInstallation } from '../lib/InstallHelper.js';
 
-export async function runAgent(args: z.infer<typeof runAgentSchema>) {
+export async function runAgent(args: RunAgentInternalArgs) {
   const { runner, mode, ...params } = args;
 
   // Validation manuelle des modes (déplacée ici pour compatibilité FastMCP)

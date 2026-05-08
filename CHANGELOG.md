@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.4-alpha (2026-05-08)
+
+### Fixed
+- **OOM-1 (vrai)** : le cap stdout/stderr de 10 Mo n'était auparavant présent que dans `OpenClawRunner`. Désormais aussi appliqué dans `ClaudeRunner.ts`, `KiloRunner.ts`, `GeminiRunner.ts` (rotation `slice(-MAX_BUF)` quand l'accumulation dépasserait 10 Mo).
+- **ASYNC-3 (vrai)** : `GeminiRunner.ts` reçoit un helper `cleanup()` qui retire les listeners (`removeAllListeners()` sur stdout/stderr/child) et est appelé après timeout et après `close`.
+
+### Changed
+- Corrections appliquées en parallèle par 3 agents Minimax (claude runner) via `dispatchAgents()` — preuve de bout en bout du parallélisme local.
+
+## 1.13.3-alpha (2026-05-08)
+
+### Fixed
+- **`tools/list` MCP error** : `runAgentSchema` exposait un champ `signal: z.custom<AbortSignal>()` que FastMCP ne pouvait pas sérialiser en JSON Schema (`Custom types cannot be represented in JSON Schema`), ce qui empêchait la découverte des outils côté client MCP. Le champ `signal` est désormais retiré du schéma public et passé en interne via le type `RunAgentInternalArgs`.
+
+## 1.13.2-alpha (2026-05-08)
+
+### Fixed
+- **Telemetry no-op span** : `withSpan()` retournait `{} as Span` quand `OTEL_ENABLED!=true`, ce qui plantait dès le premier `span.setAttribute(...)` (`TypeError: span.setAttribute is not a function`) et empêchait `runAgent` de s'exécuter sans OpenTelemetry. Désormais `withSpan()` passe systématiquement par `tracer.startActiveSpan(...)` — l'API OpenTelemetry fournit un `NonRecordingSpan` no-op valide quand le SDK n'est pas démarré.
+- **Chargement du `.env` utilisateur** : la binaire installée globalement (`npm i -g overmind-mcp`) ne lisait que son propre `.env` (`<install-dir>/.env`) et ignorait le `.env` du projet (`OVERMIND_WORKSPACE`, etc.). Ajout d'une cascade de chargement : `$OVERMIND_ENV_FILE` → `<process.cwd()>/.env` → fallback historique. Les valeurs déjà présentes dans `process.env` (injectées par le client MCP) restent prioritaires.
+
+## 1.13.1-alpha (2026-05-08)
+
+### Fixed
+- **Dispatcher Temporal fallback** : `dispatchAgents()` n'attendait pas la promesse retournée par `dispatchViaTemporal()` (`return` sans `await`), ce qui faisait fuir les rejets asynchrones hors du `try/catch` et provoquait un `uncaughtException` (`Failed to start Workflow`/`ECONNREFUSED ::1:7233`) lorsque Temporal n'était pas joignable. Désormais le fallback local est bien déclenché si Temporal est indisponible.
+
 ## 1.13.0-alpha (2026-05-08)
 
 ### Recovered

@@ -363,6 +363,18 @@ try {
 // Classifie et réorganise automatiquement le .env à chaque démarrage d'Overmind
 autoFormatEnvFile(localEnvPath);
 
+// 🎯 Priorité de chargement (premier trouvé gagne, car loadEnvQuietly ne réécrit pas) :
+//   1) $OVERMIND_ENV_FILE         → fichier explicite passé par le client MCP
+//   2) <process.cwd()>/.env       → si lancé depuis un dossier projet
+//   3) <bin>/../../.env           → fallback historique (utile en dev local)
+const externalEnvCandidates: string[] = [];
+if (process.env.OVERMIND_ENV_FILE) externalEnvCandidates.push(process.env.OVERMIND_ENV_FILE);
+const cwdEnv = path.resolve(process.cwd(), '.env');
+if (cwdEnv !== localEnvPath) externalEnvCandidates.push(cwdEnv);
+for (const candidate of externalEnvCandidates) {
+  loadEnvQuietly(candidate);
+}
+
 // Load OverMind's specific environment variables
 loadEnvQuietly(localEnvPath);
 
