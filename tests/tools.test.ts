@@ -28,6 +28,7 @@ vi.mock('../src/memory/PostgresMemoryProvider.js', () => ({
       return { totalRuns: 0, totalKnowledge: 0, byRunner: [] };
     }
   },
+  registerMemoryAlertCallback: vi.fn(),
 }));
 
 describe('MCP Tools Unit Tests', () => {
