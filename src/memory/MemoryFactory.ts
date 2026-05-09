@@ -1,10 +1,18 @@
 import { MemoryProvider, StoreRunParams } from './types.js';
-import { PostgresMemoryProvider } from './PostgresMemoryProvider.js';
+import {
+  PostgresMemoryProvider,
+  registerMemoryAlertCallback,
+} from './PostgresMemoryProvider.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'MemoryFactory' });
 
 let _provider: MemoryProvider | null = null;
+let _isDbAvailable = true;
+let _lastDbError: string | null = null;
+
+// Re-export for external use
+export { registerMemoryAlertCallback, unregisterMemoryAlertCallback } from './PostgresMemoryProvider.js';
 
 /**
  * Gets the PostgreSQL Memory Provider.
@@ -17,21 +25,57 @@ export function getMemoryProvider(): MemoryProvider {
 }
 
 /**
+ * Check if memory database is available.
+ */
+export function isMemoryAvailable(): boolean {
+  return _isDbAvailable;
+}
+
+/**
+ * Get last database error message.
+ */
+export function getLastMemoryError(): string | null {
+  return _lastDbError;
+}
+
+/**
+ * Initialize memory factory and register alert callbacks.
+ */
+export function initMemoryFactory(): void {
+  registerMemoryAlertCallback((message, error) => {
+    _isDbAvailable = false;
+    _lastDbError = error?.message || message;
+    logger.error({ message, error: error?.message }, 'MEMORY ALERT: Database unavailable!');
+
+    // Could trigger additional alerts here (webhooks, notifications, etc.)
+  });
+  logger.info('MemoryFactory initialized with alert callbacks');
+}
+
+// Initialize on module load
+initMemoryFactory();
+
+/**
  * Convenience helper for runners to record activity without fetching the provider manually.
- * Includes error handling to prevent runner crashes if PostgreSQL is unavailable.
+ * THROWS on DB failure to alert the caller - memory failures should not be silent!
  */
 export async function storeRun(params: StoreRunParams): Promise<string> {
+  const provider = getMemoryProvider();
   try {
-    const provider = getMemoryProvider();
+    _isDbAvailable = true;
+    _lastDbError = null;
     return await provider.storeRun(params);
   } catch (error) {
-    // Log error but don't crash the runner
+    _isDbAvailable = false;
+    const err = error instanceof Error ? error : new Error(String(error));
+    _lastDbError = err.message;
     logger.error({
-      error: error instanceof Error ? error.message : String(error),
+      error: err.message,
       runner: params.runner,
       agentName: params.agentName,
-    }, 'Failed to store run in memory, continuing execution');
-    // Return empty string to maintain compatibility
-    return '';
+    }, 'CRITICAL: Failed to store run in memory - database may be unavailable!');
+
+    // Re-throw so the runner can report this to the user
+    throw new Error(`MEMORY_UNAVAILABLE: ${err.message}`);
   }
 }

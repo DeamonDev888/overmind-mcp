@@ -102,8 +102,8 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
       success: !result.error,
       sessionId: result.sessionId,
     });
-  } catch (_e) {
-    // Memory store is secondary, don't crash if it fails
+  } catch (e) {
+    console.error(`[run_claude] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   if (result.error?.startsWith('INVALID_AGENT')) {

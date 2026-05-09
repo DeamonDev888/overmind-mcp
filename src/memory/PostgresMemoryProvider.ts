@@ -2,6 +2,7 @@ import { Pool, Client } from 'pg';
 import { getPool } from 'overmind-postgres-mcp';
 import crypto from 'crypto';
 import { embedText } from 'overmind-postgres-mcp/services/embeddings';
+import pino from 'pino';
 import {
   MemoryProvider,
   AgentRun,
@@ -11,6 +12,8 @@ import {
   SearchMemoryParams,
 } from './types.js';
 
+const logger = pino({ name: 'PostgresMemory' });
+
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
 function randomId(): string {
@@ -19,6 +22,50 @@ function randomId(): string {
 
 function sha256(text: string): string {
   return crypto.createHash('sha256').update(text).digest('hex').slice(0, 16);
+}
+
+// ── Alert System ─────────────────────────────────────────────────────────────
+
+interface AlertCallback {
+  (message: string, error?: Error): void;
+}
+
+let alertCallbacks: AlertCallback[] = [];
+let lastDbError: string | null = null;
+let lastDbErrorTime: number = 0;
+
+export function registerMemoryAlertCallback(callback: AlertCallback): void {
+  alertCallbacks.push(callback);
+  logger.info('Memory alert callback registered');
+}
+
+export function unregisterMemoryAlertCallback(callback: AlertCallback): void {
+  alertCallbacks = alertCallbacks.filter((cb) => cb !== callback);
+}
+
+function triggerMemoryAlert(message: string, error?: Error): void {
+  const now = Date.now();
+  const errorMsg = error?.message || message;
+
+  // Debounce: don't spam alerts for the same error within 60 seconds
+  if (errorMsg === lastDbError && now - lastDbErrorTime < 60000) {
+    return;
+  }
+
+  lastDbError = errorMsg;
+  lastDbErrorTime = now;
+
+  // Log locally first
+  logger.error({ error: errorMsg, stack: error?.stack }, message);
+
+  // Trigger all registered callbacks
+  for (const callback of alertCallbacks) {
+    try {
+      callback(message, error);
+    } catch (e) {
+      logger.warn({ callbackError: e }, 'Alert callback threw an error');
+    }
+  }
 }
 
 // ── Provider Implementation ──────────────────────────────────────────────────
@@ -46,7 +93,19 @@ export class PostgresMemoryProvider implements MemoryProvider {
   }
 
   private async getPoolFor(dbName: string): Promise<Pool> {
-    if (this.pools.has(dbName)) return this.pools.get(dbName)!;
+    if (this.pools.has(dbName)) {
+      const existingPool = this.pools.get(dbName)!;
+      // Check if pool is still connected
+      try {
+        const client = await existingPool.connect();
+        client.release();
+        return existingPool;
+      } catch {
+        // Pool is dead, remove it and recreate
+        this.pools.delete(dbName);
+        logger.warn({ dbName }, 'Existing pool was dead, creating new one');
+      }
+    }
 
     await this.ensureDatabaseExists(dbName);
 
@@ -71,23 +130,35 @@ export class PostgresMemoryProvider implements MemoryProvider {
     const max = (poolOptions.max as number | undefined) || 10;
     const idleTimeoutMillis = (poolOptions.idleTimeoutMillis as number | undefined) || 30000;
 
-    console.error(`[PostgresMemory] 📥 Creating connection pool for physical vault: ${dbName}`);
-    console.error(`               Host: ${host}`);
-    console.error(`               User: ${user}`);
+    logger.info({ dbName, host, user }, 'Creating connection pool for database');
 
-    const newPool = new Pool({
-      host,
-      port,
-      user,
-      password,
-      database: dbName,
-      ssl: poolOptions.ssl as boolean | undefined,
-      max,
-      idleTimeoutMillis,
-    });
+    try {
+      const newPool = new Pool({
+        host,
+        port,
+        user,
+        password,
+        database: dbName,
+        ssl: poolOptions.ssl as boolean | undefined,
+        max,
+        idleTimeoutMillis,
+      });
 
-    this.pools.set(dbName, newPool);
-    return newPool;
+      // Test connection immediately
+      const testClient = await newPool.connect();
+      testClient.release();
+
+      this.pools.set(dbName, newPool);
+      return newPool;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error({ dbName, host, error: err.message }, 'CRITICAL: Failed to connect to database');
+      triggerMemoryAlert(
+        `❌ DATABASE UNAVAILABLE: Cannot connect to ${dbName} at ${host}. Memory will not be persisted!`,
+        err,
+      );
+      throw error;
+    }
   }
 
   private async ensureDatabaseExists(dbName: string): Promise<void> {
@@ -286,27 +357,48 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
   async storeRun(params: StoreRunParams): Promise<string> {
     const dbName = this.getDbName(params.agentName || undefined);
-    const pool = await this.getPoolFor(dbName);
+
+    let pool: Pool;
+    try {
+      pool = await this.getPoolFor(dbName);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      triggerMemoryAlert(
+        `❌ MEMORY STORE FAILED: Cannot store run for agent "${params.agentName}". Database unavailable: ${err.message}`,
+        err,
+      );
+      throw error;
+    }
+
     await this.initializeDb(dbName, pool);
 
     const id = randomId();
-    await pool.query(
-      `INSERT INTO agent_runs 
-        (id, runner, agent_name, prompt, result, error, duration_ms, success, session_id) 
+    try {
+      await pool.query(
+        `INSERT INTO agent_runs
+        (id, runner, agent_name, prompt, result, error, duration_ms, success, session_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [
-        id,
-        params.runner,
-        params.agentName || null,
-        params.prompt.slice(0, 4096),
-        params.result?.slice(0, 8192) || null,
-        params.error || null,
-        params.durationMs || null,
-        params.success ? 1 : 0,
-        params.sessionId || null,
-      ],
-    );
-    return id;
+        [
+          id,
+          params.runner,
+          params.agentName || null,
+          params.prompt.slice(0, 4096),
+          params.result?.slice(0, 8192) || null,
+          params.error || null,
+          params.durationMs || null,
+          params.success ? 1 : 0,
+          params.sessionId || null,
+        ],
+      );
+      return id;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      triggerMemoryAlert(
+        `❌ MEMORY STORE FAILED: Cannot persist run to database ${dbName}. Error: ${err.message}`,
+        err,
+      );
+      throw error;
+    }
   }
 
   async storeKnowledge(params: {

@@ -65,8 +65,8 @@ export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
       success: !result.error,
       sessionId: result.sessionId,
     });
-  } catch (_e) {
-    // Memory store is secondary
+  } catch (e) {
+    console.error(`[run_gemini] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   if (result.error === 'INVALID_AGENT') {
