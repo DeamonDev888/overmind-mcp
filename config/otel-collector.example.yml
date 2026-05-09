@@ -1,0 +1,83 @@
+# OpenTelemetry Collector Configuration for OverMind-MCP
+# Bridges OTLP traces from OverMind to Jaeger
+
+receivers:
+  # ─── OTLP Receiver (accepts traces from OverMind-MCP) ─────────────────────────────────────
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # ─── Prometheus Receiver (optional - accepts metrics directly) ─────────────────────────────
+  # prometheus:
+  #   config:
+  #     scrape_configs:
+  #       - job_name: 'overmind-metrics'
+  #         static_configs:
+  #           - targets: ['host.docker.internal:9464']
+
+processors:
+  # ─── Batch Processor (batches traces before exporting) ─────────────────────────────────────
+  batch:
+
+  # ─── Memory Limiter (prevents OOM) ───────────────────────────────────────────────────────────
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 15
+
+  # ─── Resource Attributes (adds service metadata) ───────────────────────────────────────────
+  resource:
+    attributes:
+      - key: service.name
+        value: overmind-mcp
+        action: upsert
+      - key: deployment.environment
+        value: production
+        action: upsert
+
+exporters:
+  # ─── Jaeger Exporter (sends traces to Jaeger) ───────────────────────────────────────────────
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+
+  # ─── Prometheus Exporter (exposes metrics for Prometheus) ───────────────────────────────────
+  prometheus:
+    endpoint: "0.0.0.0:9464"
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # ─── Logging Exporter (debug - prints traces to console) ─────────────────────────────────────
+  logging:
+    loglevel: debug
+
+# ─── Extensions ───────────────────────────────────────────────────────────────────────────────
+extensions:
+  # Health check extension
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # PPROF extension (profiling)
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+# ─── Service Pipeline ────────────────────────────────────────────────────────────────────────
+service:
+  extensions: [health_check, pprof]
+
+  pipelines:
+    # Traces pipeline: OverMind → Batch → Jaeger
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [jaeger, logging]
+
+    # Metrics pipeline: OverMind → Batch → Prometheus
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [prometheus, logging]

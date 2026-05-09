@@ -19,7 +19,13 @@
   "files": [
     "dist",
     "assets",
-    "README.md"
+    "README.md",
+    "SETUP_WINDOWS.md",
+    "DEPLOYMENT.md",
+    "SWARM_USAGE.md",
+    "docker-compose.overmind.yml",
+    "scripts",
+    "config/*.example.yml"
   ],
   "scripts": {
     "build": "tsc",
@@ -39,12 +45,12 @@
     "version": "changeset version",
     "release": "pnpm run build && changeset publish",
     "prepublishOnly": "pnpm run rebuild",
-    "deploy:infra": "docker-compose up -d",
-    "deploy:exporters": "docker-compose -f docker-compose.exporters.yml up -d",
-    "deploy:all": "docker-compose up -d && docker-compose -f docker-compose.exporters.yml up -d",
-    "deploy:down": "docker-compose down",
-    "deploy:logs": "docker-compose logs -f",
-    "deploy:status": "docker-compose ps"
+    "deploy:infra": "docker-compose -f docker-compose.overmind.yml up -d",
+    "deploy:down": "docker-compose -f docker-compose.overmind.yml down",
+    "deploy:logs": "docker-compose -f docker-compose.overmind.yml logs -f",
+    "deploy:status": "docker-compose -f docker-compose.overmind.yml ps",
+    "setup:db": "node scripts/setup-overmind-db.js",
+    "setup:windows": "node scripts/setup-windows.js"
   },
   "keywords": [
     "mcp",
@@ -53,7 +59,12 @@
     "ai-agent",
     "llm",
     "orchestration",
-    "automation"
+    "automation",
+    "swarm",
+    "temporal",
+    "rabbitmq",
+    "pgvector",
+    "observability"
   ],
   "author": "DeaMoN888",
   "license": "MIT",
