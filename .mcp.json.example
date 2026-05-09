@@ -2,7 +2,15 @@
   "mcpServers": {
     "overmind": {
       "command": "node",
-      "args": ["C:/Path/To/Workflow/dist/index.js"]
+      "args": ["./Workflow/dist/bin/cli.js"]
+    },
+    "memory": {
+      "command": "node",
+      "args": ["./Workflow/dist/bin/cli.js", "--memory-only"]
+    },
+    "postgresql-server": {
+      "command": "node",
+      "args": ["./serveur_PostGreSQL/dist/index.js"]
     }
   }
 }
