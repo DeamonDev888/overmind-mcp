@@ -87,8 +87,8 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
       success: !result.error,
       sessionId: result.sessionId,
     });
-  } catch (_e) {
-    // Silent
+  } catch (e) {
+    console.error(`[run_hermes] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   if (result.error)

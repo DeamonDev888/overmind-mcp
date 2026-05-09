@@ -23,7 +23,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "rebuild": "rimraf dist && tsc",
+    "rebuild": "rimraf dist && tnpm run build",
     "clean": "rimraf dist",
     "start": "node --no-warnings --env-file=.env dist/bin/cli.js",
     "worker:rabbitmq": "node --no-warnings --env-file=.env dist/bin/rabbitmq-worker.js",
@@ -35,6 +35,9 @@
     "format": "prettier --write .",
     "check-types": "tsc --noEmit",
     "test": "vitest run",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm run build && changeset publish",
     "prepublishOnly": "pnpm run rebuild"
   },
   "keywords": [

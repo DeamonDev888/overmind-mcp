@@ -69,8 +69,8 @@ export async function runClineAgent(args: z.infer<typeof runClineSchema>) {
       success: !result.error,
       sessionId: result.sessionId,
     });
-  } catch (_e) {
-    // Silent
+  } catch (e) {
+    console.error(`[run_cline] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   if (result.error)

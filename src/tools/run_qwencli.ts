@@ -50,8 +50,8 @@ export async function runQwenCLIAgent(args: z.infer<typeof runQwenCLISchema>) {
       success: !result.error,
       sessionId: result.sessionId,
     });
-  } catch (_e) {
-    // Silent
+  } catch (e) {
+    console.error(`[run_qwencli] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   if (result.error)
