@@ -32,7 +32,9 @@
             </div>
             <ul class="nav-links">
               <li><a href="library.html" class="nav-link">Bibliothèque</a></li>
-              <li><a href="prompt.html" class="nav-link"><i class="fas fa-robot"></i> Prompt</a></li>
+              <li>
+                <a href="prompt.html" class="nav-link"><i class="fas fa-robot"></i> Prompt</a>
+              </li>
               <li>
                 <a
                   href="https://deamondev888.github.io/PostgreSQL-MCP-Serveur/"
@@ -54,7 +56,10 @@
       <section class="hero">
         <div class="container">
           <div class="hero-content">
-            <h1 class="hero-title"><span class="glitch" data-text="OverMind">OverMind</span><span class="gradient-text">-MCP</span></h1>
+            <h1 class="hero-title">
+              <span class="glitch" data-text="OverMind">OverMind</span
+              ><span class="gradient-text">-MCP</span>
+            </h1>
             <p class="hero-subtitle elite-subtitle">
               Orchestrateur universel d'agents IA multi-modeles via MCP pour piloter
               <span class="highlight-model">Claude-Code</span>,
@@ -111,7 +116,6 @@
                 </button>
               </div>
             </div>
-
 
             <div class="hero-stats elite-stats">
               <div class="stat elite-stat">
@@ -215,12 +219,18 @@
             <div class="feature-card">
               <div class="feature-icon">🔍</div>
               <h3>Auto-Diagnostic CLI</h3>
-              <p>Détection automatique des runners manquants avec instructions d'installation et liens officiels vers les kits (NPM/GitHub).</p>
+              <p>
+                Détection automatique des runners manquants avec instructions d'installation et
+                liens officiels vers les kits (NPM/GitHub).
+              </p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">💾</div>
               <h3>Mémoire Long Terme</h3>
-              <p>Indexation sémantique (PostgreSQL Vector) de chaque interaction pour une cohérence parfaite sur la durée.</p>
+              <p>
+                Indexation sémantique (PostgreSQL Vector) de chaque interaction pour une cohérence
+                parfaite sur la durée.
+              </p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">
@@ -294,7 +304,8 @@
               Outil Metadata
             </h2>
             <p class="section-subtitle">
-              Métadonnées projet instantanées — arborescence, configs, statistiques et liste complète des fichiers sources.
+              Métadonnées projet instantanées — arborescence, configs, statistiques et liste
+              complète des fichiers sources.
             </p>
           </div>
           <div class="code-container large">
@@ -310,7 +321,9 @@
           <div class="code-container large" style="margin-top: 20px">
             <div class="code-header">
               <span class="code-title">Exemples</span>
-              <div class="code-actions"><button class="copy-btn"><i class="fas fa-copy"></i></button></div>
+              <div class="code-actions">
+                <button class="copy-btn"><i class="fas fa-copy"></i></button>
+              </div>
             </div>
             <pre><code class="language-javascript">// Projet courant, depth 3
 metadata({ path: ".", depth: 3, includeStats: true })
@@ -325,22 +338,36 @@ metadata({ depth: 2, includeStats: false })</code></pre>
             <div class="feature-card">
               <div class="feature-icon">📁</div>
               <h3>Arborescence</h3>
-              <p>Vue tree-like récursive jusqu'à la profondeur choisie. Ignore automatiquement <code>node_modules</code>, <code>.git</code>, <code>.github</code>, <code>dist</code>, <code>build</code>…</p>
+              <p>
+                Vue tree-like récursive jusqu'à la profondeur choisie. Ignore automatiquement
+                <code>node_modules</code>, <code>.git</code>, <code>.github</code>,
+                <code>dist</code>, <code>build</code>…
+              </p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">⚙️</div>
               <h3>Configurations</h3>
-              <p>Détecte et affiche automatiquement <code>package.json</code>, <code>tsconfig.json</code>, <code>Dockerfile</code>, <code>.env.example</code>, <code>vite.config.ts</code> et plus.</p>
+              <p>
+                Détecte et affiche automatiquement <code>package.json</code>,
+                <code>tsconfig.json</code>, <code>Dockerfile</code>, <code>.env.example</code>,
+                <code>vite.config.ts</code> et plus.
+              </p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">📊</div>
               <h3>Statistiques</h3>
-              <p>Nombre de fichiers, lignes totales, répartition par langage (TypeScript, Python, Go, Rust, Java…) et liste complète des paths relatifs triés.</p>
+              <p>
+                Nombre de fichiers, lignes totales, répartition par langage (TypeScript, Python, Go,
+                Rust, Java…) et liste complète des paths relatifs triés.
+              </p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">🔒</div>
               <h3>Sandboxé</h3>
-              <p>Le <code>path</code> est strictement limité au répertoire de travail. Les chemins absolus, traversals <code>../../</code> et symlinks sont refusés.</p>
+              <p>
+                Le <code>path</code> est strictement limité au répertoire de travail. Les chemins
+                absolus, traversals <code>../../</code> et symlinks sont refusés.
+              </p>
             </div>
           </div>
         </div>
@@ -462,6 +489,7 @@ if (!isError) {
 }</code></pre>
           </div>
         </div>
+      </section>
       <div class="container">
         <p class="system-note">
           <i class="fas fa-exclamation-triangle"></i>
@@ -469,45 +497,45 @@ if (!isError) {
           <strong>OpenClaw</strong> rebelles finissent par obéir. 😈
         </p>
       </div>
-
-      <footer>
-        <div class="container">
-          <div class="footer-content">
-            <div class="footer-brand">
-              <div class="footer-logo">
-                <i class="fas fa-brain"></i>
-                <span>OverMind-MCP</span>
-              </div>
-              <p>Le futur de l'orchestration IA</p>
-            </div>
-            <div class="footer-social">
-              <a href="https://www.npmjs.com/package/overmind-mcp" target="_blank" title="NPM">
-                <i class="fab fa-npm"></i>
-              </a>
-              <a href="https://github.com/DeamonDev888/overmind-mcp" target="_blank" title="GitHub">
-                <i class="fab fa-github"></i>
-              </a>
-              <a href="https://discord.gg/4AR82phtBz" target="_blank" title="Discord">
-                <i class="fab fa-discord"></i>
-              </a>
-              <a
-                href="https://deamondev888.github.io/PostgreSQL-MCP-Serveur/"
-                target="_blank"
-                title="PostgreSQL-MCP"
-              >
-                <i class="fas fa-database"></i>
-              </a>
-            </div>
-          </div>
-          <div class="footer-bottom">
-            <p>Projet propulsé par DeaMoN888 - 2026</p>
-          </div>
-        </div>
-      </footer>
     </div>
 
+    <footer>
+      <div class="container">
+        <div class="footer-content">
+          <div class="footer-brand">
+            <div class="footer-logo">
+              <i class="fas fa-brain"></i>
+              <span>OverMind-MCP</span>
+            </div>
+            <p>Le futur de l'orchestration IA</p>
+          </div>
+          <div class="footer-social">
+            <a href="https://www.npmjs.com/package/overmind-mcp" target="_blank" title="NPM">
+              <i class="fab fa-npm"></i>
+            </a>
+            <a href="https://github.com/DeamonDev888/overmind-mcp" target="_blank" title="GitHub">
+              <i class="fab fa-github"></i>
+            </a>
+            <a href="https://discord.gg/4AR82phtBz" target="_blank" title="Discord">
+              <i class="fab fa-discord"></i>
+            </a>
+            <a
+              href="https://deamondev888.github.io/PostgreSQL-MCP-Serveur/"
+              target="_blank"
+              title="PostgreSQL-MCP"
+            >
+              <i class="fas fa-database"></i>
+            </a>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <p>Projet propulsé par DeaMoN888 - 2026</p>
+        </div>
+      </div>
+    </footer>
+
     <!-- SVG Visual Effects Definitions -->
-    <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true" focusable="false">
+    <svg style="position: absolute; width: 0; height: 0" aria-hidden="true" focusable="false">
       <defs>
         <filter id="cyber-glitch">
           <feTurbulence type="fractalNoise" baseFrequency="0.00001" numOctaves="1" result="noise" />
@@ -516,7 +544,12 @@ if (!isError) {
         </filter>
 
         <filter id="noiseFilter">
-          <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="3" stitchTiles="stitch" />
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.6"
+            numOctaves="3"
+            stitchTiles="stitch"
+          />
           <feColorMatrix type="saturate" values="0" />
           <feComponentTransfer>
             <feFuncA type="linear" slope="0.05" />

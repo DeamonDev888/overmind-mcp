@@ -1,8 +1,16 @@
 {
   "mcpServers": {
-    "claude-code-runner": {
+    "overmind": {
       "command": "node",
-      "args": ["C:/Path/To/Workflow/dist/index.js"]
+      "args": ["./dist/bin/cli.js"]
+    },
+    "memory": {
+      "command": "node",
+      "args": ["./dist/bin/cli.js", "--memory-only"]
+    },
+    "postgresql-server": {
+      "command": "node",
+      "args": ["../serveur_PostGreSQL/dist/index.js"]
     }
   }
 }

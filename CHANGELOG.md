@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.11-alpha (2026-05-08)
+
+### Fixed
+
+- **Fallback tokens $VAR resolution**: `getTokenForIndex` retournait les valeurs `$VAR` brutes (ex: `"$ANTHROPIC_AUTH_TOKEN_E"`) au lieu des tokens résolus pour les retry. Ajout de la résolution `$VAR` dans `spawnWithToken` : si `tokenValue` commence par `$`, on résout via `process.env[envKey]`. Le primary token (index=0) accepte aussi les `$VAR` non résolus (le check `!val.startsWith('$')` a été retiré).
+
+## 1.13.10-alpha (2026-05-08)
+
+### Fixed
+
+- **triggerRetry targetRetryCount bug**: `triggerRetry()` était appelé sans argument, le tokenInfo était obtenu après. Du coup `retryCount` était toujours 0 lors du `getTokenForIndex(0)` → primary token au lieu du fallback. Maintenant `triggerRetry(targetRetryCount)` passe le bon index directement.
+
+## 1.13.9-alpha (2026-05-08)
+
+### Fixed
+
+- **ClaudeRunner fast-fail on retryable errors**: Le retry n'attendait plus la fermeture complète du processus (slow). Ajout de `triggerRetry()` qui kill immédiatement le processus, clear tous les timers, et relance via `setImmediate`. Flag `earlyExitTriggered` empêche le double-exit.
+
+## 1.13.8-alpha (2026-05-08)
+
+### Fixed
+
+- **ClaudeRunner retry token switch**: Le retry ne changeait pas de token correctement (utilisait encore le primary après 429). Logique corrigée : index 0 = primary, index 1+ = AUTH_FALLBACK_1/2/3 directement.
+
+## 1.13.7-alpha (2026-05-08)
+
+### Changed
+
+- **`config_example` tool**: Documentation complète des fallback tokens (401, 429, 5xx). Exemples clairs avec syntaxe `$ANTHROPIC_AUTH_TOKEN_2`, etc.
+
+## 1.13.6-alpha (2026-05-08)
+
+### Fixed
+
+- **`ClaudeRunner fallback retry`**: Le fallback ne se déclenchait que sur les erreurs 401 (auth). Ajout de la détection des erreurs retryable : 429 (rate limit/quota exhausted), 500/502/503 (server errors) et leurs messages correspondants dans stderr. Les tokens fallback (AUTH_FALLBACK_1/2/3) sont désormais essayés pour toutes ces erreurs.
+
 ## 1.13.5-alpha (2026-05-08)
 
 ### Fixed

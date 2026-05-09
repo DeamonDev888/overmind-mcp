@@ -6,7 +6,9 @@ import { getWorkspaceDir, resetWorkspaceCache } from '../lib/config.js';
 
 // Mock telemetry — withSpan just calls fn() with a fake span to avoid OTel dependency
 vi.mock('../lib/telemetry.js', () => ({
-  withSpan: vi.fn((_name, fn) => fn({ setAttribute: vi.fn(), setStatus: vi.fn(), recordException: vi.fn(), end: vi.fn() })),
+  withSpan: vi.fn((_name, fn) =>
+    fn({ setAttribute: vi.fn(), setStatus: vi.fn(), recordException: vi.fn(), end: vi.fn() }),
+  ),
   initTelemetry: vi.fn(),
   getTracer: vi.fn(),
 }));

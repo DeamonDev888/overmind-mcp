@@ -190,11 +190,19 @@ export class ClaudeRunner {
     const TOKEN_KEYS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E'];
 
     /**
-     * Vérifie si le stderr contient une erreur d'authentification (401).
-     * Claude CLI affiche des messages explicites en cas d'auth failure.
+     * Vérifie si une erreur est retryable (fallback recommended).
+     * 401 = auth error (token invalide/expiré)
+     * 429 = rate limit / quota exhausted
+     * 500/502/503 = server error
      */
-    const isAuthError = (stderr: string): boolean => {
+    const isRetryableError = (stderr: string, jsonEnv: Record<string, unknown> | null): boolean => {
       const lower = stderr.toLowerCase();
+      const status = jsonEnv?.api_error_status as number | undefined;
+
+      if (status === 401) return true;
+      if (status === 429) return true;
+      if (status === 500 || status === 502 || status === 503) return true;
+
       return (
         lower.includes('401') ||
         lower.includes('unauthorized') ||
@@ -202,7 +210,15 @@ export class ClaudeRunner {
         lower.includes('api key invalid') ||
         lower.includes('authentication failed') ||
         lower.includes('auth error') ||
-        lower.includes('invalid authentication')
+        lower.includes('invalid authentication') ||
+        lower.includes('429') ||
+        lower.includes('rate limit') ||
+        lower.includes('quota exhausted') ||
+        lower.includes('limit exhausted') ||
+        lower.includes('503') ||
+        lower.includes('service unavailable') ||
+        lower.includes('500') ||
+        lower.includes('internal server error')
       );
     };
 
@@ -214,7 +230,7 @@ export class ClaudeRunner {
       const fallbacks: Array<{ key: string; value: string }> = [];
       for (const key of FALLBACK_KEYS) {
         const val = agentCustomEnv[key];
-        if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
+        if (val && typeof val === 'string' && val.length > 0) {
           fallbacks.push({ key, value: val });
         }
       }
@@ -222,23 +238,32 @@ export class ClaudeRunner {
     };
 
     /**
-     * Détermine quel token utiliser : le fallback à l'index donné,
-     * ou le primary token ANTHROPIC_AUTH_TOKEN / ANTHROPIC_AUTH_TOKEN_E.
+     * Détermine quel token utiliser selon l'index de retry.
+     * - index 0 = tentative initiale → use primary token (ANTHROPIC_AUTH_TOKEN)
+     * - index 1+ = retry → skip primary, use fallbacks directly
      */
     const getTokenForIndex = (
       index: number,
     ): { tokenEnvKey: string; tokenValue: string } | null => {
-      // Essayer d'abord le primary token
-      for (const tk of TOKEN_KEYS) {
-        const val = agentCustomEnv[tk];
-        if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
-          return { tokenEnvKey: tk, tokenValue: val };
+      if (index === 0) {
+        // Tentative initiale : utiliser le primary token
+        // NOTE: si la valeur est un $VAR non résolu (interpolateEnvVars n'a pas trouvé
+        // la variable dans process.env à ce moment), on le passe quand même à spawnWithToken
+        // qui fera la résolution finale via process.env.
+        for (const tk of TOKEN_KEYS) {
+          const val = agentCustomEnv[tk];
+          if (val && typeof val === 'string' && val.length > 0) {
+            return { tokenEnvKey: tk, tokenValue: val };
+          }
         }
+        // Aucun primary token trouvé — retourner null plutôt que de tomber dans les fallbacks
+        return null;
       }
-      // Puis les fallbacks
+      // Retry (index >= 1) : skip primary, use fallbacks directly
       const fallbacks = getAvailableFallbacks();
-      if (index < fallbacks.length) {
-        return { tokenEnvKey: fallbacks[index].key, tokenValue: fallbacks[index].value };
+      const fallbackIndex = index - 1; // index 1 → fallback[0] (AUTH_FALLBACK_1)
+      if (fallbackIndex < fallbacks.length) {
+        return { tokenEnvKey: fallbacks[fallbackIndex].key, tokenValue: fallbacks[fallbackIndex].value };
       }
       return null;
     };
@@ -266,12 +291,32 @@ export class ClaudeRunner {
         let currentStdout = '';
         const MAX_BUF = 10 * 1024 * 1024;
         let currentSessionId: string | undefined = sessionId;
+        let earlyExitTriggered = false; // Prevent double-exit on early retry
 
         const safeResolve = (value: RunAgentResult) => {
           if (!resolved) {
             resolved = true;
             resolve(value);
           }
+        };
+
+        const triggerRetry = (targetRetryCount: number) => {
+          if (earlyExitTriggered) return;
+          earlyExitTriggered = true;
+          if (currentChildRef && !currentChildRef.killed) {
+            currentChildRef.kill();
+          }
+          if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
+          if (killTimer) clearTimeout(killTimer);
+          if (timeout) clearTimeout(timeout);
+          retryCount = targetRetryCount;
+          const tokenInfo = getTokenForIndex(retryCount);
+          if (!options.silent) {
+            process.stderr.write(
+              `\n\x1b[41m\x1b[37m[ClaudeRunner] 🔄 Retry ${retryCount}/${maxRetries} avec ${tokenInfo?.tokenEnvKey || 'UNKNOWN'}...\x1b[0m\n`,
+            );
+          }
+          setImmediate(() => spawnWithToken(tokenInfo));
         };
 
         const cleanupTmpFiles = () => {
@@ -293,6 +338,7 @@ export class ClaudeRunner {
 
         let killTimer: NodeJS.Timeout | null = null;
         let hardTimeoutTimer: NodeJS.Timeout | null = null;
+        const timeout: NodeJS.Timeout | null = null;
 
         /**
          * Fonction centrale qui spawn le processus Claude avec le bon token.
@@ -318,10 +364,20 @@ export class ClaudeRunner {
           };
           if (tokenInfo) {
             // Remplacer le token actif par celui du fallback
+            // NOTE: Les tokens peuvent encore contenir des $VAR non résolus
+            // (interpolateEnvVars n'a pas trouvé ces vars dans process.env au moment du load).
+            // On résout ici via process.env (qui a été peuplé par loadEnvQuietly).
             for (const tk of TOKEN_KEYS) {
               delete spawnEnv[tk];
             }
-            spawnEnv[tokenInfo.tokenEnvKey] = tokenInfo.tokenValue;
+            let resolvedToken = tokenInfo.tokenValue;
+            if (resolvedToken.startsWith('$')) {
+              const envKey = resolvedToken.slice(1);
+              resolvedToken = process.env[envKey] || resolvedToken;
+            }
+            // Le Claude CLI lit ANTHROPIC_AUTH_TOKEN — on injecte toujours sous ce nom,
+            // peu importe que tokenInfo vienne du primary ou d'un AUTH_FALLBACK_n.
+            spawnEnv['ANTHROPIC_AUTH_TOKEN'] = resolvedToken;
           }
 
           currentStderr = '';
@@ -330,11 +386,29 @@ export class ClaudeRunner {
           let command = 'claude';
           let spawnArgs: string[] = [];
 
+          // Sur retry avec un token fallback, on doit démarrer une nouvelle session.
+          // Reprendre (--resume) une session créée par un autre compte/token fait que
+          // le provider (ex: Z.AI) lie la session au compte original → le quota du
+          // compte original s'applique même avec un nouveau token → 429 parasite.
+          const isFallbackRetry =
+            tokenInfo !== null && tokenInfo.tokenEnvKey.startsWith('AUTH_FALLBACK_');
+          let effectiveArgs = argsSpawn;
+          if (isFallbackRetry) {
+            effectiveArgs = [];
+            for (let i = 0; i < argsSpawn.length; i++) {
+              if (argsSpawn[i] === '--resume') {
+                i++; // skip the value too
+                continue;
+              }
+              effectiveArgs.push(argsSpawn[i]);
+            }
+          }
+
           if (process.platform === 'win32') {
             command = 'cmd.exe';
-            spawnArgs = ['/c', 'claude', ...argsSpawn, '-p'];
+            spawnArgs = ['/c', 'claude', ...effectiveArgs, '-p'];
           } else {
-            spawnArgs = [...argsSpawn, '-p'];
+            spawnArgs = [...effectiveArgs, '-p'];
           }
 
           if (!options.silent) {
@@ -355,7 +429,8 @@ export class ClaudeRunner {
           if (currentChildRef.stdout) {
             currentChildRef.stdout.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              if (currentStdout.length + chunk.length > MAX_BUF) currentStdout = currentStdout.slice(-MAX_BUF);
+              if (currentStdout.length + chunk.length > MAX_BUF)
+                currentStdout = currentStdout.slice(-MAX_BUF);
               else currentStdout += chunk;
               if (agentName && !options.silent) {
                 process.stderr.write(`[ClaudeRunner:${agentName}] ${chunk}`);
@@ -366,7 +441,8 @@ export class ClaudeRunner {
           if (currentChildRef.stderr) {
             currentChildRef.stderr.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              if (currentStderr.length + chunk.length > MAX_BUF) currentStderr = currentStderr.slice(-MAX_BUF);
+              if (currentStderr.length + chunk.length > MAX_BUF)
+                currentStderr = currentStderr.slice(-MAX_BUF);
               else currentStderr += chunk;
               if (agentName && !options.silent) {
                 process.stderr.write(`[ClaudeRunner:${agentName}:ERR] ${chunk}`);
@@ -440,37 +516,50 @@ export class ClaudeRunner {
               }
             }
 
-            // ─── Vérification 401 / Auth Error → Retry avec fallback ───
-            // Le 401 peut apparaître dans stderr OU dans le JSON résultat (api_error_status: 401)
-            const has401InStderr = isAuthError(currentStderr);
-            const has401InResult =
+            // ─── Fallback retry — DÉSACTIVÉ (en standby) ───────────────────────
+            // Le retry interne au runner ne peut pas changer effectivement de token :
+            // Claude CLI réutilise l'auth de la session (--resume / session-env) ou
+            // d'autres credentials hérités, donc le fallback se retrouve à soumettre
+            // la même clé que l'attempt précédent. Conséquence observée : 429 répété
+            // avec exactement le même message (Anthropic Console quota), même quand
+            // la clé fallback fonctionne en direct (curl OK, primary OK).
+            //
+            // TODO(bridge/client) : réimplémenter le fallback en amont du runner —
+            // côté bridge HTTP (overmind-bridge.js / nexus-api-server) ou côté
+            // client Discord. Au lieu de relancer un subprocess `claude` qui hérite
+            // de l'état session, le bridge doit :
+            //   1. détecter la 429/401 dans la réponse JSON du runner
+            //   2. relancer un nouveau call run_agent avec un agent/settings dont
+            //      le ANTHROPIC_AUTH_TOKEN primary pointe sur la clé suivante
+            //      (ou cloner l'agent à la volée avec settings overridés)
+            //   3. ne PAS passer de sessionId pour cette nouvelle tentative
+            // ───────────────────────────────────────────────────────────────────
+            const FALLBACK_RETRY_ENABLED = false;
+            const isRetryable = isRetryableError(currentStderr, jsonEnvelope);
+            const hasRetryableStatus =
               jsonEnvelope !== null &&
               (jsonEnvelope.api_error_status === 401 ||
-                (typeof jsonEnvelope.result === 'string' && isAuthError(jsonEnvelope.result)));
-            const isAuthFailure = (code !== 0 && has401InStderr) || has401InResult;
+                jsonEnvelope.api_error_status === 429 ||
+                jsonEnvelope.api_error_status === 500 ||
+                jsonEnvelope.api_error_status === 502 ||
+                jsonEnvelope.api_error_status === 503);
+            const isFailure =
+              FALLBACK_RETRY_ENABLED && ((code !== 0 && isRetryable) || hasRetryableStatus);
 
-            if (isAuthFailure) {
-              const tokenInfo = getTokenForIndex(retryCount);
-              if (tokenInfo && retryCount < maxRetries) {
-                retryCount++;
-                if (!options.silent) {
-                  process.stderr.write(
-                    `\n\x1b[41m\x1b[37m[ClaudeRunner] 🔄 Auth error (401). Retry ${retryCount}/${maxRetries} avec ${tokenInfo.tokenEnvKey}...\x1b[0m\n`,
-                  );
-                }
-                // Relancer avec le fallback suivant
-                spawnWithToken(tokenInfo);
+            if (isFailure) {
+              if (retryCount < maxRetries) {
+                triggerRetry(retryCount + 1);
                 return;
               } else {
                 if (!options.silent) {
                   process.stderr.write(
-                    `\n\x1b[41m\x1b[37m[ClaudeRunner] ❌ Tous les tokens fallback épuisés. Auth error finale.\x1b[0m\n`,
+                    `\n\x1b[41m\x1b[37m[ClaudeRunner] ❌ Tous les tokens fallback épuisés. Error retryable finale.\x1b[0m\n`,
                   );
                 }
                 cleanupTmpFiles();
                 safeResolve({
                   result: '',
-                  error: 'AUTH_ERROR_ALL_FALLBACKS_EXHAUSTED',
+                  error: 'RETRYABLE_ERROR_ALL_FALLBACKS_EXHAUSTED',
                   rawOutput: fullRaw,
                 });
                 return;
