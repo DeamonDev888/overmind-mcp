@@ -32,22 +32,115 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 
 ## 🚀 Commencer (Guide Facile)
 
-### Option 1 : Utilisation Globale ou Package distant NPM
-
-Si vous souhaitez l'installer globalement sans cloner de repo, vous pouvez utiliser :
+### Option 1 : Installation Globale NPM (Recommandé)
 
 ```bash
-npm install -g overmind-mcp
+npm install -g overmind-mcp@2.0.0
 ```
 
-**Configuration MCP (Client) pour l'Option 1 :**
-Pour connecter l'orchestrateur distant à un client ou à Cursor,Antigravity ou Claude Code, pointez simplement via `npx` :
+**🎯 Après Installation NPM :**
 
-```json
-{
-  "mcpServers": {
-    "overmind": {
-      "command": "npx",
+Une fois installé, vous avez 2 options :
+
+#### A. Mode Simple (Sans Docker - Recommandé pour débuter)
+
+OverMind fonctionne **immédiatement** sans infrastructure Docker :
+
+```bash
+# Créer un agent simple
+overmind create-agent --name expert-python --runner claude --prompt "Tu es un expert Python..."
+
+# Lancer une analyse
+overmind run-agent --runner claude --prompt "Analyse ce code..."
+```
+
+**✅ Avantages :**
+- Installation immédiate
+- Pas de Docker requis
+- Fonctionne tout de suite
+- Idéal pour tester et utiliser les features de base
+
+#### B. Mode Avancé (Avec Docker - Recommandé pour Production)
+
+Pour utiliser les **fonctionnalités avancées** (Swarm, Workflows long-running, Observabilité), vous avez besoin de l'infrastructure Docker.
+
+**Suivez le guide d'installation :**
+- 📄 [Windows avec PostgreSQL existant](https://github.com/DeamonDev888/overmind-mcp/blob/main/SETUP_WINDOWS.md)
+- 📄 [Guide de déploiement complet](https://github.com/DeamonDev888/overmind-mcp/blob/main/DEPLOYMENT.md)
+
+**Résumé du setup Docker :**
+1. Installer Docker Desktop
+2. Télécharger `docker-compose.overmind.yml` depuis [GitHub](https://github.com/DeamonDev888/overmind-mcp/blob/main/docker-compose.overmind.yml)
+3. Lancer : `docker-compose -f docker-compose.overmind.yml up -d`
+
+**✅ Avantages du Mode Avancé :**
+- 🐳 RabbitMQ (Message Broker)
+- ⏱️ Temporal (Workflows long-running)
+- 📊 Observabilité (Prometheus, Grafana, Jaeger)
+- 🧠 Vector DB (PostgreSQL + pgvector)
+
+---
+
+### Option 2 : Installation Locale (Développement)
+
+Si vous souhaitez contribuer ou avoir la toute dernière version :
+
+```bash
+# 1. Cloner le repo
+git clone https://github.com/DeamonDev888/overmind-mcp.git
+cd overmind-mcp
+
+# 2. Installer les dépendances
+pnpm install
+
+# 3. Build le projet
+pnpm run build
+
+# 4. Optionnel : Setup Windows automatique
+node scripts/setup-windows.js
+```
+
+---
+
+## 🎯 Mode d'Emploi
+
+| Mode | Installation | Infrastructure | Features |
+|------|-------------|----------------|----------|
+| **Simple** | `npm install -g` | Aucune | OverMind base (agents, mémoire locale) |
+| **Avancé** | `npm install -g` + Docker | Docker Desktop | Toutes les features (Swarm, Workflows, Observabilité) |
+| **Dév** | Clone repo + `pnpm install` | Docker + PostgreSQL local | Toutes les features + accès au code source |
+
+**Recommandation :** Commencez par le **Mode Simple**, puis passez au **Mode Avancé** quand vous avez besoin des fonctionnalités avancées !
+
+---
+
+### Option 3 : Utilisation comme Bibliothèque
+
+Vous pouvez utiliser OverMind-MCP comme un module dans vos propres projets :
+
+```typescript
+import { runAgent, AgentManager, createSwarmOrchestrator } from 'overmind-mcp';
+
+// 1. Initialisation
+const manager = new AgentManager();
+await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude');
+
+// 2. Lancer une analyse
+const { content, isError } = await runAgent({
+  runner: 'claude',
+  agentName: 'expert-seo',
+  prompt: 'Analyse le site example.com',
+});
+
+// 3. Swarm Orchestration (mode avancé avec Docker)
+const swarm = createSwarmOrchestrator({
+  agents: [...],
+  tasks: [...],
+  maxParallelTasks: 5,
+});
+```
+
+---
       "args": ["-y", "overmind-mcp@latest"]
     }
   }
