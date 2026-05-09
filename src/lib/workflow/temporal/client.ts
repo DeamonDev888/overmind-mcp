@@ -1,6 +1,6 @@
 import { Client, Connection, WorkflowHandle } from '@temporalio/client';
-import { orchestrateAgentsWorkflow } from './workflows.js';
-import type { AgentConfig } from './workflows.js';
+import { orchestrateAgentsWorkflow, longRunningWorkflow } from './workflows.js';
+import type { AgentConfig, LongRunningWorkflowInput } from './workflows.js';
 
 let _client: Client | null = null;
 
@@ -31,5 +31,35 @@ export async function startAgentsWorkflow(
     args: [agents],
     taskQueue: 'overmind-agents',
     workflowId: `agents-${Date.now()}`,
+    workflowRunTimeout: '30 minutes',
   });
+}
+
+export async function startLongRunningWorkflow(
+  input: LongRunningWorkflowInput,
+): Promise<WorkflowHandle<typeof longRunningWorkflow>> {
+  const client = getTemporalClient();
+  if (!client) {
+    throw new Error('Temporal client not initialized. Set OVERMIND_WORKFLOW=temporal');
+  }
+
+  const workflowId = `long-running-${Date.now()}`;
+
+  return client.workflow.start(longRunningWorkflow, {
+    args: [input],
+    taskQueue: 'overmind-agents',
+    workflowId,
+    workflowRunTimeout: '7 days', // Workflows pouvant durer jusqu'à 7 jours
+  });
+}
+
+export async function getLongRunningWorkflowHandle(
+  workflowId: string,
+): Promise<WorkflowHandle<typeof longRunningWorkflow>> {
+  const client = getTemporalClient();
+  if (!client) {
+    throw new Error('Temporal client not initialized. Set OVERMIND_WORKFLOW=temporal');
+  }
+
+  return client.workflow.getHandle(workflowId);
 }

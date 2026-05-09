@@ -2,6 +2,73 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-05-09
+
+### 🚀 OverMind-MCP v2.0.0 - Swarm & Observabilité Unifiée
+
+Cette version majeure marque l'achèvement complet de l'infrastructure OverMind-MCP avec des fonctionnalités d'orchestration avancées et une observabilité de niveau production.
+
+#### 🎯 Nouvelles Fonctionnalités Majeures
+
+**Swarm Orchestration (NOUVEAU)**
+- Allocation dynamique de tâches aux agents spécialisés
+- Load Balancing automatique avec scoring intelligent
+- Support de capacités multiples par agent (code, analysis, scraping, etc.)
+- Gestion de priorités de tâches (1-10)
+- Statistiques en temps réel (completed, failed, running, pending)
+- `createSwarmOrchestrator()` avec API complète
+
+**Workflows Long-Running Temporal (NOUVEAU)**
+- `longRunningWorkflow` pour tâches stateful (OSINT, analyses complètes)
+- Support de workflows jusqu'à 7 jours
+- Signaux de contrôle: `cancel`, `pause`, `resume`
+- Query d'état temps réel du workflow
+- Survit aux crashes (persistance Temporal)
+
+**Infrastructure Docker Complète (NOUVEAU)**
+- `docker-compose.yml`: Stack principale (9 services)
+- `docker-compose.exporters.yml`: Exporters de métriques
+- `init-db.sql`: Script d'initialisation PostgreSQL
+- `config/prometheus.yml`: Configuration Prometheus
+- `config/otel-collector.yml`: Configuration OpenTelemetry Collector
+
+**Observabilité de Niveau Production (NOUVEAU)**
+- Traces distribuées via OpenTelemetry → Jaeger
+- Métriques temps réel via Prometheus
+- Dashboards Grafana prêts à l'emploi
+- Scripts NPM: `deploy:infra`, `deploy:exporters`, `deploy:all`
+
+#### 📚 Documentation
+
+**Nouveaux Guides**
+- `DEPLOYMENT.md` (600+ lignes): Guide déploiement complet
+- `SWARM_USAGE.md` (500+ lignes): Guide Swarm Orchestration
+- Configuration .env étendue
+
+#### 🔧 Améliorations Techniques
+
+- Correction TypeScript (possibly undefined)
+- Correction ESLint (unused vars, any types)
+- Correction tests (mock PostgresMemoryProvider)
+- Tests: 69 passed, 3 skipped
+- Build TypeScript clean
+- Linting ESLint clean (0 errors, 0 warnings)
+
+#### 🚨 Breaking Changes
+
+- Version majeure (1.x → 2.0)
+- Nouvelles APIs publiques: Swarm, Long-Running Workflows
+- Nouvelle structure de projet (docker/, config/)
+
+#### 🔄 Migration
+
+- Aucune migration nécessaire (opt-in)
+- Configuration .env étendue (rétro-compatible)
+
+---
+
+**Déploiement 100% terminé !** 🎉
+
 ## 1.13.13 (2026-05-09)
 
 ### Features

@@ -104,7 +104,7 @@ updateConfig('./settings.json', './mcp.local.json');
 
 // 2. Gestion des agents
 const manager = new AgentManager();
-await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude-3-5-sonnet');
+await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude-4-6-sonnet');
 
 // 3. Lancer une exécution via l'Orchestrateur Unifié
 const { content, isError } = await runAgent({
