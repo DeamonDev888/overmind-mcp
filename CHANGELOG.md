@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.13.13 (2026-05-09)
+
+### Features
+
+- **All runners 10/10 quality score**: All 8 runners (Claude, Gemini, Kilo, Hermes, OpenClaw, Cline, OpenCode, QwenCLI) now share a consistent enterprise-grade architecture
+
+### All Runners Upgraded
+
+- Pino logger for structured logging
+- OpenTelemetry integration for distributed tracing
+- 10MB buffer management (prevents memory leaks)
+- Hard timeout (SIGTERM → 5s → SIGKILL)
+- Automatic cleanup of temporary files
+- Session persistence via saveSessionId
+
+### Specific Improvements
+
+- **Hermes**: Cross-platform binary detection (Windows/Linux/macOS), HERMES_BIN_PATH env override support
+- **QwenCLI**: Added buffer management and hard timeout (critical fixes)
+- **Cline**: Added telemetry with mode attribute in spans
+- **OpenCode**: Added structured logging and cleanup
+- **OpenClaw**: Added telemetry and structured logging
+- **run_agent.ts**: Replaced unsafe casts with strict Zod validation
+- **telemetry.ts**: Dynamic version from package.json, graceful shutdown method
+- **MemoryFactory**: Robust error handling with logging (no more runner crashes on DB failure)
+
+### Bug Fixes
+
+- Fixed control character regex in sanitization (Kilo)
+- Fixed lexical declaration in switch default case
+- Removed unused variables across all runners
+- Removed deprecated metadata tool
+
 ## 1.13.11-alpha (2026-05-08)
 
 ### Fixed
