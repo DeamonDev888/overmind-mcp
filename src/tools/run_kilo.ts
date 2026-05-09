@@ -78,8 +78,8 @@ export async function runKiloAgent(args: z.infer<typeof runKiloSchema>) {
       success: !result.error,
       sessionId: result.sessionId,
     });
-  } catch (_e) {
-    // Memory store is secondary
+  } catch (e) {
+    console.error(`[run_kilo] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   if (result.error?.startsWith('INVALID_AGENT')) {
