@@ -1,21 +1,23 @@
+<p align="center">
+  <img src="assets/overmind.png" alt="OverMind-MCP Banner" width="293" height="253">
+</p>
+
+<div align="center">
+
 # 🧠 OverMind-MCP
 
-_Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini-cli, QwenCli, Nous Hermes, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite._
+</div>
 
-![OverMind-MCP Banner](assets/overmind_mcp_banner_slim.png)
+_Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini-cli, QwenCli, Nous Hermes, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite._
 
 <p align="center">
   <a href="https://discord.gg/4AR82phtBz"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://deamondev888.github.io/overmind-mcp/"><img src="https://img.shields.io/badge/Documentation-Live-00fff5?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Live Doc"></a>
 </p>
 
-## 👋 C'est quoi ?
-
 **OverMind-MCP** est une conscience supérieure conçue pour orchestrer, commander et automatiser une flotte illimitée d'agents IA. Compatible avec **Claude-Code, Gemini-cli, QwenCli, Nous Hermes, Kilo/Cline, OpenClaw**, et prêt pour **GLM, Minimax, Kimi, Ollama** et bien d'autres. Plus qu'un simple runner, c'est le **Cortex Central** de votre infrastructure IA.
 
 Il transforme les outils CLI isolés en une force coordonnée, pilotable par API ou par MCP, capable d'exécuter des missions complexes en 2 secondes chrono. de creer et d orchestrer des pipeline de plusieurs agent. il est expert en outils MCP et peu etre scripté pour les faire fonctionner ensemble et les mettre en productions
-
-## ✨ Ce que ça fait
 
 - 🔌 **Contrôle Total** : Lancez des missions complexes via MCP ou directement via le code (Claude, Gemini, QwenCli, Hermes).
 - 🏗️ **Architecture Pro** : Basé sur des services (`AgentManager`, `ClaudeRunner`, `PromptManager`) pour une stabilité maximale.

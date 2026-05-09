@@ -343,7 +343,7 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
         process.env.ANTHROPIC_DEFAULT_OPUS_MODEL || 'claude-3-opus-20240229',
       ANTHROPIC_DEFAULT_SONNET_MODEL:
         process.env.ANTHROPIC_DEFAULT_SONNET_MODEL || 'claude-3-5-sonnet-20241022',
-      API_TIMEOUT_MS: process.env.API_TIMEOUT_MS || '3000000',
+      AGENT_TIMEOUT_MS: process.env.AGENT_TIMEOUT_MS || process.env.API_TIMEOUT_MS || '3000000',
       MISTRAL_API_KEY: process.env.MISTRAL_API_KEY || '',
       OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
       ALIBABA_API_KEY: process.env.ALIBABA_API_KEY || '',
