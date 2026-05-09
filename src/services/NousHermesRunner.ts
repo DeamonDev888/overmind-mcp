@@ -1,10 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
-import { getLastSessionId } from '../lib/sessions.js';
+import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { resolveKiloModel } from '../lib/modelMapping.js';
+import { withSpan } from '../lib/telemetry.js';
+import pino from 'pino';
+
+const execAsync = promisify(exec);
+
+const logger = pino({ name: 'NousHermesRunner' });
 
 export interface RunAgentOptions {
   prompt: string;
@@ -26,14 +34,112 @@ export interface RunAgentResult {
   nickname?: string; // original value from config (if different)
 }
 
+/**
+ * Find hermes binary across platforms (Windows, Linux, macOS)
+ * Priority: HERMES_BIN_PATH env > PATH > platform-specific paths > pip show
+ */
+async function findHermesBinary(): Promise<string> {
+  const isWin = process.platform === 'win32';
+
+  // 1. Check environment variable first (allows users to override)
+  if (process.env.HERMES_BIN_PATH) {
+    if (fs.existsSync(process.env.HERMES_BIN_PATH)) {
+      logger.info({ path: process.env.HERMES_BIN_PATH }, 'Using HERMES_BIN_PATH');
+      return process.env.HERMES_BIN_PATH;
+    }
+  }
+
+  // 2. Try to find via PATH
+  try {
+    const command = isWin ? 'where hermes' : 'which hermes';
+    const { stdout } = await execAsync(command);
+    const hermesPath = stdout.trim().split('\n')[0];
+    if (hermesPath && fs.existsSync(hermesPath)) {
+      logger.info({ path: hermesPath }, 'Found hermes in PATH');
+      return hermesPath;
+    }
+  } catch {
+    // Not found in PATH
+  }
+
+  // 3. Platform-specific paths
+  const platformPaths = isWin
+    ? [
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'Scripts', 'hermes.exe'),
+        path.join(process.env.APPDATA || '', 'Python', 'Python312', 'Scripts', 'hermes.exe'),
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'Scripts', 'hermes.exe'),
+        path.join(process.env.APPDATA || '', 'Python', 'Python311', 'Scripts', 'hermes.exe'),
+        'C:\\Python312\\Scripts\\hermes.exe',
+        'C:\\Python311\\Scripts\\hermes.exe',
+        'C:\\Program Files\\Hermes\\hermes.exe',
+      ]
+    : [
+        path.join(process.env.HOME || '', '.local', 'bin', 'hermes'),
+        path.join(process.env.HOME || '', 'miniconda3', 'bin', 'hermes'),
+        path.join(process.env.HOME || '', 'anaconda3', 'bin', 'hermes'),
+        '/usr/local/bin/hermes',
+        '/usr/bin/hermes',
+        '/opt/homebrew/bin/hermes',
+      ];
+
+  for (const p of platformPaths) {
+    if (fs.existsSync(p)) {
+      logger.info({ path: p }, 'Found hermes at platform path');
+      return p;
+    }
+  }
+
+  // 4. Try pip show to find installation
+  try {
+    const { stdout } = await execAsync('pip show hermes-agent 2>/dev/null || pip3 show hermes-agent');
+    const match = stdout.match(/Location:\s*(.+)/);
+    if (match) {
+      const sitePackages = match[1].trim();
+      const hermesPath = isWin
+        ? path.join(sitePackages, 'Scripts', 'hermes.exe')
+        : path.join(sitePackages, 'bin', 'hermes');
+      if (fs.existsSync(hermesPath)) {
+        logger.info({ path: hermesPath }, 'Found hermes via pip show');
+        return hermesPath;
+      }
+    }
+  } catch {
+    // pip show failed
+  }
+
+  // 5. Fallback to 'hermes' and let spawn fail with proper error
+  logger.warn('hermes binary not found, using "hermes" command');
+  return 'hermes';
+}
+
 export class NousHermesRunner {
   private timeoutMs: number;
+  private tempFiles: string[] = [];
+  private MAX_BUF = 10 * 1024 * 1024; // 10MB buffer limit
 
   constructor() {
     this.timeoutMs = CONFIG.TIMEOUT_MS || 900000; // 15 min default
   }
 
+  cleanupTempFiles(): void {
+    for (const tempFile of this.tempFiles) {
+      try {
+        if (fs.existsSync(tempFile)) {
+          fs.unlinkSync(tempFile);
+          logger.debug({ tempFile }, 'Cleaned up temp file');
+        }
+      } catch (err) {
+        logger.warn({ tempFile, error: err }, 'Failed to cleanup temp file');
+      }
+    }
+    this.tempFiles = [];
+  }
+
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
+    return runAgentWrapper.call(this, options);
+  }
+
+  async runAgentInternal(options: RunAgentOptions): Promise<RunAgentResult> {
     const { prompt, agentName, autoResume, silent } = options;
     let { sessionId } = options;
 
@@ -62,7 +168,6 @@ export class NousHermesRunner {
       NVIDIA_API_BASE: process.env.NVIDIA_API_BASE || 'https://integrate.api.nvidia.com/v1',
       ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
     };
-    const debugLogs: string[] = [];
 
     // --- Isolation / Settings / Prompt ---
     const overmindHermesPath = path.resolve(
@@ -105,7 +210,7 @@ export class NousHermesRunner {
               .filter((f) => f.startsWith('settings_') && f.endsWith('.json'))
               .map((f) => f.replace('settings_', '').replace('.json', ''));
           } catch (e) {
-            console.error(`[NousHermesRunner] ⚠️ Error reading settings directory: ${e}`);
+            logger.warn({ settingsDir, error: e }, 'Error reading settings directory');
           }
 
           return {
@@ -213,12 +318,12 @@ export class NousHermesRunner {
                 `[NousHermesRunner] 🛠️  Hermes configs (mcp.json & config.yaml) generated in ${hermesConfigDir}`,
               );
           } catch (err) {
-            console.error(`[NousHermesRunner] ❌ Error translating MCP config: ${err}`);
+            logger.error({ error: err }, 'Error translating MCP config');
           }
         }
       } catch (e) {
         if (e instanceof Error && e.message?.includes('INVALID_AGENT')) throw e;
-        console.error(`[NousHermesRunner] ⚠️ Error processing agent settings: ${e}`);
+        logger.warn({ agentName, error: e }, 'Error processing agent settings');
       }
     }
 
@@ -263,20 +368,14 @@ export class NousHermesRunner {
     cleanArgs.push('--model', model);
 
     if (isOpenAIModel && hasOpenAIKey) {
-      if (!silent) console.error(`[NousHermesRunner] 🤖 Using OpenAI for ${model}`);
+      logger.info({ model, provider: 'openai' }, 'Using OpenAI provider');
       cleanArgs.push('--provider', 'openai');
       // Nettoyage des clés conflictuelles
       delete agentCustomEnv.OPENROUTER_API_KEY;
       delete agentCustomEnv.NVIDIA_API_KEY;
       delete agentCustomEnv.NVAPI_KEY;
-
-      // Map OPENAI_BASE_URL if present to OPENAI_API_BASE if needed by some tools
-      if (agentCustomEnv.OPENAI_BASE_URL && !agentCustomEnv.OPENAI_API_BASE) {
-        agentCustomEnv.OPENAI_API_BASE = agentCustomEnv.OPENAI_BASE_URL;
-      }
     } else if (isMistralModel && hasMistralKey) {
-      if (!silent) console.error(`[NousHermesRunner] 🌪️ Using Mistral for ${model}`);
-      debugLogs.push(`🌪️ Using Mistral provider for ${model}`);
+      logger.info({ model, provider: 'mistral' }, 'Using Mistral provider');
       cleanArgs.push('--provider', 'mistral');
       // Nettoyage des clés conflictuelles
       delete agentCustomEnv.OPENROUTER_API_KEY;
@@ -284,27 +383,25 @@ export class NousHermesRunner {
       delete agentCustomEnv.NVAPI_KEY;
       delete agentCustomEnv.OPENAI_API_KEY;
     } else if (isNvidiaModel && hasNvidiaKey) {
-      if (!silent) console.error(`[NousHermesRunner] 🎯 Using NVIDIA NIM for ${model}`);
-      debugLogs.push(`🎯 Using NVIDIA NIM for ${model}`);
+      logger.info({ model, provider: 'nvidia' }, 'Using NVIDIA NIM provider');
       cleanArgs.push('--provider', 'nvidia');
     } else {
       // Fallback OpenRouter pour tout le reste ou si clé NIM manquante
-      if (!silent) console.error(`[NousHermesRunner] 🌐 Using OpenRouter for ${model}`);
-      debugLogs.push(
-        `🌐 Using OpenRouter for ${model} (isMistral: ${isMistralModel}, hasKey: ${hasMistralKey})`,
-      );
+      logger.info({ model, provider: 'openrouter' }, 'Using OpenRouter provider');
       cleanArgs.push('--provider', 'openrouter');
     }
 
-    // --- OS Specific Spawn ---
-    const spawnCommand =
-      'C:\\Users\\Deamon\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\hermes.exe';
+    // --- Find Hermes Binary (cross-platform) ---
+    const spawnCommand = await findHermesBinary();
 
     if (!silent) {
-      console.error(
-        `[NousHermesRunner] 🚀 Starting Hermes Agent: ${spawnCommand} ${cleanArgs.join(' ')}`,
-      );
+      logger.info({ command: spawnCommand, args: cleanArgs }, 'Starting Hermes Agent');
     }
+
+    // Track temp files for MCP config
+    const mcpJsonPath = path.join(overmindHermesSubPath, 'mcp.json');
+    const configYamlPath = path.join(overmindHermesSubPath, 'config.yaml');
+    this.tempFiles.push(mcpJsonPath, configYamlPath);
 
     return new Promise((resolve) => {
       let resolved = false;
@@ -327,6 +424,9 @@ export class NousHermesRunner {
 
       child.stdout?.on('data', (d: Buffer) => {
         const chunk = d.toString();
+        if (stdout.length + chunk.length > this.MAX_BUF) {
+          stdout = stdout.slice(-this.MAX_BUF);
+        }
         stdout += chunk;
         if (!silent) {
           process.stderr.write(`[Hermes] ${chunk}`);
@@ -335,6 +435,9 @@ export class NousHermesRunner {
 
       child.stderr?.on('data', (d: Buffer) => {
         const chunk = d.toString();
+        if (stderr.length + chunk.length > this.MAX_BUF) {
+          stderr = stderr.slice(-this.MAX_BUF);
+        }
         stderr += chunk;
         if (!silent) {
           process.stderr.write(`[Hermes:ERR] ${chunk}`);
@@ -389,5 +492,51 @@ export class NousHermesRunner {
         child.stdin.end();
       }
     });
+  }
+}
+
+/**
+ * Run agent with proper cleanup and telemetry
+ */
+async function runAgentWrapper(
+  this: NousHermesRunner,
+  options: RunAgentOptions,
+): Promise<RunAgentResult> {
+  try {
+    const result = await withSpan('hermes.runAgent', async (span) => {
+      span.setAttribute('agentName', options.agentName || '');
+      span.setAttribute('model', options.model || '');
+      span.setAttribute('runner', 'hermes');
+      return await this.runAgentInternal(options);
+    }, {
+      agentName: options.agentName || '',
+      model: options.model || '',
+      runner: 'hermes',
+    });
+
+    // Cleanup on success
+    this.cleanupTempFiles();
+
+    // Save session if needed
+    if (options.agentName && result.sessionId) {
+      await saveSessionId(
+        options.agentName,
+        result.sessionId,
+        options.configPath,
+        'hermes',
+      );
+    }
+
+    return result;
+  } catch (error) {
+    // Cleanup on error
+    this.cleanupTempFiles();
+
+    logger.error({
+      error: error instanceof Error ? error.message : String(error),
+      agentName: options.agentName,
+    }, 'Hermes runner failed');
+
+    throw error;
   }
 }

@@ -1,11 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
+import { createHash } from 'crypto';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { withSpan } from '../lib/telemetry.js';
 import { Span } from '@opentelemetry/api';
+import pino from 'pino';
+
+const logger = pino({ name: 'GeminiRunner' });
 
 export interface RunAgentOptions {
   prompt: string;
@@ -28,10 +32,25 @@ export interface RunAgentResult {
 export class GeminiRunner {
   private config: typeof CONFIG.CLAUDE;
   private timeoutMs: number;
+  private tempFiles: string[] = []; // Track temp files for cleanup
 
   constructor() {
     this.config = CONFIG.CLAUDE;
     this.timeoutMs = CONFIG.TIMEOUT_MS || 900000; // 15 min default
+  }
+
+  private cleanupTempFiles(): void {
+    for (const tempFile of this.tempFiles) {
+      try {
+        if (fs.existsSync(tempFile)) {
+          fs.unlinkSync(tempFile);
+          logger.debug({ tempFile }, 'Cleaned up temp file');
+        }
+      } catch (err) {
+        logger.warn({ tempFile, error: err }, 'Failed to cleanup temp file');
+      }
+    }
+    this.tempFiles = [];
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
@@ -73,8 +92,8 @@ export class GeminiRunner {
           const systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
           finalPrompt = `${systemPrompt}\n\n[USER QUERY]:\n${prompt}`;
         }
-      } catch {
-        // Ignored
+      } catch (err) {
+        logger.warn({ agentName, error: err }, 'Failed to load agent prompt, using raw prompt');
       }
     }
 
@@ -110,12 +129,33 @@ export class GeminiRunner {
 
       if (fs.existsSync(globalFile)) {
         try {
-          fs.copyFileSync(globalFile, localFile);
-          if (!options.silent)
-            console.error(`[GeminiRunner] OAuth synchronisé: ${file} vers ${localFile}`);
+          // Validate file integrity before copying
+          const globalContent = fs.readFileSync(globalFile);
+          const globalHash = createHash('sha256').update(globalContent).digest('hex');
+
+          // Check if local file exists and has same content
+          let needsCopy = true;
+          if (fs.existsSync(localFile)) {
+            const localContent = fs.readFileSync(localFile);
+            const localHash = createHash('sha256').update(localContent).digest('hex');
+            needsCopy = globalHash !== localHash;
+          }
+
+          if (needsCopy) {
+            fs.writeFileSync(localFile, globalContent);
+            this.tempFiles.push(localFile); // Track for cleanup
+            logger.info({ file, from: globalFile, to: localFile }, 'OAuth file synchronized');
+            if (!options.silent) {
+              process.stderr.write(`[GeminiRunner] OAuth synchronisé: ${file}\n`);
+            }
+          } else {
+            logger.debug({ file }, 'OAuth file already up to date');
+          }
         } catch (err) {
-          if (!options.silent)
-            console.error(`[GeminiRunner] Échec synchronisation ${file}: ${err}`);
+          logger.error({ file, error: err }, 'Failed to synchronize OAuth file');
+          if (!options.silent) {
+            process.stderr.write(`[GeminiRunner] Échec synchronisation ${file}: ${err}\n`);
+          }
         }
       }
     }
@@ -161,7 +201,11 @@ export class GeminiRunner {
           }
 
           fs.writeFileSync(mcpPath, JSON.stringify(mcpToUse, null, 2));
-          if (!options.silent) console.error(`[GeminiRunner] MCP synchronisé: ${mcpPath}`);
+          this.tempFiles.push(mcpPath); // Track for cleanup
+          logger.info({ mcpPath }, 'MCP configuration synchronized');
+          if (!options.silent) {
+            process.stderr.write(`[GeminiRunner] MCP synchronisé: ${mcpPath}\n`);
+          }
         }
       }
     }
@@ -320,9 +364,14 @@ export class GeminiRunner {
       });
     };
 
-    return withSpan('gemini.runAgent', runImpl, {
+    const result = await withSpan('gemini.runAgent', runImpl, {
       agentName: agentName || '',
       runner: 'gemini',
     });
+
+    // Cleanup temp files after execution
+    this.cleanupTempFiles();
+
+    return result;
   }
 }

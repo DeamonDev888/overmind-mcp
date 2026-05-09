@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "claude-code-runner": {
+    "overmind": {
       "command": "node",
       "args": ["C:/Path/To/Workflow/dist/index.js"]
     }

@@ -230,7 +230,7 @@ export class ClaudeRunner {
       const fallbacks: Array<{ key: string; value: string }> = [];
       for (const key of FALLBACK_KEYS) {
         const val = agentCustomEnv[key];
-        if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
+        if (val && typeof val === 'string' && val.length > 0) {
           fallbacks.push({ key, value: val });
         }
       }
@@ -256,6 +256,8 @@ export class ClaudeRunner {
             return { tokenEnvKey: tk, tokenValue: val };
           }
         }
+        // Aucun primary token trouvé — retourner null plutôt que de tomber dans les fallbacks
+        return null;
       }
       // Retry (index >= 1) : skip primary, use fallbacks directly
       const fallbacks = getAvailableFallbacks();
@@ -373,7 +375,9 @@ export class ClaudeRunner {
               const envKey = resolvedToken.slice(1);
               resolvedToken = process.env[envKey] || resolvedToken;
             }
-            spawnEnv[tokenInfo.tokenEnvKey] = resolvedToken;
+            // Le Claude CLI lit ANTHROPIC_AUTH_TOKEN — on injecte toujours sous ce nom,
+            // peu importe que tokenInfo vienne du primary ou d'un AUTH_FALLBACK_n.
+            spawnEnv['ANTHROPIC_AUTH_TOKEN'] = resolvedToken;
           }
 
           currentStderr = '';
@@ -382,11 +386,29 @@ export class ClaudeRunner {
           let command = 'claude';
           let spawnArgs: string[] = [];
 
+          // Sur retry avec un token fallback, on doit démarrer une nouvelle session.
+          // Reprendre (--resume) une session créée par un autre compte/token fait que
+          // le provider (ex: Z.AI) lie la session au compte original → le quota du
+          // compte original s'applique même avec un nouveau token → 429 parasite.
+          const isFallbackRetry =
+            tokenInfo !== null && tokenInfo.tokenEnvKey.startsWith('AUTH_FALLBACK_');
+          let effectiveArgs = argsSpawn;
+          if (isFallbackRetry) {
+            effectiveArgs = [];
+            for (let i = 0; i < argsSpawn.length; i++) {
+              if (argsSpawn[i] === '--resume') {
+                i++; // skip the value too
+                continue;
+              }
+              effectiveArgs.push(argsSpawn[i]);
+            }
+          }
+
           if (process.platform === 'win32') {
             command = 'cmd.exe';
-            spawnArgs = ['/c', 'claude', ...argsSpawn, '-p'];
+            spawnArgs = ['/c', 'claude', ...effectiveArgs, '-p'];
           } else {
-            spawnArgs = [...argsSpawn, '-p'];
+            spawnArgs = [...effectiveArgs, '-p'];
           }
 
           if (!options.silent) {
@@ -494,8 +516,25 @@ export class ClaudeRunner {
               }
             }
 
-            // ─── Vérification Error Retryable → Retry avec fallback ───
-            // 401 (auth), 429 (rate limit/quota), 500/502/503 (server error)
+            // ─── Fallback retry — DÉSACTIVÉ (en standby) ───────────────────────
+            // Le retry interne au runner ne peut pas changer effectivement de token :
+            // Claude CLI réutilise l'auth de la session (--resume / session-env) ou
+            // d'autres credentials hérités, donc le fallback se retrouve à soumettre
+            // la même clé que l'attempt précédent. Conséquence observée : 429 répété
+            // avec exactement le même message (Anthropic Console quota), même quand
+            // la clé fallback fonctionne en direct (curl OK, primary OK).
+            //
+            // TODO(bridge/client) : réimplémenter le fallback en amont du runner —
+            // côté bridge HTTP (overmind-bridge.js / nexus-api-server) ou côté
+            // client Discord. Au lieu de relancer un subprocess `claude` qui hérite
+            // de l'état session, le bridge doit :
+            //   1. détecter la 429/401 dans la réponse JSON du runner
+            //   2. relancer un nouveau call run_agent avec un agent/settings dont
+            //      le ANTHROPIC_AUTH_TOKEN primary pointe sur la clé suivante
+            //      (ou cloner l'agent à la volée avec settings overridés)
+            //   3. ne PAS passer de sessionId pour cette nouvelle tentative
+            // ───────────────────────────────────────────────────────────────────
+            const FALLBACK_RETRY_ENABLED = false;
             const isRetryable = isRetryableError(currentStderr, jsonEnvelope);
             const hasRetryableStatus =
               jsonEnvelope !== null &&
@@ -504,7 +543,8 @@ export class ClaudeRunner {
                 jsonEnvelope.api_error_status === 500 ||
                 jsonEnvelope.api_error_status === 502 ||
                 jsonEnvelope.api_error_status === 503);
-            const isFailure = (code !== 0 && isRetryable) || hasRetryableStatus;
+            const isFailure =
+              FALLBACK_RETRY_ENABLED && ((code !== 0 && isRetryable) || hasRetryableStatus);
 
             if (isFailure) {
               if (retryCount < maxRetries) {
