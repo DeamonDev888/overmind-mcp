@@ -31,7 +31,6 @@ export interface RunAgentResult {
   fallbackUsed?: string; // which fallback token was used (e.g. 'AUTH_FALLBACK_1')
 }
 
-const CLAUDE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class KiloRunner {
   private config: typeof CONFIG.KILO;
@@ -181,7 +180,7 @@ export class KiloRunner {
       argsSpawn.push('--agent', mode);
     }
 
-    if (sessionId && !CLAUDE_UUID_RE.test(sessionId)) {
+    if (sessionId && sessionId.length > 0) {
       argsSpawn.push('--session', sessionId);
     }
     if (selectedModel) argsSpawn.push('--model', selectedModel);
@@ -232,8 +231,14 @@ export class KiloRunner {
       const fallbacks: Array<{ key: string; value: string }> = [];
       for (const key of FALLBACK_KEYS) {
         const val = agentCustomEnv[key];
-        if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
-          fallbacks.push({ key, value: val });
+        if (val && typeof val === 'string' && val.length > 0) {
+          // Resolve $VAR like ClaudeRunner does
+          let resolvedValue = val;
+          if (val.startsWith('$')) {
+            const envKey = val.slice(1);
+            resolvedValue = process.env[envKey] || val;
+          }
+          fallbacks.push({ key, value: resolvedValue });
         }
       }
       return fallbacks;
@@ -246,18 +251,28 @@ export class KiloRunner {
     const getTokenForIndex = (
       index: number,
     ): { tokenEnvKey: string; tokenValue: string } | null => {
-      // D'abord le token API primaire (OPENAI_API_KEY ou ANTHROPIC_AUTH_TOKEN)
-      const primaryKeys = ['OPENAI_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E'];
-      for (const tk of primaryKeys) {
-        const val = agentCustomEnv[tk];
-        if (val && typeof val === 'string' && val.length > 0 && !val.startsWith('$')) {
-          return { tokenEnvKey: tk, tokenValue: val };
+      if (index === 0) {
+        // Tentative initiale : utiliser le primary token
+        const primaryKeys = ['OPENAI_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E'];
+        for (const tk of primaryKeys) {
+          const val = agentCustomEnv[tk];
+          if (val && typeof val === 'string' && val.length > 0) {
+            // Resolve $VAR if present
+            let resolvedValue = val;
+            if (val.startsWith('$')) {
+              const envKey = val.slice(1);
+              resolvedValue = process.env[envKey] || val;
+            }
+            return { tokenEnvKey: tk, tokenValue: resolvedValue };
+          }
         }
+        return null;
       }
-      // Puis les fallbacks
+      // Retry (index >= 1) : use fallbacks directly
       const fallbacks = getAvailableFallbacks();
-      if (index < fallbacks.length) {
-        return { tokenEnvKey: fallbacks[index].key, tokenValue: fallbacks[index].value };
+      const fallbackIndex = index - 1;
+      if (fallbackIndex < fallbacks.length) {
+        return { tokenEnvKey: fallbacks[fallbackIndex].key, tokenValue: fallbacks[fallbackIndex].value };
       }
       return null;
     };
@@ -329,10 +344,22 @@ export class KiloRunner {
             );
             process.stderr.write(`\x1b[33m[Kilo] 🤖 Modèle: ${selectedModel}\x1b[0m\n`);
             if (mode) process.stderr.write(`\x1b[33m[Kilo] 🛠️ Mode/Agent: ${mode}\x1b[0m\n`);
-            if (sessionId && !CLAUDE_UUID_RE.test(sessionId))
+            if (sessionId && sessionId.length > 0)
               process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
+            // Sanitize command args before display to prevent injection
+            const sanitizedArgs = argsSpawn.map(arg => {
+              let result = '';
+              for (const char of arg) {
+                const code = char.charCodeAt(0);
+                // Skip control chars (0x00-0x1F) and DEL (0x7F)
+                if (code >= 0x20 && code !== 0x7F) {
+                  result += char;
+                }
+              }
+              return result;
+            }).join(' ');
             process.stderr.write(
-              `\x1b[33m[Kilo] 🚀 Commande: ${command} ${argsSpawn.join(' ')}\x1b[0m\n`,
+              `\x1b[33m[Kilo] 🚀 Commande: ${command} ${sanitizedArgs}\x1b[0m\n`,
             );
           }
 
@@ -349,7 +376,8 @@ export class KiloRunner {
           if (currentChild.stdout) {
             currentChild.stdout.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              if (currentStdout.length + chunk.length > MAX_BUF) currentStdout = currentStdout.slice(-MAX_BUF);
+              if (currentStdout.length + chunk.length > MAX_BUF)
+                currentStdout = currentStdout.slice(-MAX_BUF);
               else currentStdout += chunk;
 
               const lines = chunk.split('\n');
@@ -385,7 +413,8 @@ export class KiloRunner {
           if (currentChild.stderr) {
             currentChild.stderr.on('data', (d: Buffer) => {
               const chunk = d.toString();
-              if (currentStderr.length + chunk.length > MAX_BUF) currentStderr = currentStderr.slice(-MAX_BUF);
+              if (currentStderr.length + chunk.length > MAX_BUF)
+                currentStderr = currentStderr.slice(-MAX_BUF);
               else currentStderr += chunk;
 
               const lowerChunk = chunk.toLowerCase();

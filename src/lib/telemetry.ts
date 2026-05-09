@@ -3,8 +3,26 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 let sdk: NodeSDK | null = null;
+
+/**
+ * Get version from package.json dynamically
+ */
+function getServiceVersion(): string {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const packagePath = join(__dirname, '../../package.json');
+    const pkg = JSON.parse(readFileSync(packagePath, 'utf8'));
+    return pkg.version || '1.0.0';
+  } catch {
+    return '1.0.0'; // Fallback version
+  }
+}
 
 export function initTelemetry(): void {
   if (process.env.OTEL_ENABLED !== 'true') return;
@@ -18,12 +36,22 @@ export function initTelemetry(): void {
   sdk = new NodeSDK({
     resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: 'overmind-mcp',
-      [ATTR_SERVICE_VERSION]: '1.0.0',
+      [ATTR_SERVICE_VERSION]: getServiceVersion(),
     }),
     traceExporter: exporter,
   });
 
   sdk.start();
+}
+
+/**
+ * Gracefully shutdown the telemetry SDK
+ */
+export async function shutdownTelemetry(): Promise<void> {
+  if (sdk) {
+    await sdk.shutdown();
+    sdk = null;
+  }
 }
 
 export async function withSpan<T>(

@@ -144,7 +144,7 @@ ${interpolationNotice}`;
     case 'overmind':
       text = `🎯 **GUIDE COMPLET : SUBSTITUTION $VAR ET FALLBACK TOKENS**
 
-Overmind supporte deux mécanismes puissant pour vos agents :
+Overmind supporte deux mécanismes puissants pour vos agents :
 
 ---
 
@@ -165,44 +165,49 @@ Au runtime, Overmind remplace automatiquement \`$ANTHROPIC_AUTH_TOKEN_1\` par sa
 
 ---
 
-### 2️⃣ RETRY AUTOMATIQUE SUR ERREUR 401 (ClaudeRunner + KiloRunner)
+### 2️⃣ RETRY AUTOMATIQUE SUR ERREUR (ClaudeRunner + KiloRunner)
 
-Si une erreur d'authentification (401) se produit, Overmind peut RETENTER automatiquement avec des tokens de secours.
+Quand une erreur se produit, Overmind peut RETENTER automatiquement avec des tokens de secours.
 
-**Détection :** \`401\`, \`unauthorized\`, \`invalid api key\`, \`authentication failed\`, \`auth error\`
+**Erreurs retryables :**
+- **401** : Auth failure (token invalide/expiré)
+- **429** : Rate limit / quota exhausted (limite atteinte)
+- **500, 502, 503** : Server error (erreur serveur)
+
+**Détection texte stderr :** \`401\`, \`unauthorized\`, \`invalid api key\`, \`authentication failed\`, \`auth error\`, \`429\`, \`rate limit\`, \`quota exhausted\`, \`limit exhausted\`, \`503\`, \`service unavailable\`, \`500\`, \`internal server error\`
 
 **Flow :** Token primaire → AUTH_FALLBACK_1 → AUTH_FALLBACK_2 → AUTH_FALLBACK_3 → ÉCHEC
 
 ---
 
-### 📂 EXEMPLE COMPLET : ClaudeRunner avec fallback
+### 📂 EXEMPLE COMPLET : ClaudeRunner avec 3 fallback tokens
 
 \`\`\`json
 {
   "model": "claude-sonnet-4-20250514",
   "env": {
-    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN",
-    "AUTH_FALLBACK_1": "$ANTHROPIC_AUTH_TOKEN_1",
-    "AUTH_FALLBACK_2": "$ANTHROPIC_AUTH_TOKEN_2",
-    "AUTH_FALLBACK_3": "$ANTHROPIC_AUTH_TOKEN_3"
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN",      // Token principal
+    "AUTH_FALLBACK_1": "$ANTHROPIC_AUTH_TOKEN_2",         // Si 401/429/5xx
+    "AUTH_FALLBACK_2": "$ANTHROPIC_AUTH_TOKEN_3",         // Si encore échoué
+    "AUTH_FALLBACK_3": "$ANTHROPIC_AUTH_TOKEN_4"         // Dernier recours
   }
 }
 \`\`\`
 
 **.env associé :**
 \`\`\`
-ANTHROPIC_AUTH_TOKEN=sk-cp-primary...    # Token principal ( utilisation normale )
-ANTHROPIC_AUTH_TOKEN_1=sk-cp-xxx...   # Fallback #1
-ANTHROPIC_AUTH_TOKEN_2=sk-cp-yyy...   # Fallback #2
-ANTHROPIC_AUTH_TOKEN_3=sk-cp-zzz...   # Fallback #3
+ANTHROPIC_AUTH_TOKEN=sk-cp-primary...     # Token principal ( utilisation normale )
+ANTHROPIC_AUTH_TOKEN_2=sk-cp-xxx...       # Fallback #1
+ANTHROPIC_AUTH_TOKEN_3=sk-cp-yyy...       # Fallback #2
+ANTHROPIC_AUTH_TOKEN_4=sk-cp-zzz...       # Fallback #3
 \`\`\`
 
 **Comment ça marche :**
 1. L'agent commence avec \`ANTHROPIC_AUTH_TOKEN\` = \`$ANTHROPIC_AUTH_TOKEN\` → résolu → \`sk-cp-primary...\`
-2. Si erreur 401 → retry avec \`AUTH_FALLBACK_1\` → \`sk-cp-xxx...\`
-3. Si erreur 401 → retry avec \`AUTH_FALLBACK_2\` → \`sk-cp-yyy...\`
-4. Si erreur 401 → retry avec \`AUTH_FALLBACK_3\` → \`sk-cp-zzz...\`
-5. Si erreur 401 → \`AUTH_ERROR_ALL_FALLBACKS_EXHAUSTED\`
+2. Si erreur 401/429/5xx → retry avec \`AUTH_FALLBACK_1\` → \`sk-cp-xxx...\`
+3. Si encore échec → retry avec \`AUTH_FALLBACK_2\` → \`sk-cp-yyy...\`
+4. Si encore échec → retry avec \`AUTH_FALLBACK_3\` → \`sk-cp-zzz...\`
+5. Si encore échec → \`RETRYABLE_ERROR_ALL_FALLBACKS_EXHAUSTED\`
 
 ---
 
@@ -212,17 +217,15 @@ ANTHROPIC_AUTH_TOKEN_3=sk-cp-zzz...   # Fallback #3
 {
   "model": "claude-sonnet-4-20250514",
   "env": {
-    "OPENAI_API_KEY": "$ANTHROPIC_AUTH_TOKEN",
-    "AUTH_FALLBACK_1": "$ANTHROPIC_AUTH_TOKEN_1",
-    "AUTH_FALLBACK_2": "$ANTHROPIC_AUTH_TOKEN_2",
-    "AUTH_FALLBACK_3": "$ANTHROPIC_AUTH_TOKEN_3"
+    "OPENAI_API_KEY": "$ANTHROPIC_AUTH_TOKEN",          // Clé primaire Kilo
+    "AUTH_FALLBACK_1": "$ANTHROPIC_AUTH_TOKEN_2",       // Fallback #1
+    "AUTH_FALLBACK_2": "$ANTHROPIC_AUTH_TOKEN_3",        // Fallback #2
+    "AUTH_FALLBACK_3": "$ANTHROPIC_AUTH_TOKEN_4"         // Fallback #3
   }
 }
 \`\`\`
 
-> Kilo utilise \`OPENAI_API_KEY\` comme clé primaire (compatible OpenAI / OpenRouter /etc.).
-
-> Kilo utilise \`OPENAI_API_KEY\` comme clé primaire (compatible OpenAI-compatible API).
+> Kilo utilise \`OPENAI_API_KEY\` comme clé primaire (compatible OpenAI / OpenRouter / etc.).
 
 ---
 
@@ -245,10 +248,12 @@ Les \`$VAR\` peuvent être sur n'importe quelle valeur de \`env\`.
 
 ### ⚠️ RÈGLES IMPORTANTES
 
-- Les clés \`AUTH_FALLBACK_1\`, \`AUTH_FALLBACK_2\`, \`AUTH_FALLBACK_3\` sont réservées par Overmind pour le retry 401.
+- Les clés \`AUTH_FALLBACK_1\`, \`AUTH_FALLBACK_2\`, \`AUTH_FALLBACK_3\` sont réservées par Overmind pour le retry automatique.
 - La substitution est à **un seul niveau** : \`$MINIMAXI_API_KEY\` est remplacé, mais pas récursivement.
-- Les tokens sont résolution **avant** le spawn de l'agent.
-- Le retry ne fonctionne que sur erreur **401/auth** — pas sur les erreurs de réseau ou rate limit.`;
+- Les tokens sont résolus **avant** le spawn de l'agent.
+- Le retry fonctionne sur erreur **401 (auth), 429 (rate limit), 500/502/503 (server error)** — pas sur les erreurs de réseau simples (timeout, DNS...).
+- Chaque token fallback ne sera testé qu'une seule fois par session d'agent.
+- Si tous les fallbacks sont épuisés, l'erreur finale est \`RETRYABLE_ERROR_ALL_FALLBACKS_EXHAUSTED\`.`;
       break;
   }
 

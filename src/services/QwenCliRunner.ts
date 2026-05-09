@@ -4,6 +4,10 @@ import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
+import { withSpan } from '../lib/telemetry.js';
+import pino from 'pino';
+
+const logger = pino({ name: 'QwenCliRunner' });
 
 export interface RunAgentOptions {
   prompt: string;
@@ -25,13 +29,45 @@ export interface RunAgentResult {
 export class QwenCLIRunner {
   private config: typeof CONFIG.CLAUDE;
   private timeoutMs: number;
+  private tempFiles: string[] = [];
+  private MAX_BUF = 10 * 1024 * 1024; // 10MB
 
   constructor() {
     this.config = CONFIG.CLAUDE;
     this.timeoutMs = CONFIG.TIMEOUT_MS || 900000;
   }
 
+  private cleanupTempFiles(): void {
+    for (const tempFile of this.tempFiles) {
+      try {
+        if (fs.existsSync(tempFile)) {
+          fs.unlinkSync(tempFile);
+          logger.debug({ tempFile }, 'Cleaned up temp file');
+        }
+      } catch (err) {
+        logger.warn({ tempFile, error: err }, 'Failed to cleanup temp file');
+      }
+    }
+    this.tempFiles = [];
+  }
+
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
+    return withSpan('qwencli.runAgent', async (span) => {
+      span.setAttribute('agentName', options.agentName || '');
+      span.setAttribute('runner', 'qwencli');
+
+      const result = await this.runAgentInternal(options);
+      this.cleanupTempFiles();
+
+      if (options.agentName && result.sessionId) {
+        await saveSessionId(options.agentName, result.sessionId, options.configPath, 'qwencli');
+      }
+
+      return result;
+    }, { agentName: options.agentName || '', runner: 'qwencli' });
+  }
+
+  private async runAgentInternal(options: RunAgentOptions): Promise<RunAgentResult> {
     const { prompt, agentName, autoResume } = options;
     let { sessionId } = options;
     const { PATHS } = this.config;
@@ -63,8 +99,8 @@ export class QwenCLIRunner {
             customTimeoutMs = parseInt(settings.env.AGENT_TIMEOUT_MS, 10) || customTimeoutMs;
           }
         }
-      } catch (_e) {
-        // silent
+      } catch (err) {
+        logger.warn({ agentName, error: err }, 'Failed to load agent settings');
       }
     }
 
@@ -88,12 +124,32 @@ export class QwenCLIRunner {
 
       let stdout = '';
       let stderr = '';
+      let hardTimeoutTimer: NodeJS.Timeout | null = null;
 
-      if (child.stdout) child.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
-      if (child.stderr) child.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+      const cleanup = () => {
+        child.stdout?.removeAllListeners();
+        child.stderr?.removeAllListeners();
+        child.removeAllListeners();
+        if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
+      };
+
+      if (child.stdout)
+        child.stdout.on('data', (d: Buffer) => {
+          if (stdout.length + d.length > this.MAX_BUF) stdout = stdout.slice(-this.MAX_BUF);
+          else stdout += d.toString();
+        });
+      if (child.stderr)
+        child.stderr.on('data', (d: Buffer) => {
+          if (stderr.length + d.length > this.MAX_BUF) stderr = stderr.slice(-this.MAX_BUF);
+          else stderr += d.toString();
+        });
 
       const timeout = setTimeout(() => {
-        child.kill();
+        child.kill('SIGTERM');
+        hardTimeoutTimer = setTimeout(() => {
+          if (!child.killed) child.kill('SIGKILL');
+        }, 5000);
+        cleanup();
         resolve({ result: '', error: 'TIMEOUT', rawOutput: stdout });
       }, customTimeoutMs);
 
