@@ -67,7 +67,7 @@ export async function runAgentsLocally(
           agentName: agentArgs.agentName,
           status: result?.isError ? 'error' : 'success',
           elapsed: `${elapsed}s`,
-          result: text.slice(0, 2000),
+          result: text,
         };
       } catch (err: unknown) {
         settled[index] = true;
@@ -167,8 +167,8 @@ export async function dispatchAgents(agents: AgentSpec[], opts: DispatchOptions)
         result:
           r.error ??
           (typeof r.result === 'string'
-            ? r.result.slice(0, 2000)
-            : JSON.stringify(r.result).slice(0, 2000)),
+            ? r.result
+            : JSON.stringify(r.result)),
       }));
       // Build summary (same format as runAgentsLocally)
       const successCount = adapted.filter((r) => r.status === 'success').length;

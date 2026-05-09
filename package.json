@@ -66,6 +66,7 @@
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^9.39.4",
+    "@types/amqplib": "^0.10.8",
     "@types/node": "^22.19.17",
     "@types/pg": "^8.20.0",
     "@types/pino": "^7.0.5",
