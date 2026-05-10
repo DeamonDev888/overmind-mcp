@@ -1,12 +1,57 @@
 import fs from 'fs';
 import path from 'path';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, exec } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { resolveModel } from '../lib/modelMapping.js';
 import { withSpan } from '../lib/telemetry.js';
 import { Span } from '@opentelemetry/api';
+
+// Sur Windows, `child.kill()` ne tue que cmd.exe (le wrapper) — claude.exe
+// devient orphelin et garde la session bound au token initial côté provider.
+// On utilise `taskkill /F /T /PID` pour propager le kill au sous-arbre,
+// puis on attend l'event 'exit' avant de respawn.
+const killProcessTree = (child: ChildProcess): Promise<void> => {
+  return new Promise((resolve) => {
+    if (!child || child.exitCode !== null || child.killed) {
+      resolve();
+      return;
+    }
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    child.once('exit', finish);
+
+    if (process.platform === 'win32' && child.pid) {
+      exec(`taskkill /F /T /PID ${child.pid}`, () => {
+        // taskkill peut échouer si le process est déjà mort — on s'appuie sur 'exit'
+      });
+    } else {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // Ignored
+      }
+      setTimeout(() => {
+        if (child.exitCode === null && !child.killed) {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // Ignored
+          }
+        }
+      }, 2000);
+    }
+
+    // Filet de sécurité : si 'exit' ne se déclenche pas (process zombie),
+    // on débloque le respawn après 5s plutôt que de bloquer indéfiniment.
+    setTimeout(finish, 5000);
+  });
+};
 
 export interface RunAgentOptions {
   prompt: string;
@@ -274,7 +319,7 @@ export class ClaudeRunner {
       return Promise.reject(new Error('ABORTED'));
     }
     options.signal?.addEventListener('abort', () => {
-      if (currentChildRef) currentChildRef.kill('SIGTERM');
+      if (currentChildRef) void killProcessTree(currentChildRef);
     });
 
     const runImpl = async (span: Span): Promise<RunAgentResult> => {
@@ -300,15 +345,18 @@ export class ClaudeRunner {
           }
         };
 
-        const triggerRetry = (targetRetryCount: number) => {
+        const triggerRetry = async (targetRetryCount: number) => {
           if (earlyExitTriggered) return;
           earlyExitTriggered = true;
-          if (currentChildRef && !currentChildRef.killed) {
-            currentChildRef.kill();
-          }
           if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
           if (killTimer) clearTimeout(killTimer);
           if (timeout) clearTimeout(timeout);
+          // Attendre la mort effective de l'arbre (cmd.exe + claude.exe sur Win)
+          // avant de respawn, sinon le nouveau process tape sur la même session
+          // encore "vivante" côté provider → 429 fantôme.
+          if (currentChildRef) {
+            await killProcessTree(currentChildRef);
+          }
           retryCount = targetRetryCount;
           const tokenInfo = getTokenForIndex(retryCount);
           if (!options.silent) {
@@ -386,29 +434,15 @@ export class ClaudeRunner {
           let command = 'claude';
           let spawnArgs: string[] = [];
 
-          // Sur retry avec un token fallback, on doit démarrer une nouvelle session.
-          // Reprendre (--resume) une session créée par un autre compte/token fait que
-          // le provider (ex: Z.AI) lie la session au compte original → le quota du
-          // compte original s'applique même avec un nouveau token → 429 parasite.
-          const isFallbackRetry =
-            tokenInfo !== null && tokenInfo.tokenEnvKey.startsWith('AUTH_FALLBACK_');
-          let effectiveArgs = argsSpawn;
-          if (isFallbackRetry) {
-            effectiveArgs = [];
-            for (let i = 0; i < argsSpawn.length; i++) {
-              if (argsSpawn[i] === '--resume') {
-                i++; // skip the value too
-                continue;
-              }
-              effectiveArgs.push(argsSpawn[i]);
-            }
-          }
-
+          // Sur retry fallback, on garde --resume : le nouveau noeud reprend la
+          // même session avec un token différent. Le précédent process est tué via
+          // killProcessTree (taskkill /F /T) avant le respawn, donc la session
+          // n'est plus bound côté provider à l'ancien token vivant.
           if (process.platform === 'win32') {
             command = 'cmd.exe';
-            spawnArgs = ['/c', 'claude', ...effectiveArgs, '-p'];
+            spawnArgs = ['/c', 'claude', ...argsSpawn, '-p'];
           } else {
-            spawnArgs = [...effectiveArgs, '-p'];
+            spawnArgs = [...argsSpawn, '-p'];
           }
 
           if (!options.silent) {
@@ -471,10 +505,7 @@ export class ClaudeRunner {
 
             const hardTimeoutDelay = CONFIG.HARD_TIMEOUT_MS || 60000;
             hardTimeoutTimer = setTimeout(() => {
-              if (currentChildRef) currentChildRef.kill();
-              killTimer = setTimeout(() => {
-                if (currentChildRef && !currentChildRef.killed) currentChildRef.kill('SIGKILL');
-              }, 5000);
+              if (currentChildRef) void killProcessTree(currentChildRef);
               cleanupTmpFiles();
               safeResolve({
                 result: '',
@@ -516,25 +547,13 @@ export class ClaudeRunner {
               }
             }
 
-            // ─── Fallback retry — DÉSACTIVÉ (en standby) ───────────────────────
-            // Le retry interne au runner ne peut pas changer effectivement de token :
-            // Claude CLI réutilise l'auth de la session (--resume / session-env) ou
-            // d'autres credentials hérités, donc le fallback se retrouve à soumettre
-            // la même clé que l'attempt précédent. Conséquence observée : 429 répété
-            // avec exactement le même message (Anthropic Console quota), même quand
-            // la clé fallback fonctionne en direct (curl OK, primary OK).
-            //
-            // TODO(bridge/client) : réimplémenter le fallback en amont du runner —
-            // côté bridge HTTP (overmind-bridge.js / nexus-api-server) ou côté
-            // client Discord. Au lieu de relancer un subprocess `claude` qui hérite
-            // de l'état session, le bridge doit :
-            //   1. détecter la 429/401 dans la réponse JSON du runner
-            //   2. relancer un nouveau call run_agent avec un agent/settings dont
-            //      le ANTHROPIC_AUTH_TOKEN primary pointe sur la clé suivante
-            //      (ou cloner l'agent à la volée avec settings overridés)
-            //   3. ne PAS passer de sessionId pour cette nouvelle tentative
+            // ─── Fallback retry ─────────────────────────────────────────────────
+            // Sur 401/429/5xx, on tue l'arbre du process courant via killProcessTree
+            // (taskkill /F /T sur Windows pour ne pas laisser claude.exe orphelin),
+            // puis on respawn un nouveau noeud avec --resume + le token fallback
+            // suivant (AUTH_FALLBACK_1 → 2 → 3).
             // ───────────────────────────────────────────────────────────────────
-            const FALLBACK_RETRY_ENABLED = false;
+            const FALLBACK_RETRY_ENABLED = true;
             const isRetryable = isRetryableError(currentStderr, jsonEnvelope);
             const hasRetryableStatus =
               jsonEnvelope !== null &&
