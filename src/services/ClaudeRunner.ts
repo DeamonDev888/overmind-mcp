@@ -6,8 +6,7 @@ import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { resolveModel } from '../lib/modelMapping.js';
-import { withSpan } from '../lib/telemetry.js';
-import { Span } from '@opentelemetry/api';
+import { withSpan, type Span } from '../lib/telemetry.js';
 import { loadEnvQuietly } from '../lib/loadEnv.js';
 import {
   registerProcess,

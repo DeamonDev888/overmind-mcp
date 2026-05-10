@@ -83,7 +83,6 @@
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^9.39.4",
-    "@types/amqplib": "^0.10.8",
     "@types/node": "^22.19.17",
     "@types/pg": "^8.20.0",
     "@types/pino": "^7.0.5",
@@ -97,16 +96,6 @@
     "vitest": "^4.1.4"
   },
   "dependencies": {
-    "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/auto-instrumentations-node": "^0.75.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.217.0",
-    "@opentelemetry/resources": "^2.7.1",
-    "@opentelemetry/sdk-node": "^0.217.0",
-    "@opentelemetry/semantic-conventions": "^1.40.0",
-    "@temporalio/activity": "^1.17.1",
-    "@temporalio/client": "^1.17.1",
-    "@temporalio/worker": "^1.17.1",
-    "@temporalio/workflow": "^1.17.1",
     "async-mutex": "^0.5.0",
     "dotenv": "^17.4.2",
     "fastmcp": "^3.35.0",
