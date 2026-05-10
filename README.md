@@ -30,129 +30,37 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 
 ---
 
-## 🚀 Commencer (Guide Facile)
+## 🚀 Installation
 
-### Option 1 : Installation Globale NPM (Recommandé)
-
-```bash
-npm install -g overmind-mcp@latest
-```
-
-**🎯 Après Installation NPM :**
-
-Une fois installé, vous avez 2 options :
-
-#### A. Mode Simple (Sans Docker - Recommandé pour débuter)
-
-OverMind fonctionne **immédiatement** sans infrastructure Docker :
-
-```bash
-# Créer un agent simple
-overmind create-agent --name expert-python --runner claude --prompt "Tu es un expert Python..."
-
-# Lancer une analyse
-overmind run-agent --runner claude --prompt "Analyse ce code..."
-```
-
-**✅ Avantages :**
-- Installation immédiate
-- Pas de Docker requis
-- Fonctionne tout de suite
-- Idéal pour tester et utiliser les features de base
-
-#### B. Mode Avancé (Avec Docker - Recommandé pour Production)
-
-Pour utiliser les **fonctionnalités avancées** (Swarm, Workflows long-running, Observabilité), vous avez besoin de l'infrastructure Docker.
-
-**Suivez le guide d'installation :**
-- 📄 [Guide d'installation rapide](https://github.com/DeamonDev888/overmind-mcp/blob/main/INSTALL.md)
-- 📄 [Guide de déploiement complet](https://github.com/DeamonDev888/overmind-mcp/blob/main/docs/guides/DEPLOYMENT.md)
-
-**🚀 Installation Docker Automatique :**
-
-L'installation **100% automatique** installe et configure **tout** pour vous :
+### Globale via NPM (Recommandé)
 
 ```bash
 npm install -g overmind-mcp@latest
 ```
 
-**Ce qui est installé automatiquement :**
-- ✅ Docker Desktop (vérification)
-- ✅ PostgreSQL + pgvector (si absent)
-- ✅ **Toute** l'infrastructure Docker (RabbitMQ, Temporal, Prometheus, Grafana, Jaeger, Redis)
-- ✅ Configuration (.env, .mcp.json)
-- ✅ Validation de tous les services
+**🎯 Ce qui est installé automatiquement :**
 
-**Après installation, ouvrez Docker Desktop → onglet "Containers" pour voir tous les services.**
+1. **Détection Docker** - Vérification que Docker Desktop est disponible
+2. **PostgreSQL + pgvector** - Container Docker avec extension vectorielle (si absent)
+3. **overmind-postgres-mcp** - Serveur MCP PostgreSQL vectoriel installé automatiquement
+4. **Configuration complète** - Fichiers .env et .mcp.json générés automatiquement
+5. **Base de données initialisée** - Tables OverMind créées automatiquement
 
-**✅ Avantages du Mode Avancé :**
-- 🐳 RabbitMQ (Message Broker)
-- ⏱️ Temporal (Workflows long-running)
-- 📊 Observabilité (Prometheus, Grafana, Jaeger)
-- 🧠 Vector DB (PostgreSQL + pgvector)
+**✅ Installation ultra-simplifiée :**
+- 📦 **Taille** : 1-5 GB (au lieu de 8 GB)
+- ⚡ **Rapide** : ~15 secondes chrono
+- 🎯 **Automatique** : Tout configuré pour vous
+- 🛡️ **Sécurisé** - Vos containers personnels sont protégés
 
----
+### Configuration MCP
 
-### Option 2 : Installation Locale (Développement)
+Pour utiliser OverMind dans votre IDE ou CLI préféré :
 
-Si vous souhaitez contribuer ou avoir la toute dernière version :
-
-```bash
-# 1. Cloner le repo
-git clone https://github.com/DeamonDev888/overmind-mcp.git
-cd overmind-mcp
-
-# 2. Installer les dépendances
-pnpm install
-
-# 3. Build le projet
-pnpm run build
-
-# 4. Optionnel : Setup Windows automatique
-node scripts/setup-windows.js
-```
-
----
-
-## 🎯 Mode d'Emploi
-
-| Mode | Installation | Infrastructure | Features |
-|------|-------------|----------------|----------|
-| **Simple** | `npm install -g` | Aucune | OverMind base (agents, mémoire locale) |
-| **Avancé** | `npm install -g` + Docker | Docker Desktop | Toutes les features (Swarm, Workflows, Observabilité) |
-| **Dév** | Clone repo + `pnpm install` | Docker + PostgreSQL local | Toutes les features + accès au code source |
-
-**Recommandation :** Commencez par le **Mode Simple**, puis passez au **Mode Avancé** quand vous avez besoin des fonctionnalités avancées !
-
----
-
-### Option 3 : Utilisation comme Bibliothèque
-
-Vous pouvez utiliser OverMind-MCP comme un module dans vos propres projets :
-
-```typescript
-import { runAgent, AgentManager, createSwarmOrchestrator } from 'overmind-mcp';
-
-// 1. Initialisation
-const manager = new AgentManager();
-await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude');
-
-// 2. Lancer une analyse
-const { content, isError } = await runAgent({
-  runner: 'claude',
-  agentName: 'expert-seo',
-  prompt: 'Analyse le site example.com',
-});
-
-// 3. Swarm Orchestration (mode avancé avec Docker)
-const swarm = createSwarmOrchestrator({
-  agents: [...],
-  tasks: [...],
-  maxParallelTasks: 5,
-});
-```
-
----
+```json
+{
+  "mcpServers": {
+    "overmind": {
+      "command": "npx",
       "args": ["-y", "overmind-mcp@latest"]
     }
   }
@@ -161,45 +69,27 @@ const swarm = createSwarmOrchestrator({
 
 ---
 
-### Option 2 : Installation Locale (Développement ou hébergement précis)
+## 🔧 Installation Locale (Dev)
+
+Si vous souhaitez contribuer au projet :
 
 ```bash
-# 1. Cloner le repo localement
-git clone https://github.com/DeamonDev888/overmind-mcp overmind-mcp
+# Cloner le repo
+git clone https://github.com/DeamonDev888/overmind-mcp.git
 cd overmind-mcp
 
-# 2. Installer les dépendances
+# Installer les dépendances
 pnpm install
 
-# 3. Build le projet
+# Builder le projet
 pnpm run build
-```
-
-Pour que l'agent puisse voir vos autres serveurs MCP locaux, copiez le fichier d'exemple :
-
-```bash
-cp .mcp.json.example .mcp.json
-```
-
-**Configuration MCP (Client) pour l'Option 2 :**
-Pour connecter ce runner à un client en pointant vers votre version locale compilée :
-
-```json
-{
-  "mcpServers": {
-    "overmind": {
-      "command": "node",
-      "args": ["/LE_CHEMIN_ABSOLU_VERS_LE_DOSSIER_CLONE/dist/bin/cli.js"]
-    }
-  }
-}
 ```
 
 ---
 
-## 📦 Utilisation comme Bibliothèque
+### Utilisation comme Bibliothèque
 
-Vous pouvez désormais importer le moteur du runner dans vos propres scripts :
+Vous pouvez utiliser OverMind-MCP comme un module dans vos propres projets TypeScript/JavaScript :
 
 ```typescript
 import { runAgent, AgentManager, updateConfig } from 'overmind-mcp';
@@ -209,9 +99,9 @@ updateConfig('./settings.json', './mcp.local.json');
 
 // 2. Gestion des agents
 const manager = new AgentManager();
-await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude-4-6-sonnet');
+await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude');
 
-// 3. Lancer une exécution via l'Orchestrateur Unifié
+// 3. Lancer une exécution
 const { content, isError } = await runAgent({
   runner: 'claude',
   agentName: 'expert-seo',
