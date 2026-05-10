@@ -74,7 +74,7 @@ export const CLIS_METADATA: Record<string, CLIInfo> = {
     name: 'Trae CLI',
     command: 'trae',
     versionCmd: 'trae --version',
-    installCmd: 'https://www.trae.ai/download',
+    installCmd: 'npm install -g @trae-ai/trae',
     url: 'https://www.trae.ai/',
   },
 };

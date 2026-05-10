@@ -60,12 +60,31 @@ async function writeStore(
 
 /**
  * Check if a PID is still alive on the system.
+ * On Windows: parse tasklist output to verify the PID actually appears.
+ * On Unix: use `kill -0` which returns error if process doesn't exist.
  */
 export async function isPidAlive(pid: number): Promise<boolean> {
   try {
     if (process.platform === 'win32') {
-      await execAsync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`);
-      return true;
+      const { stdout } = await execAsync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`);
+      // tasklist returns "INFO: No tasks are running." with exit code 0 when no match
+      const trimmed = stdout.trim();
+      if (trimmed.includes('No tasks are running') || !trimmed) {
+        return false;
+      }
+      // Output format: "imagename","pid","sessionname","sessionnum","memory"
+      // If PID appears, it will be in the second CSV field
+      const lines = trimmed.split('\n');
+      for (const line of lines) {
+        const parts = line.split(',');
+        if (parts.length >= 2) {
+          const pidStr = parts[1].replace(/"/g, '').trim();
+          if (pidStr === String(pid)) {
+            return true;
+          }
+        }
+      }
+      return false;
     } else {
       await execAsync(`kill -0 ${pid}`);
       return true;
