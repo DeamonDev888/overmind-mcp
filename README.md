@@ -148,6 +148,38 @@ Workflow/
 
 ---
 
+## ⚙️ Configuration MCP (après installation globale)
+
+Après `npm install -g overmind-mcp`, voici la configuration MCP recommandée pour votre client (Claude Code, Cline, etc.) :
+
+```json
+{
+  "mcpServers": {
+    "overmind": {
+      "command": "overmind",
+      "description": "OverMind-MCP principal - Orchestration d'agents IA"
+    },
+    "memory": {
+      "command": "overmind",
+      "args": ["--memory-only"],
+      "description": "OverMind-MCP mémoire - Gestion mémoire vectorielle"
+    },
+    "overmind-postgres": {
+      "command": "overmind-postgres-mcp",
+      "description": "OverMind-PostgreSQL-MCP - Serveur PostgreSQL vectoriel optimisé pour OverMind"
+    }
+  },
+  "description": "Configuration MCP OverMind-MCP optimisée pour installation globale npm",
+  "version": "2.2.6",
+  "installation": "npm install -g overmind-mcp",
+  "note": "Après installation globale, les commandes 'overmind' et 'overmind-postgres-mcp' sont disponibles directement dans le système. Cette configuration utilise les binaires globaux installés par npm."
+}
+```
+
+**📖 Exemples de configuration détaillée** : Voir `config/README.md` pour plus de scénarios d'utilisation.
+
+---
+
 ![Aperçu du Terminal](https://cdn.jsdelivr.net/npm/overmind-mcp@1.0.8/assets/terminal_preview.png)
 
 _Note : L'**OverMind** punit et martyrise les **OpenClaw** qui n'écoutent pas._ 😈
