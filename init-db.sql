@@ -1,110 +1,68 @@
--- OverMind-MCP Database Initialization Script
--- Creates necessary extensions, databases, and schemas
+-- OverMind-MCP PostgreSQL Initialization
+-- This script initializes the database with pgvector extension
 
--- ─── Enable pgvector extension ───────────────────────────────────────────────────────────────
+-- Create pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- ─── Core Memory Database ───────────────────────────────────────────────────────────────────
--- This is the main database for OverMind's RAG system
-
--- Agent Runs Table (stores execution history)
-CREATE TABLE IF NOT EXISTS agent_runs (
-  id TEXT PRIMARY KEY,
-  runner TEXT NOT NULL,
-  agent_name TEXT,
-  prompt TEXT NOT NULL,
-  result TEXT,
-  error TEXT,
-  duration_ms INTEGER,
-  success INTEGER DEFAULT 0,
-  session_id TEXT,
-  created_at BIGINT DEFAULT extract(epoch from now()) * 1000
+-- Create memory table for RAG
+CREATE TABLE IF NOT EXISTS memory (
+    id SERIAL PRIMARY KEY,
+    agent_name VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    embedding vector(4096),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Knowledge Chunks Table (RAG vectors)
-CREATE TABLE IF NOT EXISTS knowledge_chunks (
-  id TEXT PRIMARY KEY,
-  source TEXT NOT NULL,
-  text TEXT NOT NULL,
-  embedding vector(4096),
-  model TEXT,
-  created_at BIGINT DEFAULT extract(epoch from now()) * 1000,
-  updated_at BIGINT DEFAULT extract(epoch from now()) * 1000
+-- Create index for vector similarity search
+CREATE INDEX IF NOT EXISTS memory_embedding_idx ON memory 
+USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- Create index for agent queries
+CREATE INDEX IF NOT EXISTS memory_agent_name_idx ON memory(agent_name);
+
+-- Create agents configuration table
+CREATE TABLE IF NOT EXISTS agents (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    runner VARCHAR(50) NOT NULL,
+    model VARCHAR(100),
+    prompt TEXT NOT NULL,
+    settings JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_agent_runs_runner ON agent_runs(runner);
-CREATE INDEX IF NOT EXISTS idx_agent_runs_session ON agent_runs(session_id);
-CREATE INDEX IF NOT EXISTS idx_knowledge_source ON knowledge_chunks(source);
+-- Create index for agent lookups
+CREATE INDEX IF NOT EXISTS agents_name_idx ON agents(name);
 
--- HNSW Index for vector search (if dimensions ≤ 2000)
--- For 4096D, we use optimized exact K-NN search instead
-CREATE INDEX IF NOT EXISTS idx_knowledge_embedding_hnsw
-ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)
-WITH (m = 16, ef_construction = 64);
+-- Create runs history table
+CREATE TABLE IF NOT EXISTS runs (
+    id SERIAL PRIMARY KEY,
+    agent_name VARCHAR(255) NOT NULL,
+    runner VARCHAR(50) NOT NULL,
+    prompt TEXT NOT NULL,
+    result TEXT,
+    status VARCHAR(50) DEFAULT 'running',
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    metadata JSONB DEFAULT '{}'
+);
 
--- ─── Temporal Database Setup (if using Temporal) ───────────────────────────────────────────
--- Note: Temporal auto-setup handles most of this, but we ensure the DB exists
+-- Create index for run queries
+CREATE INDEX IF NOT EXISTS runs_agent_name_idx ON runs(agent_name);
+CREATE INDEX IF NOT EXISTS runs_status_idx ON runs(status);
+CREATE INDEX IF NOT EXISTS runs_started_at_idx ON runs(started_at);
 
--- ─── Permissions & Security ────────────────────────────────────────────────────────────────
--- Grant necessary permissions (adjust based on your security model)
-
--- Grant usage on schemas
+-- Grant permissions
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO postgres;
 
--- ─── Sample Data (Optional - for testing) ───────────────────────────────────────────────────
--- INSERT INTO knowledge_chunks (id, source, text, embedding, model)
--- VALUES (
---   'test_knowledge_1',
---   'system',
---   'OverMind-MCP is an AI agent orchestrator supporting multiple runners.',
---   NULL, -- Embedding will be generated when storing
---   'qwen/qwen3-embedding-8b'
--- );
-
--- ─── Maintenance Functions ──────────────────────────────────────────────────────────────────
-
--- Function to clean old agent runs (retention policy)
-CREATE OR REPLACE FUNCTION clean_old_agent_runs(retention_days INTEGER DEFAULT 30)
-RETURNS INTEGER AS $$
-DECLARE
-  deleted_count INTEGER;
-BEGIN
-  DELETE FROM agent_runs
-  WHERE created_at < extract(epoch from now()) * 1000 - (retention_days * 86400000);
-
-  GET DIAGNOSTICS deleted_count = ROW_COUNT;
-  RETURN deleted_count;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to get memory stats
-CREATE OR REPLACE FUNCTION get_memory_stats()
-RETURNS TABLE (
-  total_runs BIGINT,
-  total_knowledge BIGINT,
-  success_rate NUMERIC,
-  avg_duration_ms NUMERIC
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT
-    (SELECT COUNT(*) FROM agent_runs) as total_runs,
-    (SELECT COUNT(*) FROM knowledge_chunks) as total_knowledge,
-    (SELECT CASE WHEN COUNT(*) > 0 THEN
-       (SELECT COUNT(*) FROM agent_runs WHERE success = 1)::NUMERIC / COUNT(*) * 100
-       ELSE 0 END FROM agent_runs) as success_rate,
-    (SELECT AVG(duration_ms) FROM agent_runs WHERE duration_ms IS NOT NULL) as avg_duration_ms;
-END;
-$$ LANGUAGE plpgsql;
-
--- ─── Completion Message ─────────────────────────────────────────────────────────────────────
+-- Success message
 DO $$
 BEGIN
-  RAISE NOTICE 'OverMind-MCP database initialized successfully!';
-  RAISE NOTICE 'Extensions: pgvector enabled';
-  RAISE NOTICE 'Tables: agent_runs, knowledge_chunks created';
-  RAISE NOTICE 'Indexes: HNSW vector index created';
-  RAISE NOTICE 'Functions: clean_old_agent_runs, get_memory_stats created';
+    RAISE NOTICE 'OverMind-MCP database initialized successfully!';
+    RAISE NOTICE 'Created tables: memory, agents, runs';
+    RAISE NOTICE 'Enabled extensions: vector (pgvector)';
 END $$;
