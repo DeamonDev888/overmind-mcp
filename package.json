@@ -1,6 +1,6 @@
 {
   "name": "overmind-mcp",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "preferGlobal": true,
   "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut le protocole 'Custom-Nickname' pour identifier vos agents avec des surnoms originaux (The Chaos Prophet, Shadow Sniper, etc.), l'isolation mémoire (Private Memory Context) et le support pour QwenCli et Nous Hermes. Installation automatique des dépendances Docker (PostgreSQL, pgvector) inclus.",
   "type": "module",
@@ -9,7 +9,7 @@
   "bin": {
     "overmind": "./dist/bin/cli.js",
     "overmind-setup": "./scripts/setup.mjs",
-    "overmind-infra": "./scripts/docker-manager.mjs",
+    "overmind-postgres": "./scripts/postgres-manager.mjs",
     "overmind-uninstall": "./scripts/uninstall.mjs"
   },
   "exports": {
@@ -33,8 +33,6 @@
     "rebuild": "rimraf dist && tsc",
     "clean": "rimraf dist",
     "start": "node --no-warnings --env-file=.env dist/bin/cli.js",
-    "worker:rabbitmq": "node --no-warnings --env-file=.env dist/bin/rabbitmq-worker.js",
-    "worker:temporal": "node --no-warnings --env-file=.env dist/bin/temporal-worker.js",
     "dev": "node --no-warnings --watch --env-file=.env dist/bin/cli.js",
     "build:fix": "pnpm run clean && pnpm install && pnpm run build",
     "lint": "eslint .",
@@ -42,19 +40,19 @@
     "format": "prettier --write .",
     "check-types": "tsc --noEmit",
     "test": "vitest run",
+    "test:install": "node scripts/test-installation.mjs",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "pnpm run build && changeset publish",
     "prepublishOnly": "pnpm run rebuild",
     "postinstall": "node scripts/postinstall.mjs",
     "setup": "overmind-setup",
-    "setup:full": "overmind-setup --full",
     "setup:deps": "node scripts/install-dependencies.mjs",
-    "deploy:infra": "overmind-infra up",
-    "deploy:down": "overmind-infra down",
-    "deploy:status": "overmind-infra status",
-    "deploy:logs": "overmind-infra logs",
-    "deploy:restart": "overmind-infra restart"
+    "postgres:up": "overmind-postgres up",
+    "postgres:down": "overmind-postgres down",
+    "postgres:status": "overmind-postgres status",
+    "postgres:logs": "overmind-postgres logs",
+    "postgres:reset": "overmind-postgres reset"
   },
   "keywords": [
     "mcp",
@@ -64,11 +62,7 @@
     "llm",
     "orchestration",
     "automation",
-    "swarm",
-    "temporal",
-    "rabbitmq",
     "pgvector",
-    "observability",
     "docker",
     "auto-installation"
   ],
