@@ -468,19 +468,10 @@ export class ClaudeRunner {
           currentStderr = '';
           currentStdout = '';
 
-          let command = 'claude';
-          let spawnArgs: string[] = [];
-
-          // Sur retry fallback, on garde --resume : le nouveau noeud reprend la
-          // même session avec un token différent. Le précédent process est tué via
-          // killProcessTree (taskkill /F /T) avant le respawn, donc la session
-          // n'est plus bound côté provider à l'ancien token vivant.
-          if (process.platform === 'win32') {
-            command = 'cmd.exe';
-            spawnArgs = ['/c', 'claude', ...argsSpawn, '-p'];
-          } else {
-            spawnArgs = [...argsSpawn, '-p'];
-          }
+          const command = process.platform === 'win32' ? 'cmd.exe' : 'claude';
+          const spawnArgs = process.platform === 'win32'
+            ? ['/c', 'claude', ...argsSpawn, '-p']
+            : ['claude', ...argsSpawn, '-p'];
 
           if (!options.silent) {
             const tokenLabel = tokenInfo ? ` (token: ${tokenInfo.tokenEnvKey})` : '';
