@@ -201,14 +201,14 @@ async function setupConfigFiles() {
 
   try {
     // Télécharger .env.example
-    const envExampleData = runCommand(`curl -sL ${envExampleUrl}`);
+    const envExampleData = runCommand(`curl -sL --max-time 30 ${envExampleUrl}`);
     if (envExampleData) {
       writeFileSync(join(INSTALL_DIR, '.env.example'), envExampleData);
       log(COLORS.green, '✅ .env.example téléchargé');
     }
 
     // Télécharger .mcp.json.example
-    const mcpExampleData = runCommand(`curl -sL ${mcpExampleUrl}`);
+    const mcpExampleData = runCommand(`curl -sL --max-time 30 ${mcpExampleUrl}`);
     if (mcpExampleData) {
       writeFileSync(join(INSTALL_DIR, '.mcp.json.example'), mcpExampleData);
       log(COLORS.green, '✅ .mcp.json.example téléchargé');
