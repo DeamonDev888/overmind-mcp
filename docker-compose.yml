@@ -1,212 +1,98 @@
 version: '3.8'
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# OverMind-MCP Docker Compose - PostgreSQL + pgvector Optimisé
+# ═══════════════════════════════════════════════════════════════════════════════
+# Configuration Docker parfaite pour OverMind-MCP
+# Service: PostgreSQL + pgvector (Mémoire vectorielle 4096D)
+#
+# Prérequis:
+#   - Docker Desktop installé et démarré
+#   - Port 5432 disponible
+#
+# Usage:
+#   docker-compose up -d
+#
+# Intégration OverMind:
+#   - Base de données: overmind_memory
+#   - Extension vectorielle: pgvector (4096D)
+#   - Utilisateur: postgres
+#   - Configuration optimisée pour embeddings
+# ═══════════════════════════════════════════════════════════════════════════════
+
 services:
-  # ─── RABBITMQ (Message Broker) ─────────────────────────────────────────────────────
-  rabbitmq:
-    image: rabbitmq:3.13-management
-    container_name: overmind-rabbitmq
-    ports:
-      - "5672:5672"   # AMQP protocol
-      - "15672:15672" # Management UI
-    environment:
-      RABBITMQ_DEFAULT_USER: overmind
-      RABBITMQ_DEFAULT_PASS: overmind_secret_password_change_me
-      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbit log_levels [{connection,error},{default,warning}]
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - overmind-network
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    restart: unless-stopped
-
-  # ─── TEMPORAL (Workflow Orchestrator) ──────────────────────────────────────────────
-  # TEMPORARILY DISABLED - Requires PostgreSQL database initialization
-  # To enable: Create temporal user and databases in PostgreSQL first
-  # temporal:
-  #   image: temporalio/auto-setup:1.24.0
-  #   container_name: overmind-temporal
-  #   ports:
-  #     - "7233:7233"   # gRPC
-  #     - "8233:8233"   # Web UI
-  #   environment:
-  #     DB: postgres
-  #     DB_PORT: 5432
-  #     POSTGRES_USER: temporal
-  #     POSTGRES_PWD: temporal_password_change_me
-  #     POSTGRES_SEEDS: postgres
-  #     DYNAMIC_CONFIG_FILE: /etc/temporal/config/docker.yaml
-  #   networks:
-  #     - overmind-network
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   restart: unless-stopped
-  #
-  # temporal-web:
-  #   image: temporalio/web:1.15.0
-  #   container_name: overmind-temporal-web
-  #   ports:
-  #     - "8088:8088"
-  #   environment:
-  #     - TEMPORAL_GRPC_ENDPOINT=temporal:7233
-  #     - TEMPORAL_PERMIT_WRITE_API=true
-  #   networks:
-  #     - overmind-network
-  #   depends_on:
-  #     - temporal
-  #   restart: unless-stopped
-
-  # ─── PROMETHEUS (Metrics Collection) ────────────────────────────────────────────────
-  prometheus:
-    image: prom/prometheus:v2.55.1
-    container_name: overmind-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
-    networks:
-      - overmind-network
-    restart: unless-stopped
-
-  # ─── GRAFANA (Dashboards & Visualization) ───────────────────────────────────────────
-  grafana:
-    image: grafana/grafana:11.3.1
-    container_name: overmind-grafana
-    ports:
-      - "3000:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: grafana_password_change_me
-      GF_INSTALL_PLUGINS: grafana-piechart-panel
-      GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./config/grafana/provisioning:/etc/grafana/provisioning
-    networks:
-      - overmind-network
-    depends_on:
-      - prometheus
-    restart: unless-stopped
-
-  # ─── JAEGER (Distributed Tracing) ───────────────────────────────────────────────────
-  jaeger:
-    image: jaegertracing/all-in-one:1.58
-    container_name: overmind-jaeger
-    ports:
-      - "5775:5775/udp" # accept zipkin.thrift over compact thrift protocol
-      - "6831:6831/udp" # accept jaeger.thrift over compact thrift protocol
-      - "6832:6832/udp" # accept jaeger.thrift over binary thrift protocol
-      - "5778:5778"     # serve configs
-      - "16686:16686"   # serve frontend (Jaeger UI)
-      - "14268:14268"   # accept jaeger.thrift directly from clients
-      - "14250:14250"   # accept model.proto
-      - "9411:9411"     # Zipkin compatible endpoint
-    environment:
-      COLLECTOR_ZIPKIN_HOST_PORT: :9411
-      COLLECTOR_OTLP_ENABLED: "true"
-    networks:
-      - overmind-network
-    restart: unless-stopped
-
-  # ─── OPENTELEMETRY COLLECTOR (Traces Bridge) ───────────────────────────────────────
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.114.0
-    container_name: overmind-otel-collector
-    ports:
-      - "4317:4317"   # OTLP gRPC receiver
-      - "4318:4318"   # OTLP HTTP receiver
-      - "13133:13133" # Health check
-      - "9464:9464"   # Prometheus metrics
-    volumes:
-      - ./config/otel-collector.yml:/etc/otelcol-contrib/config.yaml
-    command: --config=/etc/otelcol-contrib/config.yaml
-    networks:
-      - overmind-network
-    depends_on:
-      - jaeger
-    restart: unless-stopped
-
-  # ─── POSTGRESQL (Vector DB + OverMind State) ───────────────────────────────────────
+  # ───────────────────────────────────────────────────────────────────────────────
+  # POSTGRESQL + PGVECTOR (OverMind Memory Engine)
+  # ───────────────────────────────────────────────────────────────────────────────
+  # Base de données vectorielle optimisée pour OverMind
+  # - Supporte les embeddings 4096D (Qwen, Claude, etc.)
+  # - Performance optimale pour les recherches sémantiques
+  # - Persistances des données et configurations OverMind
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: overmind-postgres
+    container_name: overmind-postgres-pgvector
+    hostname: overmind-postgres
+
     ports:
       - "5432:5432"
+
     environment:
+      # Configuration PostgreSQL
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_password_change_me
+      POSTGRES_PASSWORD: overmind_temp_password_change_me
       POSTGRES_DB: overmind_memory
+
+      # Optimisations Performance
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+      POSTGRES_HOST_AUTH_METHOD: md5
+
+      # Configuration Memory (optimisé pour vectors)
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 1GB
+      POSTGRES_MAINTENANCE_WORK_MEM: 64MB
+      POSTGRES_WORK_MEM: 16MB
+
     volumes:
+      # Data persistence
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+
+      # Initialisation automatique OverMind
+      - ./init-overmind-db.sql:/docker-entrypoint-initdb.d/01-init-overmind.sql:ro
+
     networks:
       - overmind-network
+
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d overmind_memory"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+
     restart: unless-stopped
 
-  # ─── REDIS (Caching & Session Store) ────────────────────────────────────────────────
-  redis:
-    image: redis:7.2-alpine
-    container_name: overmind-redis
-    ports:
-      - "6379:6379"
-    networks:
-      - overmind-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
+    # Logging optimisé
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ─── NODE EXPORTER (Host Metrics for Prometheus) ────────────────────────────────────
-  # NOTE: Disabled on Windows due to volume mount issues with root filesystem
-  # To enable on Linux, uncomment the following section:
-  # node-exporter:
-  #   image: prom/node-exporter:v1.8.2
-  #   container_name: overmind-node-exporter
-  #   ports:
-  #     - "9100:9100"
-  #   command:
-  #     - '--path.procfs=/host/proc'
-  #     - '--path.sysfs=/host/sys'
-  #     - '--path.rootfs=/host'
-  #     - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-  #   volumes:
-  #     - /proc:/host/proc:ro
-  #     - /sys:/host/sys:ro
-  #     - /:/host:ro,rslave
-  #   networks:
-  #     - overmind-network
-  #   restart: unless-stopped
-
+# ─────────────────────────────────────────────────────────────────────────────────
+# NETWORKS
+# ─────────────────────────────────────────────────────────────────────────────────
 networks:
   overmind-network:
     driver: bridge
     name: overmind-network
-    external: false
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
 
+# ─────────────────────────────────────────────────────────────────────────────────
+# VOLUMES
+# ─────────────────────────────────────────────────────────────────────────────────
 volumes:
-  rabbitmq_data:
-    name: overmind-rabbitmq-data
-  prometheus_data:
-    name: overmind-prometheus-data
-  grafana_data:
-    name: overmind-grafana-data
   postgres_data:
     name: overmind-postgres-data
+    driver: local
