@@ -173,23 +173,25 @@ services:
     restart: unless-stopped
 
   # ─── NODE EXPORTER (Host Metrics for Prometheus) ────────────────────────────────────
-  node-exporter:
-    image: prom/node-exporter:v1.8.2
-    container_name: overmind-node-exporter
-    ports:
-      - "9100:9100"
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.sysfs=/host/sys'
-      - '--path.rootfs=/host'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/host:ro,rslave
-    networks:
-      - overmind-network
-    restart: unless-stopped
+  # NOTE: Disabled on Windows due to volume mount issues with root filesystem
+  # To enable on Linux, uncomment the following section:
+  # node-exporter:
+  #   image: prom/node-exporter:v1.8.2
+  #   container_name: overmind-node-exporter
+  #   ports:
+  #     - "9100:9100"
+  #   command:
+  #     - '--path.procfs=/host/proc'
+  #     - '--path.sysfs=/host/sys'
+  #     - '--path.rootfs=/host'
+  #     - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+  #   volumes:
+  #     - /proc:/host/proc:ro
+  #     - /sys:/host/sys:ro
+  #     - /:/host:ro,rslave
+  #   networks:
+  #     - overmind-network
+  #   restart: unless-stopped
 
 networks:
   overmind-network:
