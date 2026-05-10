@@ -65,13 +65,25 @@ overmind run-agent --runner claude --prompt "Analyse ce code..."
 Pour utiliser les **fonctionnalités avancées** (Swarm, Workflows long-running, Observabilité), vous avez besoin de l'infrastructure Docker.
 
 **Suivez le guide d'installation :**
-- 📄 [Windows avec PostgreSQL existant](https://github.com/DeamonDev888/overmind-mcp/blob/main/SETUP_WINDOWS.md)
-- 📄 [Guide de déploiement complet](https://github.com/DeamonDev888/overmind-mcp/blob/main/DEPLOYMENT.md)
+- 📄 [Guide d'installation rapide](https://github.com/DeamonDev888/overmind-mcp/blob/main/INSTALL.md)
+- 📄 [Guide de déploiement complet](https://github.com/DeamonDev888/overmind-mcp/blob/main/docs/guides/DEPLOYMENT.md)
 
-**Résumé du setup Docker :**
-1. Installer Docker Desktop
-2. Télécharger `docker-compose.overmind.yml` depuis [GitHub](https://github.com/DeamonDev888/overmind-mcp/blob/main/docker-compose.overmind.yml)
-3. Lancer : `docker-compose -f docker-compose.overmind.yml up -d`
+**🚀 Installation Docker Automatique :**
+
+L'installation **100% automatique** installe et configure **tout** pour vous :
+
+```bash
+npm install -g overmind-mcp@latest
+```
+
+**Ce qui est installé automatiquement :**
+- ✅ Docker Desktop (vérification)
+- ✅ PostgreSQL + pgvector (si absent)
+- ✅ **Toute** l'infrastructure Docker (RabbitMQ, Temporal, Prometheus, Grafana, Jaeger, Redis)
+- ✅ Configuration (.env, .mcp.json)
+- ✅ Validation de tous les services
+
+**Après installation, ouvrez Docker Desktop → onglet "Containers" pour voir tous les services.**
 
 **✅ Avantages du Mode Avancé :**
 - 🐳 RabbitMQ (Message Broker)
