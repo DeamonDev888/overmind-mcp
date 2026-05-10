@@ -45,7 +45,7 @@ services:
     restart: unless-stopped
 
   temporal-web:
-    image: temporalio/web:1.24.0
+    image: temporalio/web:1.15.0
     container_name: overmind-temporal-web
     ports:
       - "8088:8088"
