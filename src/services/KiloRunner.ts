@@ -8,6 +8,12 @@ import { PromptManager } from './PromptManager.js';
 import { resolveKiloModel } from '../lib/modelMapping.js';
 import { withSpan } from '../lib/telemetry.js';
 import { Span } from '@opentelemetry/api';
+import {
+  registerProcess,
+  linkSessionToPid,
+  appendOutput,
+  updateProcessStatus,
+} from '../lib/processRegistry.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -373,9 +379,24 @@ export class KiloRunner {
             },
           });
 
+          // Register process immediately after spawn
+          if (currentChild.pid) {
+            void registerProcess(currentChild.pid, {
+              agentName: agentName || '',
+              runner: 'kilo',
+              configPath: options.configPath,
+            });
+          }
+
           if (currentChild.stdout) {
             currentChild.stdout.on('data', (d: Buffer) => {
               const chunk = d.toString();
+
+              // Append to live output buffer
+              if (currentChild && currentChild.pid && chunk) {
+                void appendOutput(currentChild.pid, chunk, options.configPath);
+              }
+
               if (currentStdout.length + chunk.length > MAX_BUF)
                 currentStdout = currentStdout.slice(-MAX_BUF);
               else currentStdout += chunk;
@@ -390,6 +411,9 @@ export class KiloRunner {
 
                   if (event.sessionID && !lastSessionId) {
                     lastSessionId = event.sessionID;
+                    if (currentChild) {
+                      void linkSessionToPid(event.sessionID, currentChild.pid!, options.configPath);
+                    }
                   }
 
                   if (event.type === 'text' && event.part && event.part.text) {
@@ -397,7 +421,14 @@ export class KiloRunner {
                   } else if (event.type === 'message' || event.type === 'reply') {
                     finalResult += event.content || event.text || '';
                   } else if (event.type === 'session') {
-                    lastSessionId = event.id || event.sessionID || lastSessionId;
+                    if (!lastSessionId) {
+                      lastSessionId = event.id || event.sessionID;
+                      if (currentChild && lastSessionId) {
+                        void linkSessionToPid(lastSessionId, currentChild.pid!, options.configPath);
+                      }
+                    } else {
+                      lastSessionId = event.id || event.sessionID || lastSessionId;
+                    }
                   } else if (event.type === 'error') {
                     currentStderr += (event.message || JSON.stringify(event)) + '\n';
                   }
@@ -511,6 +542,15 @@ export class KiloRunner {
             process.stderr.write(
               `\x1b[32m[Kilo] ✅ Mission terminée (${((Date.now() - startTime) / 1000).toFixed(1)}s)\x1b[0m\n`,
             );
+
+            if (currentChild && currentChild.pid) {
+              void updateProcessStatus(
+                currentChild.pid,
+                code === 0 ? 'done' : 'failed',
+                code,
+                options.configPath,
+              );
+            }
 
             if (agentName && lastSessionId) {
               await saveSessionId(agentName, lastSessionId, options.configPath, 'kilo');

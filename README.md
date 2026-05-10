@@ -118,12 +118,65 @@ if (!isError) {
 
 ## 📂 Structure du Projet
 
-- `src/services/` : Le cœur du système (Logique métier isolée en services).
-- `src/tools/` : Les outils MCP qui appellent les services.
-- `src/bin/cli.ts` : Le point d'entrée exécutable pour le terminal.
-- `src/server.ts` : La définition du serveur FastMCP.
-- `src/index.ts` : Les exports publics (API de la bibliothèque).
-- `.claude/` : Stockage des agents (Prompts `.md` et Settings `.json`).
+OverMind-MCP est organisé de manière modulaire pour faciliter la navigation et la maintenance.
+
+```
+Workflow/
+├── 📦 bin/                    # Scripts d'installation
+├── 📋 changelog/             # Historique des versions
+├── 🐳 docker/                # Configuration Docker
+├── 🗄️ db/                    # Scripts base de données
+├── ⚙️ config/               # Configurations MCP
+├── 📚 docs/                  # Documentation complète
+├── 💻 src/                   # Code source
+│   ├── bin/                  # Points d'entrée CLI
+│   ├── lib/                  # Bibliothèques partagées
+│   ├── services/             # Services métier
+│   └── tools/                # Outils MCP
+├── 🧪 tests/                 # Tests unitaires
+└── 🔧 scripts/              # Scripts de maintenance
+```
+
+**📖 Documentation détaillée** : Voir [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) pour une explication complète de chaque dossier.
+
+**Points clés :**
+- `src/services/` : Le cœur du système (Logique métier isolée en services)
+- `src/tools/` : Les outils MCP qui appellent les services
+- `src/bin/cli.ts` : Le point d'entrée exécutable pour le terminal
+- `src/server.ts` : La définition du serveur FastMCP
+- `.claude/` : Stockage des agents (Prompts `.md` et Settings `.json`)
+
+---
+
+## ⚙️ Configuration MCP (après installation globale)
+
+Après `npm install -g overmind-mcp`, voici la configuration MCP recommandée pour votre client (Claude Code, Cline, etc.) :
+
+```json
+{
+  "mcpServers": {
+    "overmind": {
+      "command": "overmind",
+      "description": "OverMind-MCP principal - Orchestration d'agents IA"
+    },
+    "memory": {
+      "command": "overmind",
+      "args": ["--memory-only"],
+      "description": "OverMind-MCP mémoire - Gestion mémoire vectorielle"
+    },
+    "overmind-postgres": {
+      "command": "overmind-postgres-mcp",
+      "description": "OverMind-PostgreSQL-MCP - Serveur PostgreSQL vectoriel optimisé pour OverMind"
+    }
+  },
+  "description": "Configuration MCP OverMind-MCP optimisée pour installation globale npm",
+  "version": "2.2.6",
+  "installation": "npm install -g overmind-mcp",
+  "note": "Après installation globale, les commandes 'overmind' et 'overmind-postgres-mcp' sont disponibles directement dans le système. Cette configuration utilise les binaires globaux installés par npm."
+}
+```
+
+**📖 Exemples de configuration détaillée** : Voir `config/README.md` pour plus de scénarios d'utilisation.
 
 ---
 

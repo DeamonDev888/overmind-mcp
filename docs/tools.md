@@ -8,8 +8,9 @@ Ce serveur MCP expose des outils d'orchestration multi-agents avec isolation de 
 
 - [🤖 Exécution d'Agents](#-exécution-dagents)
 - [🎨 Gestion des Prompts](#-gestion-des-prompts)
-- [🧠 Mémoire OverMind](️-mémoire-overmind)
-- [⚙️ Gestion des Agents](️-gestion-des-agents)
+- [🧠 Mémoire OverMind](#-mémoire-overmind)
+- [⚙️ Gestion des Agents](#️-gestion-des-agents)
+- [🔄 agent_control — Cycle de Vie](#🔄-agent_control--cycle-de-vie)
 
 ---
 
@@ -416,6 +417,30 @@ Par runner :
 ---
 
 ## ⚙️ Gestion des Agents
+
+### `agent_control` — NOUVEAU (unifié)
+
+**Description** : Outil unifié pour contrôler le cycle de vie des agents OverMind. Remplace `get_agent_status`, `stream_agent_output`, `kill_agent`, `wait_agent`.
+
+**Paramètres** :
+
+- **`agentName`** (string, requis) : Nom unique de l'agent à contrôler
+- **`runner`** (enum, optionnel) : `claude`, `gemini`, `kilo`, `qwencli`, `openclaw`, `cline`, `opencode`, `hermes`
+- **`action`** (enum, requis) :
+  - `status` — Lecture pure (pid, status, sessionId, outputBuffer)
+  - `stream` — Lecture + flag isComplete
+  - `kill` — Destruction irréversible du process tree
+  - `wait` — Blocage async avec polling (1s interval)
+- **`timeoutMs`** (number, optionnel, défaut: 900000) : Timeout pour action `wait`
+- **`sinceTimestamp`** (number, optionnel) : Pour `stream`, ne retourner que l'output après ce timestamp
+- **`config`** (string, optionnel) : Chemin racine Overmind
+
+**Codes d'erreur** : `AGENT_NOT_FOUND`, `AGENT_NOT_RUNNING`, `KILL_FAILED`, `WAIT_TIMEOUT`, `ORPHANED_PROCESS`
+**États du process** : `running`, `done`, `failed`, `orphaned`
+
+**Documentation complète** : [`agent_control.md`](./agent_control.md)
+
+---
 
 ### `create_agent`
 

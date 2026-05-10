@@ -6,6 +6,11 @@ import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { withSpan } from '../lib/telemetry.js';
 import pino from 'pino';
+import {
+  registerProcess,
+  appendOutput,
+  updateProcessStatus,
+} from '../lib/processRegistry.js';
 
 const logger = pino({ name: 'OpenCodeRunner' });
 
@@ -122,6 +127,10 @@ export class OpenCodeRunner {
         },
       });
 
+      if (child.pid) {
+        void registerProcess(child.pid, { agentName: agentName || '', runner: 'opencode', configPath: options.configPath });
+      }
+
       let stdout = '';
       let stderr = '';
       let hardTimeoutTimer: NodeJS.Timeout | null = null;
@@ -135,8 +144,10 @@ export class OpenCodeRunner {
 
       if (child.stdout)
         child.stdout.on('data', (d: Buffer) => {
+          const chunk = d.toString();
+          if (child.pid) void appendOutput(child.pid, chunk, options.configPath);
           if (stdout.length + d.length > this.MAX_BUF) stdout = stdout.slice(-this.MAX_BUF);
-          else stdout += d.toString();
+          else stdout += chunk;
         });
       if (child.stderr)
         child.stderr.on('data', (d: Buffer) => {
@@ -150,11 +161,13 @@ export class OpenCodeRunner {
           if (!child.killed) child.kill('SIGKILL');
         }, 5000);
         cleanup();
+        if (child.pid) void updateProcessStatus(child.pid, 'failed', null, options.configPath);
         resolve({ result: '', error: 'TIMEOUT', rawOutput: stdout });
       }, customTimeoutMs);
 
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
+        if (child.pid) void updateProcessStatus(child.pid, code === 0 ? 'done' : 'failed', code, options.configPath);
 
         if (code !== 0 && !stdout) {
           return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr });
