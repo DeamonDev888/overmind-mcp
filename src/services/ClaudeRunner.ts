@@ -1,12 +1,17 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { spawn, ChildProcess, exec } from 'child_process';
-import { CONFIG, resolveConfigPath } from '../lib/config.js';
+import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { resolveModel } from '../lib/modelMapping.js';
 import { withSpan } from '../lib/telemetry.js';
 import { Span } from '@opentelemetry/api';
+import { loadEnvQuietly } from '../lib/loadEnv.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Sur Windows, `child.kill()` ne tue que cmd.exe (le wrapper) — claude.exe
 // devient orphelin et garde la session bound au token initial côté provider.
@@ -90,6 +95,22 @@ export class ClaudeRunner {
     const { CORE, PERMISSIONS, PATHS } = this.config;
     const agentCustomEnv: Record<string, string> = {};
 
+    // Load environment variables FIRST before any processing
+    const workspaceEnvPath = path.resolve(options.configPath || getWorkspaceDir(), '.env');
+    loadEnvQuietly(workspaceEnvPath);
+
+    // Also load from Workflow directory as fallback
+    const workflowEnvPath = path.resolve(__dirname, '../../.env');
+    loadEnvQuietly(workflowEnvPath);
+
+    // Debug: check if variables are loaded
+    if (!options.silent) {
+      console.error(`[ClaudeRunner] Env check - ANTHROPIC_MODEL_Z in process.env: ${!!process.env.ANTHROPIC_MODEL_Z}`);
+      console.error(`[ClaudeRunner] Env check - ANTHROPIC_AUTH_TOKEN_Y in process.env: ${!!process.env.ANTHROPIC_AUTH_TOKEN_Y}`);
+      console.error(`[ClaudeRunner] Env check - workspaceEnvPath: ${workspaceEnvPath}`);
+      console.error(`[ClaudeRunner] Env check - workflowEnvPath: ${workflowEnvPath}`);
+    }
+
     if (agentName) {
       agentCustomEnv.OVERMIND_AGENT_NAME = agentName;
     }
@@ -137,8 +158,22 @@ export class ClaudeRunner {
         if (fs.existsSync(agentSettingsPath)) {
           let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
 
+          // Debug: log environment variables
+          if (!options.silent) {
+            console.error(`[ClaudeRunner] ANTHROPIC_MODEL_Z = ${process.env.ANTHROPIC_MODEL_Z}`);
+            console.error(`[ClaudeRunner] ANTHROPIC_AUTH_TOKEN_Y = ${process.env.ANTHROPIC_AUTH_TOKEN_Y ? '***SET***' : 'NOT SET'}`);
+            console.error(`[ClaudeRunner] ANTHROPIC_AUTH_TOKEN_E = ${process.env.ANTHROPIC_AUTH_TOKEN_E ? '***SET***' : 'NOT SET'}`);
+            console.error(`[ClaudeRunner] ANTHROPIC_BASE_URL_Z = ${process.env.ANTHROPIC_BASE_URL_Z}`);
+          }
+
           // --- New interpolation logic ---
           settings = interpolateEnvVars(settings);
+
+          // Debug: log interpolated values
+          if (!options.silent) {
+            console.error(`[ClaudeRunner] Interpolated ANTHROPIC_MODEL = ${settings.env?.ANTHROPIC_MODEL}`);
+            console.error(`[ClaudeRunner] Interpolated ANTHROPIC_BASE_URL = ${settings.env?.ANTHROPIC_BASE_URL}`);
+          }
 
           // 1. Create a temporary settings file with interpolated values
           const tmpSettingsPath = path.join(
