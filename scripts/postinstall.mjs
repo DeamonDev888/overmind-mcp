@@ -96,18 +96,40 @@ async function checkDocker() {
 
     const platform = process.platform;
     if (platform === 'win32') {
-      console.log('   Windows: https://www.docker.com/products/docker-desktop/');
+      console.log('   Windows: Docker Desktop, Rancher Desktop, ou Podman');
+      console.log('   https://www.docker.com/products/docker-desktop/');
     } else if (platform === 'darwin') {
-      console.log('   macOS: https://www.docker.com/products/docker-desktop/');
+      console.log('   macOS: Docker Desktop, Colima, OrbStack, ou Podman');
+      console.log('   https://www.docker.com/products/docker-desktop/');
     } else {
-      console.log('   Linux: https://docs.docker.com/engine/install/');
+      console.log('   Linux: Docker Engine, Podman, ou rootless Docker');
+      console.log('   https://docs.docker.com/engine/install/');
+      console.log('   Podman: https://podman.io/getting-started/installation');
     }
 
     log(COLORS.cyan, '\nAprès installation de Docker, relancez: npm install -g overmind-mcp');
     return false;
   }
 
+  // Détecter le type d'implémentation Docker
+  let implType = 'Docker';
+  try {
+    const dockerInfo = runCommand('docker info --format "{{.ServerVersion}}"');
+    if (dockerInfo) {
+      // Essayer de détecter Podman
+      const podmanCheck = runCommand('docker info --format "{{.OperatingSystem}}"');
+      if (podmanCheck && podmanCheck.toLowerCase().includes('podman')) {
+        implType = 'Podman';
+      }
+    }
+  } catch (e) {
+    // Ignorer les erreurs de détection
+  }
+
   log(COLORS.green, '✅ Docker détecté: ' + version.trim());
+  if (implType !== 'Docker') {
+    log(COLORS.cyan, '   Implémentation: ' + implType);
+  }
   return true;
 }
 
@@ -406,7 +428,7 @@ function showSummary() {
   log(COLORS.yellow, "📋 COMPOSANTS INSTALLÉS:");
   console.log('');
   console.log('┌─────────────────────────────────────────────────────────────────┐');
-  console.log('│ ' + COLORS.cyan + 'Ouvrez Docker Desktop → onglet "Containers"' + COLORS.reset + '            │');
+  console.log('│ ' + COLORS.cyan + 'Ouvrez votre interface Docker (Containers)' + COLORS.reset + '             │');
   console.log('│ ' + COLORS.cyan + 'Vous verrez le service OverMind actif:' + COLORS.reset + '                     │');
   console.log('│ ' + COLORS.green + '  • PostgreSQL + pgvector (Mémoire Vectorielle)' + COLORS.reset + '            │');
   console.log('│                                                                 │');
