@@ -9,7 +9,8 @@
   "bin": {
     "overmind": "./dist/bin/cli.js",
     "overmind-setup": "./scripts/setup.mjs",
-    "overmind-infra": "./scripts/docker-manager.mjs"
+    "overmind-infra": "./scripts/docker-manager.mjs",
+    "overmind-uninstall": "./scripts/uninstall.mjs"
   },
   "exports": {
     ".": {
@@ -22,17 +23,8 @@
     "dist",
     "assets",
     "README.md",
-    "SETUP_WINDOWS.md",
-    "DEPLOYMENT.md",
-    "SWARM_USAGE.md",
-    "CHANGELOG.md",
-    "docker-compose.overmind.yml",
-    "scripts",
-    "scripts/setup.js",
-    "scripts/setup-overmind-db.js",
-    "scripts/docker-manager.js",
-    "scripts/install-dependencies.js",
-    "scripts/postinstall.js"
+    "docs",
+    "scripts"
   ],
   "scripts": {
     "build": "tsc",

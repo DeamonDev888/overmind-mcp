@@ -50,7 +50,7 @@ services:
   # TEMPORAL (Workflow Orchestrator)
   # ───────────────────────────────────────────────────────────────────────────────
   # Gère les workflows long-running (OSINT, analyses continues)
-  # Web UI: http://localhost:8088
+  # Web UI: http://localhost:8233
   temporal:
     image: temporalio/auto-setup:1.24.0
     container_name: overmind-temporal
@@ -77,13 +77,13 @@ services:
   # TEMPORAL WEB (UI Temporal)
   # ───────────────────────────────────────────────────────────────────────────────
   # Interface web pour visualiser les workflows
-  # URL: http://localhost:8088
+  # URL: http://localhost:8233
   temporal-web:
     image: temporalio/web:1.24.0
     container_name: overmind-temporal-web
     hostname: overmind-temporal-web
     ports:
-      - "8088:8088"
+      - "8233:8088"
     environment:
       TEMPORAL_GRPC_ENDPOINT: temporal:7233
       TEMPORAL_PERMIT_WRITE_API: true
