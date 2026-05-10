@@ -117,7 +117,7 @@ interface ControlResult {
 }
 
 /** Construit un rapport d'état formaté depuis une ProcessEntry */
-function formatStatus(entry: ProcessEntry, action: string): string {
+function formatStatus(entry: ProcessEntry, _action: string): string {
   const lines: string[] = [];
 
   lines.push(`**Agent:** ${entry.agentName}`);
@@ -180,8 +180,7 @@ async function doStatus(
     return { content: [{ type: 'text', text: resolved.error }], isError: true };
   }
 
-  const isZombie = resolved.status === 'running' && resolved.pid;
-  const statusOk = resolved.status === 'done' || resolved.status === 'running';
+  const isZombie = resolved.status === 'running' && !!resolved.pid;
 
   return {
     content: [{ type: 'text', text: formatStatus(resolved, 'status') }],
@@ -207,7 +206,7 @@ async function doStream(
     resolved.status === 'failed' ||
     resolved.status === 'orphaned';
 
-  let output = resolved.outputBuffer || '';
+  const output = resolved.outputBuffer || '';
 
   // Filtering by sinceTimestamp is best-effort if lastOutputAt is available
   if (sinceTimestamp && resolved.lastOutputAt && resolved.lastOutputAt > sinceTimestamp) {
