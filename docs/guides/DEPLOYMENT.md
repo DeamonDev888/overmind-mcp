@@ -99,10 +99,10 @@ DISCORD_CHANNEL_ID=YOUR_CHANNEL_ID_HERE
 
 ```bash
 # Lancer tous les services
-docker-compose up -d
+cd docker && docker-compose up -d
 
 # Vérifier que tous les services sont up
-docker-compose ps
+cd docker && docker-compose ps
 ```
 
 **Services lancés :**
@@ -306,7 +306,7 @@ docker-compose down
 docker-compose down -v
 
 # Relancer après clean up
-docker-compose up -d
+cd docker && docker-compose up -d
 ```
 
 ## 🎯 Étape 8 : Workflows Avancés
