@@ -1,0 +1,68 @@
+# Prometheus Configuration for OverMind-MCP Monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'overmind-mcp'
+    environment: 'production'
+
+# Alerting configuration (optional - requires AlertManager)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+
+# Rule files (optional)
+# rule_files:
+#   - 'alerts.yml'
+
+# Scrape configurations
+scrape_configs:
+  # ─── OverMind-MCP Main Service ────────────────────────────────────────────────────────
+  - job_name: 'overmind-mcp'
+    static_configs:
+      - targets: ['host.docker.internal:9464'] # OTEL Collector metrics endpoint
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    honor_labels: true
+
+  # ─── Temporal Server Metrics ────────────────────────────────────────────────────────────
+  - job_name: 'temporal'
+    static_configs:
+      - targets: ['temporal:9090']
+    scrape_interval: 30s
+
+  # ─── RabbitMQ Metrics (via RabbitMQ Exporter) ───────────────────────────────────────────
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+    scrape_interval: 30s
+
+  # ─── PostgreSQL Metrics (via postgres_exporter) ─────────────────────────────────────────
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:9187']
+    scrape_interval: 30s
+
+  # ─── Redis Metrics (via redis_exporter) ───────────────────────────────────────────────────
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:9121']
+    scrape_interval: 30s
+
+  # ─── Node Exporter (Host Metrics) ────────────────────────────────────────────────────────
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # ─── OpenTelemetry Collector Metrics ─────────────────────────────────────────────────────
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:9464']
+    scrape_interval: 30s
+
+# Recording rules for optimized queries (optional)
+# recording_rules:
+#   - name: 'overmind_rules.yml'

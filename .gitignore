@@ -67,3 +67,27 @@ Code Cache/
 agent_multi/node_modules/
 agent_multi/dist/
 agent_multi/.claude/
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# DOCKER & INFRASTRUCTURE
+# ─────────────────────────────────────────────────────────────────────────────────
+# Docker volumes data (persist on host)
+docker-volumes/
+
+# Docker config files (use .example versions)
+config/prometheus.yml
+config/otel-collector.yml
+!config/prometheus.example.yml
+!config/otel-collector.example.yml
+!config/*.example.yml
+
+# Docker Compose override files (local customisation)
+docker-compose.override.yml
+docker-compose.*.local.yml
+
+# Docker secrets (NEVER commit these)
+*.secret
+*.password
+*.key
+*.pem
+.secrets/

@@ -1,3 +1,44 @@
+/**
+ * OverMind-MCP Server
+ * ====================
+ *
+ * Ce fichier enregistre les 13 outils MCP du serveur Overmind.
+ *
+ * ─── ARCHITECTURE ───────────────────────────────────────────────────────────
+ *
+ * CHAQUE OUTIL MCP VIT DANS SON PROPRE FICHIER sous src/tools/.
+ * Cela garantit :
+ *   - Maintenabilité : un outil = un fichier, pas de fichier fourre-tout
+ *   - Testabilité  : chaque outil peut être importé et testé isolément
+ *   - Lisibilité  : server.ts reste un index lisible, pas 500 lignes de code
+ *   - DX          : retrouver un tool = grep src/tools/, pas explorer 2000 lignes
+ *
+ * Convention de nommage :
+ *   src/tools/<nom_du_tool>.ts     → contient le schéma Zod ET la fonction execute
+ *   src/tools/run_<runner>.ts     → implémentation par runner (pas des outils MCP)
+ *
+ * Ajout d'un nouvel outil :
+ *   1. Créer src/tools/<nom>.ts   → exporter <nom>Schema + <nom>Function
+ *   2. L'importer dans server.ts → import { <nom> } from './tools/<nom>.js'
+ *   3. Ajouter server.addTool()    → name, description, parameters, execute
+ *
+ * ─── LISTE DES 13 OUTILS ─────────────────────────────────────────────────
+ *
+ *  1. run_agent          → src/tools/run_agent.ts
+ *  2. run_agents_parallel → src/tools/run_agents_parallel.ts
+ *  3. create_agent      → src/tools/create_agent.ts
+ *  4. list_agents       → src/tools/manage_agents.ts
+ *  5. delete_agent      → src/tools/manage_agents.ts
+ *  6. update_agent_config → src/tools/manage_agents.ts
+ *  7. create_prompt     → src/tools/manage_prompts.ts
+ *  8. edit_prompt       → src/tools/manage_prompts.ts
+ *  9. memory_search     → src/tools/memory_search.ts
+ * 10. memory_store      → src/tools/memory_store.ts
+ * 11. memory_runs       → src/tools/memory_runs.ts
+ * 12. get_agent_configs → src/tools/get_agent_configs.ts
+ * 13. config_example    → src/tools/config_example.ts
+ */
+
 import { FastMCP } from 'fastmcp';
 import { withSpan } from './lib/telemetry.js';
 import { runAgent, runAgentSchema } from './tools/run_agent.js';
@@ -35,7 +76,7 @@ export function createServer(name: string = 'OverMind-MCP') {
     version: '1.0.0',
   });
 
-  // ─── OUTIL UNIFIÉ D'EXÉCUTION D'AGENT ────────────────────────────────────────
+  // ─── 1. run_agent ─────────────────────────────────────────────────────────────
   server.addTool({
     name: 'run_agent',
     description: `Exécute une commande sur un agent IA via le runner spécifié.
@@ -73,7 +114,7 @@ run_agent(runner: "cline", agentName: "planner", mode: "plan", prompt: "Planifie
     execute: wrapExecute('run_agent', runAgent),
   });
 
-  // ─── OUTIL PARALLÈLE MULTI-AGENTS ──────────────────────────────────────────
+  // ─── 2. run_agents_parallel ─────────────────────────────────────────────────
   server.addTool({
     name: 'run_agents_parallel',
     description: `🚀 Lance plusieurs agents IA EN PARALLÈLE depuis un seul appel MCP. Polyglotte (mixe runners/modèles). Retourne les résultats consolidés une fois tous terminés.
@@ -95,7 +136,7 @@ run_agents_parallel(agents: [
     execute: wrapExecute('run_agents_parallel', runAgentsParallel),
   });
 
-  // Outil : Créer un nouvel agent (tous runners supportés)
+  // ─── 3. create_agent ────────────────────────────────────────────────────────
   server.addTool({
     name: 'create_agent',
     description: `Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.
@@ -110,7 +151,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: createAgent,
   });
 
-  // Outil : Lister les agents
+  // ─── 4. list_agents ─────────────────────────────────────────────────────────
   server.addTool({
     name: 'list_agents',
     description:
@@ -119,7 +160,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: listAgents,
   });
 
-  // Outil : Supprimer un agent
+  // ─── 5. delete_agent ───────────────────────────────────────────────────────
   server.addTool({
     name: 'delete_agent',
     description: 'Supprime définitivement un agent (Prompt et Config)',
@@ -127,7 +168,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: deleteAgent,
   });
 
-  // Outil : Mettre à jour la config d'un agent
+  // ─── 6. update_agent_config ────────────────────────────────────────────────
   server.addTool({
     name: 'update_agent_config',
     description:
@@ -136,9 +177,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: updateAgentConfig,
   });
 
-  // ─── GESTION DES PROMPTS ─────────────────────────────────────────────────────
-
-  // Outil : Créer un prompt seul
+  // ─── 7. create_prompt ───────────────────────────────────────────────────────
   server.addTool({
     name: 'create_prompt',
     description: 'Crée ou écrase un fichier prompt Markdown (Persona)',
@@ -146,7 +185,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: createPrompt,
   });
 
-  // Outil : Éditer un prompt par search/replace (Diff)
+  // ─── 8. edit_prompt ─────────────────────────────────────────────────────────
   server.addTool({
     name: 'edit_prompt',
     description: 'Modifie un prompt existant en remplaçant un bloc de texte spécifique',
@@ -154,8 +193,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: editPrompt,
   });
 
-  // ─── MÉMOIRE OVERMIND ─────────────────────────────────────────────────────────
-
+  // ─── 9. memory_search ──────────────────────────────────────────────────────
   server.addTool({
     name: 'memory_search',
     description:
@@ -164,6 +202,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: memorySearchTool,
   });
 
+  // ─── 10. memory_store ───────────────────────────────────────────────────────
   server.addTool({
     name: 'memory_store',
     description: "Mémorise durablement une connaissance, décision ou pattern d'orchestration",
@@ -171,6 +210,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: memoryStoreTool,
   });
 
+  // ─── 11. memory_runs ───────────────────────────────────────────────────────
   server.addTool({
     name: 'memory_runs',
     description:
@@ -179,6 +219,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: memoryRunsTool,
   });
 
+  // ─── 12. get_agent_configs ─────────────────────────────────────────────────
   server.addTool({
     name: 'get_agent_configs',
     description:
@@ -187,6 +228,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     execute: getAgentConfigs,
   });
 
+  // ─── 13. config_example ─────────────────────────────────────────────────────
   server.addTool({
     name: 'config_example',
     description:

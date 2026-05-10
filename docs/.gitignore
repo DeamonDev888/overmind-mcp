@@ -1,0 +1,7 @@
+# Ignorer les fichiers temporaires et locales
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Conserver uniquement la documentation structurée
