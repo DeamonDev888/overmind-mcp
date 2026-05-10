@@ -6,8 +6,7 @@ import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { PromptManager } from './PromptManager.js';
 import { resolveKiloModel } from '../lib/modelMapping.js';
-import { withSpan } from '../lib/telemetry.js';
-import { Span } from '@opentelemetry/api';
+import { withSpan, type Span } from '../lib/telemetry.js';
 import {
   registerProcess,
   linkSessionToPid,
