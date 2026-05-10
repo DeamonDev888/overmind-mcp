@@ -9,6 +9,12 @@ import { resolveModel } from '../lib/modelMapping.js';
 import { withSpan } from '../lib/telemetry.js';
 import { Span } from '@opentelemetry/api';
 import { loadEnvQuietly } from '../lib/loadEnv.js';
+import {
+  registerProcess,
+  linkSessionToPid,
+  appendOutput,
+  updateProcessStatus,
+} from '../lib/processRegistry.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,10 +111,10 @@ export class ClaudeRunner {
 
     // Debug: check if variables are loaded
     if (!options.silent) {
-      console.error(`[ClaudeRunner] Env check - ANTHROPIC_MODEL_Z in process.env: ${!!process.env.ANTHROPIC_MODEL_Z}`);
-      console.error(`[ClaudeRunner] Env check - ANTHROPIC_AUTH_TOKEN_Y in process.env: ${!!process.env.ANTHROPIC_AUTH_TOKEN_Y}`);
-      console.error(`[ClaudeRunner] Env check - workspaceEnvPath: ${workspaceEnvPath}`);
-      console.error(`[ClaudeRunner] Env check - workflowEnvPath: ${workflowEnvPath}`);
+      console.error(`[ClaudeRunner] Env check - ANTHROPIC_MODEL_Z present: ${!!process.env.ANTHROPIC_MODEL_Z}`);
+      console.error(`[ClaudeRunner] Auth tokens present: ${!!process.env.ANTHROPIC_AUTH_TOKEN_Y || !!process.env.ANTHROPIC_AUTH_TOKEN_E}`);
+      console.error(`[ClaudeRunner] workspaceEnvPath: ${workspaceEnvPath}`);
+      console.error(`[ClaudeRunner] workflowEnvPath: ${workflowEnvPath}`);
     }
 
     if (agentName) {
@@ -160,10 +166,9 @@ export class ClaudeRunner {
 
           // Debug: log environment variables
           if (!options.silent) {
-            console.error(`[ClaudeRunner] ANTHROPIC_MODEL_Z = ${process.env.ANTHROPIC_MODEL_Z}`);
-            console.error(`[ClaudeRunner] ANTHROPIC_AUTH_TOKEN_Y = ${process.env.ANTHROPIC_AUTH_TOKEN_Y ? '***SET***' : 'NOT SET'}`);
-            console.error(`[ClaudeRunner] ANTHROPIC_AUTH_TOKEN_E = ${process.env.ANTHROPIC_AUTH_TOKEN_E ? '***SET***' : 'NOT SET'}`);
-            console.error(`[ClaudeRunner] ANTHROPIC_BASE_URL_Z = ${process.env.ANTHROPIC_BASE_URL_Z}`);
+            console.error(`[ClaudeRunner] ANTHROPIC_MODEL_Z present: ${!!process.env.ANTHROPIC_MODEL_Z}`);
+            console.error(`[ClaudeRunner] Auth tokens present: ${!!process.env.ANTHROPIC_AUTH_TOKEN_Y || !!process.env.ANTHROPIC_AUTH_TOKEN_E}`);
+            console.error(`[ClaudeRunner] ANTHROPIC_BASE_URL_Z present: ${!!process.env.ANTHROPIC_BASE_URL_Z}`);
           }
 
           // --- New interpolation logic ---
@@ -385,7 +390,6 @@ export class ClaudeRunner {
           earlyExitTriggered = true;
           if (hardTimeoutTimer) clearTimeout(hardTimeoutTimer);
           if (killTimer) clearTimeout(killTimer);
-          if (timeout) clearTimeout(timeout);
           // Attendre la mort effective de l'arbre (cmd.exe + claude.exe sur Win)
           // avant de respawn, sinon le nouveau process tape sur la même session
           // encore "vivante" côté provider → 429 fantôme.
@@ -421,7 +425,6 @@ export class ClaudeRunner {
 
         let killTimer: NodeJS.Timeout | null = null;
         let hardTimeoutTimer: NodeJS.Timeout | null = null;
-        const timeout: NodeJS.Timeout | null = null;
 
         /**
          * Fonction centrale qui spawn le processus Claude avec le bon token.
@@ -495,9 +498,21 @@ export class ClaudeRunner {
             signal: options.signal,
           });
 
+          // Register process immediately after spawn
+          if (currentChildRef.pid) {
+            void registerProcess(currentChildRef.pid, {
+              agentName: agentName || '',
+              runner: 'claude',
+              configPath: options.configPath,
+            });
+          }
+
           if (currentChildRef.stdout) {
             currentChildRef.stdout.on('data', (d: Buffer) => {
               const chunk = d.toString();
+              if (currentChildRef && currentChildRef.pid && chunk) {
+                void appendOutput(currentChildRef.pid, chunk, options.configPath);
+              }
               if (currentStdout.length + chunk.length > MAX_BUF)
                 currentStdout = currentStdout.slice(-MAX_BUF);
               else currentStdout += chunk;
@@ -510,6 +525,9 @@ export class ClaudeRunner {
           if (currentChildRef.stderr) {
             currentChildRef.stderr.on('data', (d: Buffer) => {
               const chunk = d.toString();
+              if (currentChildRef && currentChildRef.pid && chunk) {
+                void appendOutput(currentChildRef.pid, chunk, options.configPath);
+              }
               if (currentStderr.length + chunk.length > MAX_BUF)
                 currentStderr = currentStderr.slice(-MAX_BUF);
               else currentStderr += chunk;
@@ -610,6 +628,9 @@ export class ClaudeRunner {
                     `\n\x1b[41m\x1b[37m[ClaudeRunner] ❌ Tous les tokens fallback épuisés. Error retryable finale.\x1b[0m\n`,
                   );
                 }
+                if (currentChildRef?.pid) {
+                  void updateProcessStatus(currentChildRef.pid, 'failed', code, options.configPath);
+                }
                 cleanupTmpFiles();
                 safeResolve({
                   result: '',
@@ -634,6 +655,13 @@ export class ClaudeRunner {
                     options.configPath,
                     'claude',
                   );
+                  if (currentChildRef?.pid) {
+                    void linkSessionToPid(jsonEnvelope.session_id as string, currentChildRef.pid, options.configPath);
+                  }
+                }
+
+                if (currentChildRef?.pid) {
+                  void updateProcessStatus(currentChildRef.pid, code === 0 ? 'done' : 'failed', code ?? null, options.configPath);
                 }
 
                 return safeResolve({
@@ -649,6 +677,9 @@ export class ClaudeRunner {
               }
 
               if (code === 0) {
+                if (currentChildRef?.pid) {
+                  void updateProcessStatus(currentChildRef.pid, 'done', code, options.configPath);
+                }
                 return safeResolve({
                   result: currentStdout.trim(),
                   sessionId: currentSessionId,
@@ -658,6 +689,9 @@ export class ClaudeRunner {
                 });
               }
 
+              if (currentChildRef?.pid) {
+                void updateProcessStatus(currentChildRef.pid, 'failed', code, options.configPath);
+              }
               safeResolve({
                 result: '',
                 error: code !== 0 ? `EXIT_CODE_${code}` : 'JSON_PARSE_ERROR',

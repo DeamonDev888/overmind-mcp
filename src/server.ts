@@ -2,7 +2,7 @@
  * OverMind-MCP Server
  * ====================
  *
- * Ce fichier enregistre les 13 outils MCP du serveur Overmind.
+ * Ce fichier enregistre les 14 outils MCP du serveur Overmind.
  *
  * ─── ARCHITECTURE ───────────────────────────────────────────────────────────
  *
@@ -22,21 +22,22 @@
  *   2. L'importer dans server.ts → import { <nom> } from './tools/<nom>.js'
  *   3. Ajouter server.addTool()    → name, description, parameters, execute
  *
- * ─── LISTE DES 13 OUTILS ─────────────────────────────────────────────────
+ * ─── LISTE DES 14 OUTILS ─────────────────────────────────────────────────
  *
- *  1. run_agent          → src/tools/run_agent.ts
- *  2. run_agents_parallel → src/tools/run_agents_parallel.ts
- *  3. create_agent      → src/tools/create_agent.ts
- *  4. list_agents       → src/tools/manage_agents.ts
- *  5. delete_agent      → src/tools/manage_agents.ts
- *  6. update_agent_config → src/tools/manage_agents.ts
- *  7. create_prompt     → src/tools/manage_prompts.ts
- *  8. edit_prompt       → src/tools/manage_prompts.ts
- *  9. memory_search     → src/tools/memory_search.ts
- * 10. memory_store      → src/tools/memory_store.ts
- * 11. memory_runs       → src/tools/memory_runs.ts
- * 12. get_agent_configs → src/tools/get_agent_configs.ts
- * 13. config_example    → src/tools/config_example.ts
+ *  1. run_agent              → src/tools/run_agent.ts
+ *  2. run_agents_parallel    → src/tools/run_agents_parallel.ts
+ *  3. create_agent           → src/tools/create_agent.ts
+ *  4. list_agents            → src/tools/manage_agents.ts
+ *  5. delete_agent           → src/tools/manage_agents.ts
+ *  6. update_agent_config    → src/tools/manage_agents.ts
+ *  7. get_agent_configs      → src/tools/get_agent_configs.ts
+ *  8. memory_search          → src/tools/memory_search.ts
+ *  9. memory_store           → src/tools/memory_store.ts
+ * 10. memory_runs            → src/tools/memory_runs.ts
+ * 11. create_prompt          → src/tools/manage_prompts.ts
+ * 12. edit_prompt            → src/tools/manage_prompts.ts
+ * 13. config_example         → src/tools/config_example.ts
+ * 14. agent_control          → src/tools/agent_control.ts  (REMPLACE: get_agent_status, stream_agent_output, kill_agent, wait_agent)
  */
 
 import { FastMCP } from 'fastmcp';
@@ -63,6 +64,7 @@ import {
 } from './tools/manage_agents.js';
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
+import { agentControl, agentControlSchema } from './tools/agent_control.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ToolExecute = (...args: any[]) => Promise<any>;
@@ -235,6 +237,55 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
       'Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).',
     parameters: configExampleSchema,
     execute: configExample,
+  });
+
+  // ─── 14. agent_control ─────────────────────────────────────────────────────────
+  server.addTool({
+    name: 'agent_control',
+    description: `Outil MCP unifié pour contrôler le cycle de vie des agents OverMind.
+
+REMPLACE les 4 outils précédents : get_agent_status, stream_agent_output, kill_agent, wait_agent.
+L'unification simplifie la toolbox client et assure un comportement déterministe.
+
+**Actions disponibles :**
+
+status ─── Lecture pure, zero side-effect
+  → Retourne l'état du process (pid, status, sessionId, outputBuffer)
+  → Use-case : dashboard, diagnostic, polling léger
+
+stream ─── Lecture + indicateur de complétude
+  → Retourne outputBuffer + isComplete flag
+  → Use-case : récupérer la sortie en temps réel sans savoir si c'est fini
+  → Option sinceTimestamp pour output après un timestamp
+
+kill ─── Action destructive, irréversible
+  → Tue le process tree via taskkill /F /T (Windows) ou kill -9 (Unix)
+  → Use-case : abort d'urgence, kill-switch
+
+wait ─── Blocage async avec polling
+  → Poll toutes les 1s jusqu'à status !== 'running' ou timeout
+  → Use-case : synchronisation dans un workflow d'orchestration
+
+**États du process :**
+  running  — Process actif, PID valide
+  done     — Terminé avec code 0
+  failed   — Terminé avec erreur (exit code != 0)
+  orphaned — Parent mort mais child tourne encore
+
+**Erreurs structurées :**
+  AGENT_NOT_FOUND    — Agent absent du registry (jamais lancé ou nettoyé)
+  AGENT_NOT_RUNNING  — Action "kill" sur un agent déjà terminé
+  KILL_FAILED        — taskkill/kill a échoué
+  WAIT_TIMEOUT       — Timeout atteint sans terminaison
+  ORPHANED_PROCESS   — Process zombie détecté
+
+**Exemples :**
+agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "status" })
+agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "stream" })
+agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "kill" })
+agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "wait", timeoutMs: 300000 })`,
+    parameters: agentControlSchema,
+    execute: agentControl,
   });
 
   return server;
