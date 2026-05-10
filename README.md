@@ -40,7 +40,7 @@ npm install -g overmind-mcp@latest
 
 **🎯 Ce qui est installé automatiquement :**
 
-1. **Détection Docker** - Vérification que Docker Desktop est disponible
+1. **Détection Docker** - Compatible avec Docker Desktop, Podman, Rancher Desktop, Colima, OrbStack
 2. **PostgreSQL + pgvector** - Container Docker avec extension vectorielle (si absent)
 3. **overmind-postgres-mcp** - Serveur MCP PostgreSQL vectoriel installé automatiquement
 4. **Configuration complète** - Fichiers .env et .mcp.json générés automatiquement
