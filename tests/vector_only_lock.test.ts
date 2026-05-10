@@ -43,7 +43,7 @@ describe('Overmind Vector Isolation Check', () => {
       console.log('✅ Unit Test: No trigram violation detected.');
     } catch (err: Error) {
       if (err.message.includes('VECTOR_ONLY_VIOLATION')) {
-        throw new Error('FATAL: Trigram index detected in a vector-only system!');
+        throw new Error('FATAL: Trigram index detected in a vector-only system!', { cause: err });
       }
     }
   });
