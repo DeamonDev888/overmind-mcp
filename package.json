@@ -25,7 +25,8 @@
     "README.md",
     "docs",
     "scripts",
-    "bin"
+    "bin",
+    ".mcp.json.example"
   ],
   "scripts": {
     "build": "tsc",
