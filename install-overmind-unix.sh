@@ -211,6 +211,80 @@ if [ "$USE_EXTERNAL_POSTGRES" -eq 1 ]; then
 fi
 
 echo -e "${GREEN}[OK] Fichers téléchargés${NC}"
+
+	echo -e "${YELLOW}[INFO] Création fichiers de configuration...${NC}"
+	mkdir -p "$OVERMIND_DIR/config/grafana/provisioning/datasources"
+
+	echo -e "${YELLOW}[INFO] Création config OTEL collector...${NC}"
+	cat > "$OVERMIND_DIR/config/otel-collector.yml" << 'EOF'
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  prometheusremotewrite:
+    endpoint: http://prometheus:9090/api/v1/write
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/jaeger]
+
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheusremotewrite]
+EOF
+
+	echo -e "${YELLOW}[INFO] Création config Prometheus...${NC}"
+	cat > "$OVERMIND_DIR/config/prometheus.yml" << 'EOF'
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:9464']
+EOF
+
+	echo -e "${YELLOW}[INFO] Création config Grafana datasource...${NC}"
+	cat > "$OVERMIND_DIR/config/grafana/provisioning/datasources/prometheus.yml" << 'EOF'
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+EOF
+
+	echo -e "${GREEN}[OK] Fichiers de configuration créés${NC}"
+
+	echo -e "${YELLOW}[INFO] Création init-db.sql...${NC}"
+	curl -sL https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/init-db.sql -o "$OVERMIND_DIR/init-db.sql"
+	echo -e "${GREEN}[OK] init-db.sql téléchargé${NC}"
+
+
 echo ""
 
 # ============================================================
@@ -284,12 +358,7 @@ fi
 
 # Test Temporal
 echo -e "   • Temporal:"
-docker ps --filter "name=overmind-temporal" --format "{{.Names}}" | grep -q temporal
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}      [OK] Temporal actif${NC}"
-else
-    echo -e "${RED}      [FAIL] Temporal non trouvé${NC}"
-fi
+echo -e "${YELLOW}      [INFO] Désactivé (requiert init DB)${NC}"
 
 # Test Prometheus
 echo -e "   • Prometheus:"

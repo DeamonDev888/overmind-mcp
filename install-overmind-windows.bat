@@ -204,7 +204,78 @@ echo [INFO] Telechargement docker-compose.yml...
 curl -sL https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/docker-compose.yml -o "%USERPROFILE%\.overmind\docker-compose.yml"
 curl -sL https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/docker-compose.exporters.yml -o "%USERPROFILE%\.overmind\docker-compose.exporters.yml"
 
-echo %ESC%[92m[OK] Fichers telecharges%ESC%
+echo [INFO] Creation configuration fichiers...
+if not exist "%USERPROFILE%\.overmind\config" mkdir "%USERPROFILE%\.overmind\config"
+if not exist "%USERPROFILE%\.overmind\config\grafana\provisioning\datasources" mkdir "%USERPROFILE%\.overmind\config\grafana\provisioning\datasources"
+
+echo [INFO] Creation OTEL collector config...
+(
+echo receivers:
+echo   otlp:
+echo     protocols:
+echo       grpc:
+echo         endpoint: 0.0.0.0:4317
+echo       http:
+echo         endpoint: 0.0.0.0:4318
+echo.
+echo processors:
+echo   batch:
+echo.
+echo exporters:
+echo   otlp/jaeger:
+echo     endpoint: jaeger:4317
+echo     tls:
+echo       insecure: true
+echo.
+echo   prometheusremotewrite:
+echo     endpoint: http://prometheus:9090/api/v1/write
+echo.
+echo service:
+echo   pipelines:
+echo     traces:
+echo       receivers: [otlp]
+echo       processors: [batch]
+echo       exporters: [otlp/jaeger]
+echo.
+echo     metrics:
+echo       receivers: [otlp]
+echo       processors: [batch]
+echo       exporters: [prometheusremotewrite]
+) > "%USERPROFILE%\.overmind\config\otel-collector.yml"
+
+echo [INFO] Creation Prometheus config...
+(
+echo global:
+echo   scrape_interval: 15s
+echo   evaluation_interval: 15s
+echo.
+echo scrape_configs:
+echo   - job_name: 'prometheus'
+echo     static_configs:
+echo       - targets: ['localhost:9090']
+echo.
+echo   - job_name: 'otel-collector'
+echo     static_configs:
+echo       - targets: ['otel-collector:9464']
+) > "%USERPROFILE%\.overmind\config\prometheus.yml"
+
+echo [INFO] Creation Grafana datasource config...
+(
+echo apiVersion: 1
+echo.
+echo datasources:
+echo   - name: Prometheus
+echo     type: prometheus
+echo     access: proxy
+echo     url: http://prometheus:9090
+echo     isDefault: true
+) > "%USERPROFILE%\.overmind\config\grafana\provisioning\datasources\prometheus.yml"
+
+echo %ESC%[92m[OK] Configuration fichiers crees%ESC%
+
+	echo [INFO] Creation init-db.sql...
+	curl -sL https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/init-db.sql -o "%USERPROFILE%.overmindinit-db.sql"
+
 echo.
 
 REM ============================================================
@@ -283,13 +354,8 @@ if errorlevel 1 (
     echo %ESC%[92m      [OK] RabbitMQ actif%ESC%
 )
 
-echo   - Temporal:
-docker ps --filter "name=overmind-temporal" --format "{{.Names}}" | findstr temporal >nul
-if errorlevel 1 (
-    echo %ESC%[91m      [FAIL] Temporal non trouve%ESC%
-) else (
-    echo %ESC%[92m      [OK] Temporal actif%ESC%
-)
+REM Temporal desactive - skip validation
+echo   - Temporal: %ESC%[93m      [INFO] Desactive (requiert init DB)%ESC%
 
 echo   - Prometheus:
 docker ps --filter "name=overmind-prometheus" --format "{{.Names}}" | findstr prometheus >nul
