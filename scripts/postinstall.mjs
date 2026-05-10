@@ -2,19 +2,21 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
  * OVERMIND-MCP - POST-INSTALL AUTOMATIQUE
- * ═══════════════════════════════════════════════════════════════════════════════
+ * ═════════════════════════════════════════════════════════════════════════════
  * Script exécuté automatiquement après npm install -g overmind-mcp
- * Installe et configure TOUT :
+ * INSTALLE ET DÉMARRE TOUT AUTOMATIQUEMENT :
  * - Vérifie Docker
  * - Installe PostgreSQL + pgvector (si absent)
- * - Télécharge et lance l'infrastructure Docker complète
+ * - Copie .env.example → .env
+ * - Copie .mcp.json.example → .mcp.json
+ * - Télécharge et démarre TOUTE l'infrastructure Docker
  * - Valide tous les services
- * - Montre à l'utilisateur où voir les services dans Docker Desktop
+ * - Montre où les voir dans Docker Desktop
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 import { execSync, spawn } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -28,8 +30,8 @@ const INSTALL_DIR = join(
 );
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CONFIG & COLORS
-// ═══════════════════════════════════════════════════════════════════════════════
+// COLORS
+// ═════════════════════════════════════════════════════════════════════════════
 
 const COLORS = {
   cyan: '\x1b[36m',
@@ -84,7 +86,7 @@ async function runCommandAsync(cmd, description) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // INSTALLATION STEPS
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 
 async function checkDocker() {
   logSection('VÉRIFICATION DOCKER');
@@ -104,7 +106,7 @@ async function checkDocker() {
       console.log('   Linux: https://docs.docker.com/engine/install/');
     }
 
-    log(COLORS.cyan, '\n📥 Après installation de Docker, relancez: npm install -g overmind-mcp');
+    log(COLORS.cyan, '\nAprès installation de Docker, relancez: npm install -g overmind-mcp');
     return false;
   }
 
@@ -169,26 +171,44 @@ async function setupPostgreSQL() {
 }
 
 async function setupInfrastructure() {
-  logSection('TÉLÉCHARGEMENT INFRASTRUCTURE DOCKER');
+  logSection('TÉLÉCHARGEMENT INFRASTRUCTURE');
 
   mkdirSync(INSTALL_DIR, { recursive: true });
 
-  log(COLORS.yellow, '📥 Téléchargement docker-compose.yml...');
+  log(COLORS.yellow, '📥 Téléchargement fichiers docker-compose...');
 
   const composeUrl = 'https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/docker-compose.yml';
   const exportersUrl = 'https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/docker-compose.exporters.yml';
+  const envExampleUrl = 'https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/.env.example';
+  const mcpExampleUrl = 'https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/.mcp.json.example';
 
   try {
+    // Télécharger docker-compose.yml
     const composeData = runCommand(`curl -sL ${composeUrl}`);
     if (composeData) {
       writeFileSync(join(INSTALL_DIR, 'docker-compose.yml'), composeData);
       log(COLORS.green, '✅ docker-compose.yml téléchargé');
     }
 
+    // Télécharger docker-compose.exporters.yml
     const exportersData = runCommand(`curl -sL ${exportersUrl}`);
     if (exportersData) {
       writeFileSync(join(INSTALL_DIR, 'docker-compose.exporters.yml'), exportersData);
       log(COLORS.green, '✅ docker-compose.exporters.yml téléchargé');
+    }
+
+    // Télécharger .env.example
+    const envExampleData = runCommand(`curl -sL ${envExampleUrl}`);
+    if (envExampleData) {
+      writeFileSync(join(INSTALL_DIR, '.env.example'), envExampleData);
+      log(COLORS.green, '✅ .env.example téléchargé');
+    }
+
+    // Télécharger .mcp.json.example
+    const mcpExampleData = runCommand(`curl -sL ${mcpExampleUrl}`);
+    if (mcpExampleData) {
+      writeFileSync(join(INSTALL_DIR, '.mcp.json.example'), mcpExampleData);
+      log(COLORS.green, '✅ .mcp.json.example téléchargé');
     }
 
     return true;
@@ -198,30 +218,115 @@ async function setupInfrastructure() {
   }
 }
 
+function createEnvConfig() {
+  logSection('CRÉATION CONFIGURATION');
+
+  mkdirSync(INSTALL_DIR, { recursive: true });
+
+  const envFile = join(INSTALL_DIR, '.env');
+  const envExampleFile = join(INSTALL_DIR, '.env.example');
+  const mcpFile = join(INSTALL_DIR, '.mcp.json');
+  const mcpExampleFile = join(INSTALL_DIR, '.mcp.json.example');
+
+  // Copier .env.example → .env si existe
+  if (existsSync(envExampleFile) && !existsSync(envFile)) {
+    let envContent;
+
+    if (process.platform === 'win32') {
+      envContent = runCommand(`type "${envExampleFile}"`, { stdio: 'pipe' });
+    } else {
+      envContent = runCommand(`cat "${envExampleFile}"`, { stdio: 'pipe' });
+    }
+
+    if (envContent) {
+      writeFileSync(envFile, envContent);
+      log(COLORS.green, '✅ .env créé (à partir de .env.example)');
+    }
+  }
+
+  // Créer .env minimal si n'existe pas
+  if (!existsSync(envFile)) {
+    const envContent = `# OverMind-MCP Environment Configuration
+# Généré automatiquement par npm install
+
+# PostgreSQL
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=overmind_temp_password_change_me
+POSTGRES_DB=overmind
+
+# OpenTelemetry (optionnel)
+OTEL_ENABLED=false
+
+# Workspace
+OVERMIND_WORKSPACE=${INSTALL_DIR}
+`;
+    writeFileSync(envFile, envContent);
+    log(COLORS.green, '✅ Configuration .env créée: ' + envFile);
+  }
+
+  // Copier .mcp.json.example → .mcp.json si existe
+  if (existsSync(mcpExampleFile) && !existsSync(mcpFile)) {
+    let mcpContent;
+
+    if (process.platform === 'win32') {
+      mcpContent = runCommand(`type "${mcpExampleFile}"`, { stdio: 'pipe' });
+    } else {
+      mcpContent = runCommand(`cat "${mcpExampleFile}"`, { stdio: 'pipe' });
+    }
+
+    if (mcpContent) {
+      writeFileSync(mcpFile, mcpContent);
+      log(COLORS.green, '✅ .mcp.json créé (à partir de .mcp.json.example)');
+    }
+  }
+}
+
 async function startInfrastructure() {
-  logSection('DÉMARRAGE INFRASTRUCTURE');
+  logSection('DÉMARRAGE AUTOMATIQUE INFRASTRUCTURE COMPLÈTE');
 
   const composeFile = join(INSTALL_DIR, 'docker-compose.yml');
 
   if (!existsSync(composeFile)) {
     log(COLORS.yellow, '⚠️  docker-compose.yml non trouvé. Téléchargement...');
-    return false;
+    const downloaded = await setupInfrastructure();
+    if (!downloaded) {
+      return false;
+    }
   }
 
-  log(COLORS.cyan, '💡 Infrastructure Docker téléchargée.');
-  log(COLORS.yellow, '⚠️  Pour démarrer tous les services (RabbitMQ, Temporal, Prometheus, Grafana, Jaeger):');
-  log(COLORS.white, '   → overmind-setup --full');
-  log(COLORS.white, '   → Ou manuellement: cd ~/.overmind && docker-compose up -d');
-  log(COLORS.white, '   ');
-  log(COLORS.green, '✅ PostgreSQL + pgvector sont déjà prêts !');
+  try {
+    log(COLORS.yellow, '🚀 Démarrage automatique de TOUS les services...');
+    log(COLORS.cyan, '   (PostgreSQL, RabbitMQ, Temporal, Prometheus, Grafana, Jaeger, Redis)');
 
-  return true;
+    await runCommandAsync(
+      `cd "${INSTALL_DIR}" && docker-compose -f docker-compose.yml pull`,
+      'Téléchargement images Docker'
+    );
+
+    await runCommandAsync(
+      `cd "${INSTALL_DIR}" && docker-compose -f docker-compose.yml up -d`,
+      'Démarrage infrastructure complète'
+    );
+
+    log(COLORS.cyan, '\n⏳ Attente démarrage des services (20s)...');
+    await new Promise(resolve => setTimeout(resolve, 20000));
+
+    return true;
+  } catch (error) {
+    log(COLORS.red, '\n⚠️  Erreur démarrage infrastructure: ' + error.message);
+    log(COLORS.yellow, '\n💡 Solution manuelle:');
+    log(COLORS.white, '   cd ~/.overmind');
+    log(COLORS.white, '   docker-compose up -d');
+    return false;
+  }
 }
 
 async function validateServices() {
   logSection('VALIDATION DES SERVICES');
 
-  log(COLORS.yellow, '🔍 Vérification des containers...\n');
+  log(COLORS.yellow, '🔍 Vérification des containers Docker...\n');
 
   const services = [
     { name: 'PostgreSQL + pgvector', filter: 'postgres', color: COLORS.green },
@@ -230,6 +335,7 @@ async function validateServices() {
     { name: 'Prometheus', filter: 'prometheus', color: COLORS.green },
     { name: 'Grafana', filter: 'grafana', color: COLORS.green },
     { name: 'Jaeger', filter: 'jaeger', color: COLORS.green },
+    { name: 'Redis', filter: 'redis', color: COLORS.green },
   ];
 
   let allRunning = true;
@@ -251,34 +357,6 @@ async function validateServices() {
   return allRunning;
 }
 
-function createEnvConfig() {
-  mkdirSync(INSTALL_DIR, { recursive: true });
-
-  const envFile = join(INSTALL_DIR, '.env');
-
-  if (!existsSync(envFile)) {
-    const envContent = `# OverMind-MCP Environment Configuration
-# Généré automatiquement par npm install
-
-# PostgreSQL
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=overmind_temp_password_change_me
-POSTGRES_DB=overmind
-
-# OpenTelemetry (optionnel)
-OTEL_ENABLED=false
-
-# Workspace
-OVERMIND_WORKSPACE=${INSTALL_DIR}
-`;
-
-    writeFileSync(envFile, envContent);
-    log(COLORS.green, '✅ Configuration créée: ' + envFile);
-  }
-}
-
 function showSummary() {
   console.log('\n╔══════════════════════════════════════════════════════════════════╗');
   console.log('║' + ' '.repeat(64) + '║');
@@ -286,13 +364,21 @@ function showSummary() {
   console.log('║' + ' '.repeat(64) + '║');
   console.log('╚══════════════════════════════════════════════════════════════════╝');
   console.log('');
-  log(COLORS.yellow, '📋 SERVICES DISPONIBLES:');
+  log(COLORS.yellow, '📋 SERVICES ACTIFS DANS DOCKER DESKTOP:');
   console.log('');
   console.log('┌─────────────────────────────────────────────────────────────────┐');
-  console.log('│ ' + COLORS.cyan + 'Ouvrez Docker Desktop pour voir tous les containers' + COLORS.reset + '             │');
+  console.log('│ ' + COLORS.cyan + 'Ouvrez Docker Desktop → onglet "Containers"' + COLORS.reset + '            │');
+  console.log('│ ' + COLORS.cyan + 'Vous verrez tous les services OverMind actifs:' + COLORS.reset + '              │');
+  console.log('│ ' + COLORS.green + '  • PostgreSQL + pgvector' + COLORS.reset + '                                   │');
+  console.log('│ ' + COLORS.green + '  • RabbitMQ (Message Broker)' + COLORS.reset + '                              │');
+  console.log('│ ' + COLORS.green + '  • Temporal (Workflow Engine)' + COLORS.reset + '                                │');
+  console.log('│ ' + COLORS.green + '  • Prometheus (Métriques)' + COLORS.reset + '                                   │');
+  console.log('│ ' + COLORS.green + '  • Grafana (Dashboards)' + COLORS.reset + '                                   │');
+  console.log('│ ' + COLORS.green + '  • Jaeger (Tracing)' + COLORS.reset + '                                        │');
+  console.log('│ ' + COLORS.green + '  • Redis (Cache)' + COLORS.reset + '                                            │');
   console.log('│                                                                 │');
   console.log('│ ' + COLORS.yellow + 'URLs utiles:' + COLORS.reset + '                                                      │');
-  console.log('│   • Prometheus: ' + COLORS.cyan + 'http://localhost:9090' + COLORS.reset + '                             │');
+  console.log('│   • Prometheus:  ' + COLORS.cyan + 'http://localhost:9090' + COLORS.reset + '                             │');
   console.log('│   • Grafana:      ' + COLORS.cyan + 'http://localhost:3000' + COLORS.reset + ' (admin/admin)' + '            │');
   console.log('│   • Jaeger:       ' + COLORS.cyan + 'http://localhost:16686' + COLORS.reset + '                            │');
   console.log('│   • RabbitMQ:    ' + COLORS.cyan + 'http://localhost:15672' + COLORS.reset + ' (guest/guest)' + '           │');
@@ -309,9 +395,9 @@ function showSummary() {
   console.log('');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 // MAIN
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 
 async function main() {
   console.log('╔══════════════════════════════════════════════════════════════════╗');
@@ -322,12 +408,15 @@ async function main() {
   console.log('');
 
   // Banner
-  console.log(COLORS.cyan + 'Ce script va:' + COLORS.reset);
+  console.log(COLORS.cyan + 'Ce script VA installer automatiquement:' + COLORS.reset);
   console.log('  ✓ Vérifier Docker');
   console.log('  ✓ Installer PostgreSQL + pgvector (si absent)');
-  console.log('  ✓ Télécharger l\'infrastructure Docker');
-  console.log('  ✓ Démarrer tous les services');
-  console.log('  ✓ Valider l\'installation');
+  console.log('  ✓ Télécharger docker-compose.yml et configs');
+  console.log('  ✓ Démarrer TOUS les services Docker automatiquement');
+  console.log('  ✓ Copier .env.example → .env');
+  console.log('  ✓ Copier .mcp.json.example → .mcp.json');
+  console.log('  ✓ Valider tous les services');
+  console.log('  ✓ Montrer où les voir dans Docker Desktop');
   console.log('');
 
   // Step 1: Check Docker
@@ -336,28 +425,36 @@ async function main() {
     return;
   }
 
-  // Step 2: Setup .env
-  createEnvConfig();
-
-  // Step 3: Install PostgreSQL if needed
+  // Step 2: Setup PostgreSQL
   await setupPostgreSQL();
 
+  // Step 3: Setup .env et .mcp.json
+  createEnvConfig();
+
   // Step 4: Download infrastructure files
-  await setupInfrastructure();
+  const downloaded = await setupInfrastructure();
 
-  // Step 5: Show how to start full infrastructure
-  await startInfrastructure();
+  // Step 5: Start ALL services automatically
+  if (downloaded) {
+    const started = await startInfrastructure();
+    if (!started) {
+      log(COLORS.yellow, '\n⚠️  Infrastructure non démarrée automatiquement.');
+      log(COLORS.yellow, '   PostgreSQL fonctionne, mais les autres services ne sont pas actifs.');
+    }
+  }
 
-  // Step 6: Show PostgreSQL is ready
-  logSection('POSTGRESQL PRÊT');
-  log(COLORS.green, '✅ PostgreSQL + pgvector sont installés et prêts !');
-  log(COLORS.cyan, '');
-  log(COLORS.yellow, '🚀 Pour activer toutes les features (Swarm, Workflows, Observabilité):');
-  log(COLORS.white, '   Option 1: overmind-setup --full');
-  log(COLORS.white, '   Option 2: cd ~/.overmind && docker-compose up -d');
-  log(COLORS.white, '');
+  // Step 6: Validate ALL services
+  if (downloaded) {
+    const allOk = await validateServices();
+    if (allOk) {
+      logSection('✅ TOUS LES SERVICES SONT ACTIFS');
+      log(COLORS.green, '🎉 Installation complète réussie !');
+    } else {
+      logSection('⚠️  CERTAINS SERVICES NON DÉMARRÉS');
+    }
+  }
 
-  // Show summary
+  // Show final summary
   showSummary();
 }
 
