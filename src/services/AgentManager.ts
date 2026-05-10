@@ -196,6 +196,7 @@ export class AgentManager {
       ) {
         throw new Error(
           `Impossible de modifier les paramètres unitaires : settings_${name}.json est introuvable.`,
+          { cause: _e },
         );
       }
       return changes; // Rien à faire

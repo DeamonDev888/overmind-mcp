@@ -85,11 +85,9 @@ export async function runAgentsLocally(
     },
   );
 
-  let results: AgentDispatchResult[] = [];
-
   if (waitAll) {
     const settledResults = await Promise.allSettled(promises);
-    results = settledResults.map((s, i) => {
+    const results: AgentDispatchResult[] = settledResults.map((s, i) => {
       const label = agents[i].taskId || agents[i].agentName || `task_${i + 1}`;
       if (s.status === 'fulfilled') return s.value;
       return {
@@ -101,6 +99,25 @@ export async function runAgentsLocally(
         result: s.reason instanceof Error ? s.reason.message : String(s.reason),
       };
     });
+
+    const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const successCount = results.filter((r) => r.status === 'success').length;
+    const errorCount = results.filter((r) => r.status === 'error').length;
+
+    const summary = [
+      `⚡ run_agents_parallel — ${results.length} agent(s) | ✅ ${successCount} succès | ❌ ${errorCount} erreurs | 🕐 ${totalElapsed}s total`,
+      '',
+      ...results.map((r) => {
+        const icon = r.status === 'success' ? '✅' : '❌';
+        const header = `${icon} [${r.label}] ${r.runner}${r.agentName ? `/${r.agentName}` : ''} (${r.elapsed})`;
+        return `${header}\n${r.result}`;
+      }),
+    ].join('\n---\n');
+
+    return {
+      content: [{ type: 'text' as const, text: summary }],
+      isError: errorCount === results.length,
+    };
   } else {
     const firstResult = await Promise.race(promises);
     for (let i = 0; i < controllers.length; i++) {
@@ -108,27 +125,27 @@ export async function runAgentsLocally(
         controllers[i].abort();
       }
     }
-    results = [firstResult];
+
+    const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const singleResult = [firstResult];
+    const successCount = singleResult.filter((r) => r.status === 'success').length;
+    const errorCount = singleResult.filter((r) => r.status === 'error').length;
+
+    const summary = [
+      `⚡ run_agents_parallel — ${singleResult.length} agent(s) | ✅ ${successCount} succès | ❌ ${errorCount} erreurs | 🕐 ${totalElapsed}s total`,
+      '',
+      ...singleResult.map((r) => {
+        const icon = r.status === 'success' ? '✅' : '❌';
+        const header = `${icon} [${r.label}] ${r.runner}${r.agentName ? `/${r.agentName}` : ''} (${r.elapsed})`;
+        return `${header}\n${r.result}`;
+      }),
+    ].join('\n---\n');
+
+    return {
+      content: [{ type: 'text' as const, text: summary }],
+      isError: errorCount === singleResult.length,
+    };
   }
-
-  const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  const successCount = results.filter((r) => r.status === 'success').length;
-  const errorCount = results.filter((r) => r.status === 'error').length;
-
-  const summary = [
-    `⚡ run_agents_parallel — ${results.length} agent(s) | ✅ ${successCount} succès | ❌ ${errorCount} erreurs | 🕐 ${totalElapsed}s total`,
-    '',
-    ...results.map((r) => {
-      const icon = r.status === 'success' ? '✅' : '❌';
-      const header = `${icon} [${r.label}] ${r.runner}${r.agentName ? `/${r.agentName}` : ''} (${r.elapsed})`;
-      return `${header}\n${r.result}`;
-    }),
-  ].join('\n---\n');
-
-  return {
-    content: [{ type: 'text' as const, text: summary }],
-    isError: errorCount === results.length,
-  };
 }
 
 // ─── Dispatcher ────────────────────────────────────────────────────────────────

@@ -76,6 +76,6 @@ export async function storeRun(params: StoreRunParams): Promise<string> {
     }, 'CRITICAL: Failed to store run in memory - database may be unavailable!');
 
     // Re-throw so the runner can report this to the user
-    throw new Error(`MEMORY_UNAVAILABLE: ${err.message}`);
+    throw new Error(`MEMORY_UNAVAILABLE: ${err.message}`, { cause: error });
   }
 }
