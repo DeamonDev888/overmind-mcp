@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-05-10
+
+### 🎯 agent_control — Outil Unifié de Contrôle du Cycle de Vie
+
+**Process Registry** persistant (`pid ↔ sessionId ↔ agentName ↔ runner`) dans `.claude/sessions.json`.
+
+**Outil unifié `agent_control`** remplace 4 outils :
+- `get_agent_status`, `stream_agent_output`, `kill_agent`, `wait_agent` → `agent_control` avec action explicite
+- 4 actions : `status`, `stream`, `kill`, `wait`
+- Codes d'erreur : `AGENT_NOT_FOUND`, `AGENT_NOT_RUNNING`, `KILL_FAILED`, `WAIT_TIMEOUT`, `ORPHANED_PROCESS`
+
+Intégration dans les **8 runners** (Claude, Kilo, Gemini, QwenCli, OpenClaw, Cline, OpenCode, Hermes).
+
+**Documentation** : `docs/agent_control.md` (400+ lignes) — patterns async, dashboard, lookup par PID/timestamp.
+
+---
+
 ## [2.0.0] - 2026-05-09
 
 ### 🚀 OverMind-MCP v2.0.0 - Swarm & Observabilité Unifiée
