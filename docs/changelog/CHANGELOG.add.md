@@ -1,5 +1,74 @@
 # Changelog
 
+## [2.1.0] - 2026-05-10
+
+### 🎯 agent_control — Outil Unifié de Contrôle du Cycle de Vie
+
+Cette version unifie 4 outils MCP en un seul (`agent_control`) et introduit le **Process Registry** persistant pour le suivi des agents par PID.
+
+#### Nouvelles Fonctionnalités
+
+**Process Registry (`src/lib/processRegistry.ts`)**
+- Mapping persistant `pid ↔ sessionId ↔ agentName ↔ runner`
+- Stockage dans `.claude/sessions.json`
+- TTL automatique (1h après terminaison)
+- Détection des processus orphelins (`isPidAlive`)
+- Cleanup périodique des entrées expirées
+
+**Outil unifié `agent_control` (`src/tools/agent_control.ts`)**
+- Remplace 4 outils distincts : `get_agent_status`, `stream_agent_output`, `kill_agent`, `wait_agent`
+- 4 actions : `status`, `stream`, `kill`, `wait`
+- Codes d'erreur structurés : `AGENT_NOT_FOUND`, `AGENT_NOT_RUNNING`, `KILL_FAILED`, `WAIT_TIMEOUT`, `ORPHANED_PROCESS`
+- Documentation complète avec 5 patterns async
+
+**Intégration dans les 8 Runners**
+- `ClaudeRunner`, `KiloRunner`, `GeminiRunner`, `QwenCliRunner`, `OpenClawRunner`, `ClineRunner`, `OpenCodeRunner`, `NousHermesRunner`
+- `registerProcess()` appelé post-spawn
+- `appendOutput()` dans `stdout.on('data')`
+- `linkSessionToPid()` quand sessionId détecté
+- `updateProcessStatus()` dans `child.on('close')`
+
+#### 🔧 Améliorations Techniques
+
+- Tous les runners utilisent le Process Registry
+- Mutex (`async-mutex`) pour protéger les lectures/écritures concurrentes
+- Support `AbortSignal` dans les runners
+- `killProcessTree` pour Windows (`taskkill /F /T /PID`)
+
+#### 📚 Documentation
+
+**Nouvelle documentation** : `docs/agent_control.md` (400+ lignes)
+- Architecture du Process Registry
+- Détail des 4 actions avec exemples
+- Patterns async : fire & forget, blocking wait, orchestration séquentielle, fan-out, resume après crash
+- Tracker PID ↔ Session ↔ Agent avec lookup par timestamp/PID/sessionId
+- Dashboard temps réel (CLI + HTML)
+- Flux complet de debug
+
+#### 🚨 Breaking Changes
+
+- **4 outils supprimés** : `get_agent_status`, `stream_agent_output`, `kill_agent`, `wait_agent`
+- **Nouvel outil** : `agent_control` avec action explicite
+- server.ts : 14 outils au lieu de 17
+
+#### 🔄 Migration
+
+```javascript
+// AVANT (4 appels distincts)
+get_agent_status({ agentName: "x", runner: "kilo" })
+stream_agent_output({ agentName: "x", runner: "kilo" })
+kill_agent({ agentName: "x", runner: "kilo" })
+wait_agent({ agentName: "x", runner: "kilo", timeoutMs: 300000 })
+
+// APRÈS (1 seul appel avec action)
+agent_control({ agentName: "x", runner: "kilo", action: "status" })
+agent_control({ agentName: "x", runner: "kilo", action: "stream" })
+agent_control({ agentName: "x", runner: "kilo", action: "kill" })
+agent_control({ agentName: "x", runner: "kilo", action: "wait", timeoutMs: 300000 })
+```
+
+---
+
 ## [2.0.0] - 2026-05-09
 
 ### 🚀 OverMind-MCP v2.0.0 - Swarm & Observabilité Unifiée

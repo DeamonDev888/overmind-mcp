@@ -97,13 +97,18 @@ Documentation des prompts système pour chaque runner :
 - Hermes
 - Minimax 4
 
+## 🛠️ Reference des Outils
+
+### [`agent_control.md`](./agent_control.md)
+Contrôle unifié du cycle de vie des agents OverMind via le Process Registry.
+- Remplace les 4 outils précédents : get_agent_status, stream_agent_output, kill_agent, wait_agent
+- Patterns async : fire & forget, blocking wait, orchestration séquentielle, fan-out parallèle
+- Dashboard temps réel par PID
+- Lookup par sessionId, timestamp, PID
+- Codes d'erreur structurés
+
 ### [`api/tools.md`](./api/tools.md)
-Référence complète des outils MCP :
-- `run_agent` - Exécuter un agent
-- `create_agent` - Créer un nouvel agent
-- `list_agents` - Lister les agents
-- `memory_search` - Recherche mémoire
-- `run_agents_parallel` - Exécution parallèle
+Référence complète des outils MCP (14 outils)
 
 ## 📝 Changelog
 
