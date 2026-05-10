@@ -14,7 +14,8 @@
       "description": "OverMind-PostgreSQL-MCP - Serveur PostgreSQL vectoriel optimisé pour OverMind"
     }
   },
-  "description": "Configuration MCP OverMind-MCP avec serveur PostgreSQL vectoriel intégré",
+  "description": "Configuration MCP OverMind-MCP optimisée pour installation globale npm",
   "version": "2.2.6",
-  "note": "Le serveur overmind-postgres-mcp est installé automatiquement avec npm install -g overmind-mcp. Les commandes 'overmind' utilisent les binaires globaux installés par npm."
+  "installation": "npm install -g overmind-mcp",
+  "note": "Après installation globale, les commandes 'overmind' et 'overmind-postgres-mcp' sont disponibles directement dans le système. Cette configuration utilise les binaires globaux installés par npm."
 }

@@ -118,12 +118,33 @@ if (!isError) {
 
 ## 📂 Structure du Projet
 
-- `src/services/` : Le cœur du système (Logique métier isolée en services).
-- `src/tools/` : Les outils MCP qui appellent les services.
-- `src/bin/cli.ts` : Le point d'entrée exécutable pour le terminal.
-- `src/server.ts` : La définition du serveur FastMCP.
-- `src/index.ts` : Les exports publics (API de la bibliothèque).
-- `.claude/` : Stockage des agents (Prompts `.md` et Settings `.json`).
+OverMind-MCP est organisé de manière modulaire pour faciliter la navigation et la maintenance.
+
+```
+Workflow/
+├── 📦 bin/                    # Scripts d'installation
+├── 📋 changelog/             # Historique des versions
+├── 🐳 docker/                # Configuration Docker
+├── 🗄️ db/                    # Scripts base de données
+├── ⚙️ config/               # Configurations MCP
+├── 📚 docs/                  # Documentation complète
+├── 💻 src/                   # Code source
+│   ├── bin/                  # Points d'entrée CLI
+│   ├── lib/                  # Bibliothèques partagées
+│   ├── services/             # Services métier
+│   └── tools/                # Outils MCP
+├── 🧪 tests/                 # Tests unitaires
+└── 🔧 scripts/              # Scripts de maintenance
+```
+
+**📖 Documentation détaillée** : Voir [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) pour une explication complète de chaque dossier.
+
+**Points clés :**
+- `src/services/` : Le cœur du système (Logique métier isolée en services)
+- `src/tools/` : Les outils MCP qui appellent les services
+- `src/bin/cli.ts` : Le point d'entrée exécutable pour le terminal
+- `src/server.ts` : La définition du serveur FastMCP
+- `.claude/` : Stockage des agents (Prompts `.md` et Settings `.json`)
 
 ---
 
