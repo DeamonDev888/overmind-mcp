@@ -25,8 +25,7 @@
     "README.md",
     "docs",
     "scripts",
-    "install-overmind-windows.bat",
-    "install-overmind-unix.sh"
+    "bin"
   ],
   "scripts": {
     "build": "tsc",

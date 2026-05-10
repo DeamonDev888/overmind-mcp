@@ -7,16 +7,16 @@ Guide d'installation complète en 2 minutes avec **toutes les features activées
 ### Windows (Docker Desktop)
 ```batch
 # Télécharger et exécuter
-curl -o install-overmind-windows.bat https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/install-overmind-windows.bat
-install-overmind-windows.bat
+curl -o bin/install-overmind-windows.bat https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/bin/install-overmind-windows.bat
+bin/install-overmind-windows.bat
 ```
 
 ### Linux/macOS
 ```bash
 # Télécharger et exécuter
-curl -O https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/install-overmind-unix.sh
-chmod +x install-overmind-unix.sh
-./install-overmind-unix.sh
+curl -O https://raw.githubusercontent.com/DeamonDev888/overmind-mcp/main/bin/install-overmind-unix.sh
+chmod +x bin/install-overmind-unix.sh
+./bin/install-overmind-unix.sh
 ```
 
 ## ✅ Ce que le script installe

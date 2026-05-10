@@ -8,7 +8,7 @@ Bienvenue dans la documentation centralisée d'OverMind-MCP.
 
 ```
 Workflow/
-├── docker-compose.yml              # Stack principale (9 services)
+├── dock../docker/docker-compose.yml              # Stack principale (9 services)
 ├── docker-compose.exporters.yml    # Exporters métriques
 ├── scripts/                        # Scripts setup/gestion
 │   ├── setup.mjs
@@ -65,7 +65,7 @@ Guide d'orchestration Swarm :
 ## 🏗️ Infrastructure
 
 ### Docker Compose
-- **[`../docker-compose.yml`](../docker-compose.yml)** - Stack principale (9 services)
+- **[`../dock../docker/docker-compose.yml`](../dock../docker/docker-compose.yml)** - Stack principale (9 services)
   - RabbitMQ (Message Broker)
   - Temporal (Workflow Orchestrator)
   - PostgreSQL + pgvector (Vector DB)
@@ -129,7 +129,7 @@ Notes détaillées de la v2.0.0 :
 - **Créer un agent** → [`guides/README.md`](./guides/README.md)
 - **Utiliser le Swarm** → [`guides/SWARM_USAGE.md`](./guides/SWARM_USAGE.md)
 - **Voir la référence API** → [`tools.md`](./tools.md)
-- **Setup Docker** → [`../docker-compose.yml`](../docker-compose.yml)
+- **Setup Docker** → [`../dock../docker/docker-compose.yml`](../dock../docker/docker-compose.yml)
 - **Voir les nouveautés** → [`changelog/CHANGELOG.md`](./changelog/CHANGELOG.md)
 - **Debug un problème** → [`guides/DEPLOYMENT.md`](./guides/DEPLOYMENT.md) (section Monitoring)
 
