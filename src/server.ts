@@ -22,12 +22,25 @@
  *   2. L'importer dans server.ts → import { <nom> } from './tools/<nom>.js'
  *   3. Ajouter server.addTool()    → name, description, parameters, execute
  *
- * ─── LISTE DES 13 OUTILS ─────────────────────────────────────────────────
+ * ─── LISTE DES 17 OUTILS ─────────────────────────────────────────────────
  *
  *  1. run_agent          → src/tools/run_agent.ts
  *  2. run_agents_parallel → src/tools/run_agents_parallel.ts
  *  3. create_agent      → src/tools/create_agent.ts
  *  4. list_agents       → src/tools/manage_agents.ts
+ *  5. delete_agent      → src/tools/manage_agents.ts
+ *  6. update_agent_config → src/tools/manage_agents.ts
+ *  7. get_agent_configs → src/tools/get_agent_configs.ts
+ *  8. memory_search     → src/tools/memory_search.ts
+ *  9. memory_store      → src/tools/memory_store.ts
+ * 10. memory_runs       → src/tools/memory_runs.ts
+ * 11. create_prompt     → src/tools/manage_prompts.ts
+ * 12. edit_prompt       → src/tools/manage_prompts.ts
+ * 13. config_example    → src/tools/config_example.ts
+ * 14. get_agent_status  → src/tools/get_agent_status.ts
+ * 15. stream_agent_output → src/tools/stream_agent_output.ts
+ * 16. kill_agent        → src/tools/kill_agent.ts
+ * 17. wait_agent        → src/tools/wait_agent.ts
  *  5. delete_agent      → src/tools/manage_agents.ts
  *  6. update_agent_config → src/tools/manage_agents.ts
  *  7. create_prompt     → src/tools/manage_prompts.ts
@@ -63,6 +76,10 @@ import {
 } from './tools/manage_agents.js';
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
+import { getAgentStatusTool, getAgentStatusSchema } from './tools/get_agent_status.js';
+import { streamAgentOutputTool, streamAgentOutputSchema } from './tools/stream_agent_output.js';
+import { killAgentTool, killAgentSchema } from './tools/kill_agent.js';
+import { waitAgentTool, waitAgentSchema } from './tools/wait_agent.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ToolExecute = (...args: any[]) => Promise<any>;
@@ -235,6 +252,50 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
       'Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).',
     parameters: configExampleSchema,
     execute: configExample,
+  });
+
+  // ─── 14. get_agent_status ───────────────────────────────────────────────────
+  server.addTool({
+    name: 'get_agent_status',
+    description: `Retourne le statut courant + output buffer d'un agent en exécution.
+Utilise le Process Registry pour suivre les agents via leur PID.
+
+**Retourne:**
+- status: running | done | failed | orphaned
+- pid: идентификатор процесса
+- outputBuffer: sortie collectée en temps réel
+- sessionId: ID de session si disponible`,
+    parameters: getAgentStatusSchema,
+    execute: wrapExecute('get_agent_status', getAgentStatusTool),
+  });
+
+  // ─── 15. stream_agent_output ────────────────────────────────────────────────
+  server.addTool({
+    name: 'stream_agent_output',
+    description: `Streaming de la sortie d'un agent en temps réel.
+Retourne tout le output buffer accumulé depuis le début (ou depuis sinceTimestamp).`,
+    parameters: streamAgentOutputSchema,
+    execute: wrapExecute('stream_agent_output', streamAgentOutputTool),
+  });
+
+  // ─── 16. kill_agent ─────────────────────────────────────────────────────────
+  server.addTool({
+    name: 'kill_agent',
+    description: `Tue un agent en cours d'exécution par son PID.
+Sur Windows: taskkill /F /T /PID. Sur Unix: kill -9.
+Retourne { killed: true, pid } si succès.`,
+    parameters: killAgentSchema,
+    execute: wrapExecute('kill_agent', killAgentTool),
+  });
+
+  // ─── 17. wait_agent ─────────────────────────────────────────────────────────
+  server.addTool({
+    name: 'wait_agent',
+    description: `Attend qu'un agent termine son exécution.
+Polling toutes les 1s jusqu'à status != 'running' ou timeout.
+Retourne le résultat final ou l'erreur.`,
+    parameters: waitAgentSchema,
+    execute: wrapExecute('wait_agent', waitAgentTool),
   });
 
   return server;
