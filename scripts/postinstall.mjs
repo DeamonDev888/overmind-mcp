@@ -329,24 +329,42 @@ EMBEDDING_CACHE_SIZE=1000
 }
 
 async function startPostgreSQL() {
-  logSection('DÉMARRAGE POSTGRESQL + PGVECTOR');
+  logSection('VÉRIFICATION POSTGRESQL + PGVECTOR');
 
   try {
-    const existingContainer = runCommand(
-      'docker ps --filter "name=overmind-postgres-pgvector" --format "{{.Names}}"',
+    // Vérifier si PostgreSQL existe déjà (n'importe quel container postgres)
+    const anyPostgres = runCommand(
+      'docker ps --filter "name=postgres" --filter "publish=5432" --format "{{.Names}}"',
       { stdio: 'pipe' }
     );
 
-    if (existingContainer) {
-      log(COLORS.green, '✅ PostgreSQL + pgvector déjà démarré');
+    if (anyPostgres) {
+      log(COLORS.green, '✅ PostgreSQL déjà actif sur le port 5432');
+      log(COLORS.cyan, '   Container: ' + anyPostgres.trim());
+      log(COLORS.yellow, '   💡 Utilisation de PostgreSQL existant (pas de création OverMind)');
       return true;
     }
 
-    log(COLORS.yellow, '🚀 Démarrage PostgreSQL + pgvector...');
+    // Vérifier si le container OverMind existe déjà
+    const overmindContainer = runCommand(
+      'docker ps -a --filter "name=overmind-postgres-pgvector" --format "{{.Names}}"',
+      { stdio: 'pipe' }
+    );
+
+    if (overmindContainer) {
+      log(COLORS.yellow, '⚠️  Container OverMind existe mais non démarré');
+      await runCommandAsync(
+        'docker start overmind-postgres-pgvector',
+        'Démarrage container OverMind existant'
+      );
+      return true;
+    }
+
+    log(COLORS.yellow, '🚀 Création et démarrage PostgreSQL + pgvector...');
 
     await runCommandAsync(
       'docker run -d --name overmind-postgres-pgvector -p 5432:5432 -e POSTGRES_PASSWORD=overmind_temp_password_change_me -e POSTGRES_USER=postgres -v overmind_postgres_data:/var/lib/postgresql/data --restart unless-stopped pgvector/pgvector:pg16',
-      'Démarrage PostgreSQL'
+      'Création PostgreSQL OverMind'
     );
 
     log(COLORS.cyan, '\n⏳ Attente démarrage PostgreSQL (20s)...');
