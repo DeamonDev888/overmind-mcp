@@ -42,7 +42,7 @@
     "test": "vitest run",
     "test:install": "node scripts/test-installation.mjs",
     "changeset": "changeset",
-    "version": "changeset version",
+    "version": "changeset version && node scripts/auto-changelog.mjs",
     "release": "pnpm run build && changeset publish",
     "prepublishOnly": "pnpm run rebuild",
     "postinstall": "node scripts/postinstall.mjs",
