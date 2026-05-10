@@ -13,6 +13,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.3] - 2026-05-10
+
+### 🐛 Fixes
+
+- **dispatcher.ts**: Refactored to use `const` inline in each branch (no-useless-assignment)
+- **MemoryFactory.ts**: Fixed `preserve-caught-error` — using `error` directly as cause
+- **PostgresMemoryProvider.ts**: Added `{ cause: err }` to thrown error
+- **AgentManager.ts**: Fixed `preserve-caught-error` — using `_e` as cause
+- **ClaudeRunner.ts**: Simplified to use inline `const` declarations
+- **vector_only_lock.test.ts**: Added `{ cause: err }` to thrown error
+
+### 📦 Dependencies
+
+- `overmind-postgres-mcp`: 1.1.6 → 1.2.0
+- `fastmcp`: 3.35.0 → 4.0.1
+- `pino`: 9.14.0 → 10.3.1
+- `pino-roll`: 2.2.0 → 4.0.0
+- `typescript`: 5.9.3 → 6.0.3
+- `vitest`: 4.1.4 → 4.1.5
+- `globals`: 17.5.0 → 17.6.0
+- `typescript-eslint`: 8.58.2 → 8.59.2
+- `eslint`: 9.39.4 → 10.3.0
+- `@eslint/js`: 9.39.4 → 10.0.1
+- `@types/node`: 22.19.17 → 25.6.2
+- `zod`: 4.3.6 → 4.4.3
+
+---
+
 ## [2.3.0] - 2026-05-10
 
 ### ✨ Features
@@ -179,6 +207,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!--
   Version reference (update with each release):
+  2.3.3 - 2026-05-10
+  2.3.2 - 2026-05-10
+  2.3.0 - 2026-05-10
   2.2.6 - 2026-05-10
   2.2.5 - 2026-05-09
   2.2.4 - 2026-05-09
