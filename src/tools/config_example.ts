@@ -26,13 +26,10 @@ Les variables commençant par \`$\` seront automatiquement remplacées par leur 
 \`\`\`json
 {
   "env": {
-    "ANTHROPIC_MODEL": "$Z_AI_MODEL", // Se réfère à Z_AI_MODEL dans le .env
-    "ANTHROPIC_AUTH_TOKEN": "$Z_AI_API_KEY",
-    "ANTHROPIC_BASE_URL": "$Z_AI_BASE_URL",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-sonnet-4-6",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-7",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
-    "API_TIMEOUT_MS": "3000000"
+    "ANTHROPIC_MODEL": "$ANTHROPIC_MODEL_Z",
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN_Y",
+    "ANTHROPIC_AUTH_TOKEN_FALLBACK": "$ANTHROPIC_AUTH_TOKEN_E",
+    "ANTHROPIC_BASE_URL": "$ANTHROPIC_BASE_URL_Z"
   },
   "enableAllProjectMcpServers": false,
   "enabledMcpjsonServers": [
@@ -43,6 +40,25 @@ Les variables commençant par \`$\` seront automatiquement remplacées par leur 
   "runner": "claude"
 }
 \`\`\`
+
+### 📂 .env correspondant
+\`\`\`
+# Z.AI Configuration
+ANTHROPIC_BASE_URL_Z=https://api.z.ai/api/anthropic
+ANTHROPIC_MODEL_Z=glm-5.1
+ANTHROPIC_AUTH_TOKEN_Y=your_primary_token_here
+ANTHROPIC_AUTH_TOKEN_E=your_fallback_token_here
+\`\`\`
+
+**Modèles GLM disponibles :**
+- \`glm-5.1\` - Flagship modèle (recommandé)
+- \`glm-5\` - Performances solides
+- \`glm-4.5-air\` - Modèle léger et coût-efficace
+
+**Fallback automatique :**
+- Utilise \`ANTHROPIC_AUTH_TOKEN_Y\` par défaut
+- En cas d'erreur 401/429/5xx, bascule automatiquement sur \`ANTHROPIC_AUTH_TOKEN_E\`
+
 ${interpolationNotice}`;
       break;
     case 'ilmu':
