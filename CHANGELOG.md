@@ -18,11 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Features
 
 - **Process Registry**: New async agent lifecycle management system — tracks `pid ↔ sessionId ↔ agentName` mapping in `sessions.json` with status (`running`, `done`, `failed`, `orphaned`), output buffer, and exit codes
-- **4 new MCP tools** for async agent management:
-  - `get_agent_status`: Get current status + output buffer of a running agent
-  - `stream_agent_output`: Stream accumulated output in real-time
-  - `kill_agent`: Kill a running agent by PID (Windows: `taskkill /F /T /PID`, Unix: `kill -9`)
-  - `wait_agent`: Poll until agent completes or timeout (15min default)
+- **`agent_control`** — Unified MCP tool for async agent lifecycle control:
+  - `status`: Get current status + output buffer of a running agent
+  - `stream`: Stream accumulated output in real-time with `isComplete` flag
+  - `kill`: Kill a running agent by PID (Windows: `taskkill /F /T /PID`, Unix: `kill -9`)
+  - `wait`: Poll until agent completes or timeout (15min default)
+  - Replaces 4 separate tools: `get_agent_status`, `stream_agent_output`, `kill_agent`, `wait_agent`
+  - Structured error codes: `AGENT_NOT_FOUND`, `AGENT_NOT_RUNNING`, `KILL_FAILED`, `WAIT_TIMEOUT`, `ORPHANED_PROCESS`
 - **All 8 runners** now register with the Process Registry:
   - `registerProcess()` called immediately after `spawn()` with PID
   - `appendOutput()` called on every stdout/stderr chunk for live streaming
