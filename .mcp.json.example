@@ -2,15 +2,20 @@
   "mcpServers": {
     "overmind": {
       "command": "node",
-      "args": ["./dist/bin/cli.js"]
+      "args": ["./dist/bin/cli.js"],
+      "description": "OverMind-MCP principal - Orchestration d'agents IA"
     },
     "memory": {
       "command": "node",
-      "args": ["./dist/bin/cli.js", "--memory-only"]
+      "args": ["./dist/bin/cli.js", "--memory-only"],
+      "description": "OverMind-MCP mémoire - Gestion mémoire vectorielle"
     },
-    "postgresql-server": {
-      "command": "node",
-      "args": ["../serveur_PostGreSQL/dist/index.js"]
+    "overmind-postgres": {
+      "command": "overmind-postgres-mcp",
+      "description": "OverMind-PostgreSQL-MCP - Serveur PostgreSQL vectoriel optimisé pour OverMind"
     }
-  }
+  },
+  "description": "Configuration MCP OverMind-MCP avec serveur PostgreSQL vectoriel intégré",
+  "version": "2.1.1",
+  "note": "Le serveur overmind-postgres-mcp est installé automatiquement avec npm install -g overmind-mcp"
 }
