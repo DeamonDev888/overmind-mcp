@@ -39,9 +39,9 @@ services:
       DYNAMIC_CONFIG_FILE: /etc/temporal/config/docker.yaml
     networks:
       - overmind-network
-    depends_on:
-      postgres:
-        condition: service_healthy
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
     restart: unless-stopped
 
   temporal-web:
@@ -136,26 +136,28 @@ services:
     restart: unless-stopped
 
   # ─── POSTGRESQL (Vector DB + OverMind State) ───────────────────────────────────────
-  postgres:
-    image: pgvector/pgvector:pg16
-    container_name: overmind-postgres
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_password_change_me
-      POSTGRES_DB: overmind_memory
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-    networks:
-      - overmind-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
+  # NOTE: Disabled if using existing PostgreSQL (postgres-pgvector container)
+  # To enable, uncomment this section:
+  # postgres:
+  #   image: pgvector/pgvector:pg16
+  #   container_name: overmind-postgres
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres_password_change_me
+  #     POSTGRES_DB: overmind_memory
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+  #   networks:
+  #     - overmind-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   restart: unless-stopped
 
   # ─── REDIS (Caching & Session Store) ────────────────────────────────────────────────
   redis:
@@ -197,6 +199,7 @@ networks:
   overmind-network:
     driver: bridge
     name: overmind-network
+    external: false
 
 volumes:
   rabbitmq_data:
