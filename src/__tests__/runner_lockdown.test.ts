@@ -50,6 +50,7 @@ vi.mock('child_process', () => ({
     },
     kill: vi.fn(),
   })),
+  exec: vi.fn(),
 }));
 
 describe('Lockdown: Runner & Workspace Integrity', () => {

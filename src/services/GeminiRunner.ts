@@ -8,6 +8,11 @@ import { interpolateEnvVars } from '../lib/envUtils.js';
 import { withSpan } from '../lib/telemetry.js';
 import { Span } from '@opentelemetry/api';
 import pino from 'pino';
+import {
+  registerProcess,
+  appendOutput,
+  updateProcessStatus,
+} from '../lib/processRegistry.js';
 
 const logger = pino({ name: 'GeminiRunner' });
 
@@ -264,6 +269,15 @@ export class GeminiRunner {
           env: agentCustomEnv as NodeJS.ProcessEnv,
         });
 
+        // Register process immediately after spawn
+        if (child.pid) {
+          void registerProcess(child.pid, {
+            agentName: agentName || '',
+            runner: 'gemini',
+            configPath: options.configPath,
+          });
+        }
+
         let stdout = '';
         let stderr = '';
         const MAX_BUF = 10 * 1024 * 1024;
@@ -275,11 +289,17 @@ export class GeminiRunner {
 
         child.stdout?.on('data', (data) => {
           const d = data.toString();
+          if (child.pid && d) {
+            void appendOutput(child.pid, d, options.configPath);
+          }
           if (stdout.length + d.length > MAX_BUF) stdout = stdout.slice(-MAX_BUF);
           else stdout += d;
         });
         child.stderr?.on('data', (data) => {
           const d = data.toString();
+          if (child.pid && d) {
+            void appendOutput(child.pid, d, options.configPath);
+          }
           if (stderr.length + d.length > MAX_BUF) stderr = stderr.slice(-MAX_BUF);
           else stderr += d;
         });
@@ -289,6 +309,9 @@ export class GeminiRunner {
           setTimeout(() => {
             if (!child.killed) child.kill('SIGKILL');
           }, 5000);
+          if (child.pid) {
+            void updateProcessStatus(child.pid, 'failed', null, options.configPath);
+          }
           cleanup();
           safeResolve({ result: '', error: 'TIMEOUT', rawOutput: stdout + stderr });
         }, this.timeoutMs);

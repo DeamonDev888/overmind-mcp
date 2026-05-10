@@ -9,6 +9,11 @@ import { interpolateEnvVars } from '../lib/envUtils.js';
 import { resolveKiloModel } from '../lib/modelMapping.js';
 import { withSpan } from '../lib/telemetry.js';
 import pino from 'pino';
+import {
+  registerProcess,
+  appendOutput,
+  updateProcessStatus,
+} from '../lib/processRegistry.js';
 
 const execAsync = promisify(exec);
 
@@ -330,14 +335,14 @@ export class NousHermesRunner {
     // --- CLI Arguments & Prompt Handling ---
     const finalPrompt = systemPrompt ? `${systemPrompt}\n\n[USER QUERY]:\n${prompt}` : prompt;
 
-    // Nettoyer les sauts de ligne pour l'argument CLI (-q ne supporte pas les \n)
-    const cliPrompt = finalPrompt.replace(/\n+/g, ' ').trim();
-
-    // Check command line length (Windows limit 8191)
-    if (cliPrompt.length > 7000) {
+    // Tronquer si nécessaire pour éviter les limites Windows (8191)
+    const MAX_PROMPT_LEN = 7000;
+    let cliPrompt = finalPrompt;
+    if (cliPrompt.length > MAX_PROMPT_LEN) {
       console.warn(
-        `[NousHermesRunner] ⚠️  Prompt is very long (${cliPrompt.length} chars). This might fail on Windows.`,
+        `[NousHermesRunner] ⚠️  Prompt tronqué de ${cliPrompt.length} à ${MAX_PROMPT_LEN} chars`,
       );
+      cliPrompt = cliPrompt.substring(0, MAX_PROMPT_LEN);
     }
 
     // En version 0.11.0, on simplifie pour éviter les erreurs d'arguments
@@ -419,11 +424,16 @@ export class NousHermesRunner {
         env: agentCustomEnv as NodeJS.ProcessEnv,
       });
 
+      if (child.pid) {
+        void registerProcess(child.pid, { agentName: agentName || '', runner: 'hermes', configPath: options.configPath });
+      }
+
       let stdout = '';
       let stderr = '';
 
       child.stdout?.on('data', (d: Buffer) => {
         const chunk = d.toString();
+        if (child.pid) void appendOutput(child.pid, chunk, options.configPath);
         if (stdout.length + chunk.length > this.MAX_BUF) {
           stdout = stdout.slice(-this.MAX_BUF);
         }
@@ -452,6 +462,7 @@ export class NousHermesRunner {
             child.kill('SIGKILL');
           }
         }, 5000);
+        if (child.pid) void updateProcessStatus(child.pid, 'failed', null, options.configPath);
         safeResolve({
           result: stdout.trim(),
           error: 'TIMEOUT',
@@ -463,6 +474,7 @@ export class NousHermesRunner {
 
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
+        if (child.pid) void updateProcessStatus(child.pid, code === 0 ? 'done' : 'failed', code, options.configPath);
 
         if (code !== 0 && !stdout) {
           return safeResolve({
@@ -485,6 +497,7 @@ export class NousHermesRunner {
 
       child.on('error', (err: Error) => {
         clearTimeout(timeout);
+        if (child.pid) void updateProcessStatus(child.pid, 'failed', null, options.configPath);
         safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
       });
 
