@@ -221,8 +221,8 @@ async function installPostgresMCP() {
     log(COLORS.green, '✅ overmind-postgres-mcp installé avec succès !');
     return true;
   } catch (error) {
-    log(COLORS.yellow, '⚠️  Erreur installation overmind-postgres-mcp: ' + error.message);
-    log(COLORS.cyan, '💡 Vous pouvez l''installer manuellement: npm install -g overmind-postgres-mcp');
+    log(COLORS.yellow, "⚠️  Erreur installation overmind-postgres-mcp: " + error.message);
+    log(COLORS.cyan, "💡 Vous pouvez l'installer manuellement: npm install -g overmind-postgres-mcp");
     return false; // Non bloquant
   }
 }
@@ -385,7 +385,7 @@ function showSummary() {
   console.log('║' + ' '.repeat(64) + '║');
   console.log('╚══════════════════════════════════════════════════════════════════╝');
   console.log('');
-  log(COLORS.yellow, '📋 COMPOSANTS INSTALLÉS:');
+  log(COLORS.yellow, "📋 COMPOSANTS INSTALLÉS:");
   console.log('');
   console.log('┌─────────────────────────────────────────────────────────────────┐');
   console.log('│ ' + COLORS.cyan + 'Ouvrez Docker Desktop → onglet "Containers"' + COLORS.reset + '            │');
@@ -402,25 +402,25 @@ function showSummary() {
   console.log('│   • Database: overmind_memory' + '                                         │');
   console.log('└─────────────────────────────────────────────────────────────────┘');
   console.log('');
-  log(COLORS.yellow, '📁 FICHIERS DE CONFIGURATION:');
-  console.log('   • ~/.overmind/.env (Configuration OverMind)');
-  console.log('   • ~/.overmind/.env.postgres (Configuration PostgreSQL MCP)');
-  console.log('   • ~/.overmind/.mcp.json (Configuration serveurs MCP)');
+  log(COLORS.yellow, "📁 FICHIERS DE CONFIGURATION:");
+  console.log("   • ~/.overmind/.env (Configuration OverMind)");
+  console.log("   • ~/.overmind/.env.postgres (Configuration PostgreSQL MCP)");
+  console.log("   • ~/.overmind/.mcp.json (Configuration serveurs MCP)");
   console.log('');
-  log(COLORS.yellow, '🔧 SERVEURS MCP ACTIFS:');
-  console.log('   • overmind (Orchestration d''agents)');
-  console.log('   • memory (Gestion mémoire vectorielle)');
-  console.log('   • overmind-postgres (PostgreSQL vectoriel)');
+  log(COLORS.yellow, "🔧 SERVEURS MCP ACTIFS:");
+  console.log("   • overmind (Orchestration d'agents)");
+  console.log("   • memory (Gestion mémoire vectorielle)");
+  console.log("   • overmind-postgres (PostgreSQL vectoriel)");
   console.log('');
-  log(COLORS.yellow, '📚 DOCUMENTATION:');
-  console.log('   • https://github.com/DeamonDev888/overmind-mcp');
-  console.log('   • https://www.npmjs.com/package/overmind-mcp');
-  console.log('   • https://github.com/DeamonDev888/PostgreSQL-MCP-Serveur');
+  log(COLORS.yellow, "📚 DOCUMENTATION:");
+  console.log("   • https://github.com/DeamonDev888/overmind-mcp");
+  console.log("   • https://www.npmjs.com/package/overmind-mcp");
+  console.log("   • https://github.com/DeamonDev888/PostgreSQL-MCP-Serveur");
   console.log('');
-  log(COLORS.yellow, '🎉 PROCHAINE ÉTAPE:');
-  console.log('   • Créez votre premier agent: overmind create-agent');
-  console.log('   • Ou listez les agents: overmind list-agents');
-  console.log('   • Gestion PostgreSQL: overmind-postgres up/status/down');
+  log(COLORS.yellow, "🎉 PROCHAINE ÉTAPE:");
+  console.log("   • Créez votre premier agent: overmind create-agent");
+  console.log("   • Ou listez les agents: overmind list-agents");
+  console.log("   • Gestion PostgreSQL: overmind-postgres up/status/down");
   console.log('');
 }
 
