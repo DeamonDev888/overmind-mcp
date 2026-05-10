@@ -5,11 +5,11 @@ import { createHash } from 'crypto';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
-import { withSpan } from '../lib/telemetry.js';
-import { Span } from '@opentelemetry/api';
+import { withSpan, type Span } from '../lib/telemetry.js';
 import pino from 'pino';
 import {
   registerProcess,
+  linkSessionToPid,
   appendOutput,
   updateProcessStatus,
 } from '../lib/processRegistry.js';
@@ -358,6 +358,9 @@ export class GeminiRunner {
 
               if (newSessionId && agentName) {
                 await saveSessionId(agentName, newSessionId, options.configPath, 'gemini');
+                if (child.pid) {
+                  void linkSessionToPid(newSessionId, child.pid, options.configPath);
+                }
               }
 
               return safeResolve({

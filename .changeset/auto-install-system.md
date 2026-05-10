@@ -1,5 +1,5 @@
 ---
-"@overmind-mcp/overmind-mcp": minor
+"overmind-mcp": minor
 ---
 Automated installation system for maximum features via NPM install:
 - Added CLI binaries: overmind-setup, overmind-infra
