@@ -1,6 +1,6 @@
 {
   "name": "overmind-mcp",
-  "version": "2.3.3",
+  "version": "2.4.0",
   "preferGlobal": true,
   "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut le protocole 'Custom-Nickname' pour identifier vos agents avec des surnoms originaux (The Chaos Prophet, Shadow Sniper, etc.), l'isolation mémoire (Private Memory Context) et le support pour QwenCli et Nous Hermes. Installation automatique des dépendances Docker (PostgreSQL, pgvector) inclus.",
   "type": "module",
@@ -42,7 +42,7 @@
     "test": "vitest run",
     "test:install": "node scripts/test-installation.mjs",
     "changeset": "changeset",
-    "version": "changeset version",
+    "version": "changeset version && node scripts/auto-changelog.mjs",
     "release": "pnpm run build && changeset publish",
     "prepublishOnly": "pnpm run rebuild",
     "postinstall": "node scripts/postinstall.mjs",
