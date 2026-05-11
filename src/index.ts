@@ -3,6 +3,7 @@ export { createServer } from './server.js';
 export { AgentManager } from './services/AgentManager.js';
 export { getMemoryProvider } from './memory/MemoryFactory.js';
 export { updateConfig } from './lib/config.js';
+export { ClaudeRunner } from './services/ClaudeRunner.js';
 
 // Swarm Orchestration
 export {
