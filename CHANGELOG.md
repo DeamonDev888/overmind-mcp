@@ -86,6 +86,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.2] - 2026-05-10
+
+### 🔧 Infrastructure
+
+- **Docker integration**: Removed RabbitMQ/Temporal/Prometheus/Grafana/Jaeger infrastructure for simplified setup
+- **Process Registry**: Refactored into dedicated `processRegistry.ts` module
+
+---
+
+## [2.3.1] - 2026-05-10
+
+### 🐛 Fixes
+
+- **env interpolation**: Fixed GLM-5.1 environment variable interpolation for ClaudeRunner
+- **Process Registry**: Improved session linking for GeminiRunner
+
+---
+
 ## [2.2.6] - 2026-05-10
 
 ### ✅ Improvements
@@ -123,6 +141,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Temporal service**: Disabled (requires complex DB initialization) — can be enabled manually via `overmind-setup --full`
 - **PostgreSQL init**: Full table creation (memory, agents, runs) in init-db.sql
 - **init-db.sql mount**: Fixed Docker volume mount path issue
+
+---
+
+## [2.2.4] - 2026-05-09
+
+### 🚀 Features
+
+- **Docker implementations**: Support for all Docker implementations (Desktop, Engine, Podman)
+- **GLM-5.1**: Environment variable interpolation for ClaudeRunner with GLM-5.1 support
+
+### 🐛 Fixes
+
+- **env interpolation**: Fixed correct environment variable interpolation for ClaudeRunner
+
+---
+
+## [2.2.3] - 2026-05-09
+
+### 📝 Documentation
+
+- Simplified README installation section
+
+---
+
+## [2.2.2] - 2026-05-09
+
+### 🚀 Features
+
+- **Docker integration**: Simplified Docker integration with automatic PostgreSQL MCP installation
+
+### 🐛 Fixes
+
+- **Postinstall**: Improved detection of existing PostgreSQL to avoid container conflicts
+- **Uninstall script**: Critical security fix - protect user containers from accidental deletion
+
+---
+
+## [2.1.1] - 2026-05-08
+
+### 🐛 Fixes
+
+- **Installation**: Fix installation and Docker services
+- **PostgreSQL**: Improved postinstall to detect existing PostgreSQL and avoid container conflicts
+- **Security**: Critical security fix in uninstall script - protect user containers
+
+---
+
+## [2.1.0] - 2026-05-07
+
+### 🚀 Features
+
+- **Intelligent install scripts**: Infrastructure detection with automated setup
+
+---
+
+## [2.0.9] - 2026-05-06
+
+### 🐛 Fixes
+
+- **PostgreSQL**: Disable postgres service when existing one detected
+
+---
+
+## [2.0.8] - 2026-05-05
+
+### 🐛 Fixes
+
+- **Windows compatibility**: Disable node-exporter on Windows for compatibility
 
 ---
 
@@ -209,11 +295,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Version reference (update with each release):
   2.3.3 - 2026-05-10
   2.3.2 - 2026-05-10
+  2.3.1 - 2026-05-10
   2.3.0 - 2026-05-10
   2.2.6 - 2026-05-10
-  2.2.5 - 2026-05-09
   2.2.4 - 2026-05-09
-  2.2.0 - 2026-05-07
+  2.2.3 - 2026-05-09
+  2.2.2 - 2026-05-09
+  2.1.1 - 2026-05-08
+  2.1.0 - 2026-05-07
+  2.0.9 - 2026-05-06
+  2.0.8 - 2026-05-05
   2.0.7 - 2026-05-05
   2.0.6 - 2026-05-04
   2.0.0 - 2026-05-01
