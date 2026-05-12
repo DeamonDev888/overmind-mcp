@@ -149,6 +149,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(
           `[PostgresMemory] CRITICAL: pgvector extension is REQUIRED but could not be enabled in ${dbName}. Error: ${msg}`,
+          { cause: err },
         );
       }
       this.dbVectorSupport.set(dbName, true);

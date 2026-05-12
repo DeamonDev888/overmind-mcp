@@ -188,16 +188,16 @@ export class ClaudeRunner {
     return new Promise((resolve) => {
       const cleanupTmpFiles = () => {
         if (tmpMcpPathToDelete && fs.existsSync(tmpMcpPathToDelete)) {
-          try { fs.unlinkSync(tmpMcpPathToDelete); } catch (e) {}
+          try { fs.unlinkSync(tmpMcpPathToDelete); } catch (_e) { /* intentionally empty */ }
         }
         if (tmpSettingsPathToDelete && fs.existsSync(tmpSettingsPathToDelete)) {
-          try { fs.unlinkSync(tmpSettingsPathToDelete); } catch (e) {}
+          try { fs.unlinkSync(tmpSettingsPathToDelete); } catch (_e) { /* intentionally empty */ }
         }
       };
 
       const isWin = process.platform === 'win32';
       let command = 'claude';
-      let spawnArgs: string[] = [];
+      let spawnArgs: string[];
 
       // Prepend persona if defined
       let finalPrompt = prompt;
