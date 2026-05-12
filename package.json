@@ -77,7 +77,7 @@
   "dependencies": {
     "dotenv": "^17.3.1",
     "fastmcp": "^3.33.0",
-    "overmind-postgres-mcp": "^1.2.2",
+    "overmind-postgres-mcp": "^1.2.4",
     "pg": "^8.18.0",
     "zod": "^4.2.1"
   }
