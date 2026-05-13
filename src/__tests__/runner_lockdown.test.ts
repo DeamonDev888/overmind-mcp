@@ -4,6 +4,13 @@ import { spawn } from 'child_process';
 import path from 'path';
 import { getWorkspaceDir } from '../lib/config.js';
 
+// Mock async-mutex — use a class-compatible mock
+vi.mock('async-mutex', () => ({
+  Mutex: class MockMutex {
+    runExclusive(fn: () => unknown) { return fn(); }
+  },
+}));
+
 // Mock child_process for isolation
 vi.mock('child_process', () => ({
   spawn: vi.fn(() => ({
@@ -15,6 +22,12 @@ vi.mock('child_process', () => ({
     stdin: { end: vi.fn() },
     kill: vi.fn()
   })),
+  exec: vi.fn((cmd, cb) => {
+    if (cmd.includes('tasklist')) {
+      cb(null, { stdout: '', stderr: '' });
+    }
+    return { on: vi.fn() };
+  }),
 }));
 
 describe('Lockdown: Runner & Workspace Integrity', () => {

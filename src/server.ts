@@ -21,6 +21,7 @@ import {
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
 import { shellExecute, shellExecuteSchema } from './tools/shell_execute.js';
+import { agentControl, agentControlSchema } from './tools/agent_control.js';
 
 export function createServer(name: string = 'OverMind-MCP') {
   const server = new FastMCP({
@@ -158,6 +159,28 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     description: 'Exécute une commande shell sur le système (git, npm, ls, etc.)',
     parameters: shellExecuteSchema,
     execute: shellExecute,
+  });
+
+  // ─── CONTRÔLE DU CYCLE DE VIE DES AGENTS ─────────────────────────────────────
+  server.addTool({
+    name: 'agent_control',
+    description: `Contrôle unifié du cycle de vie des agents OverMind.
+
+Remplace les 4 outils précédents : get_agent_status, stream_agent_output, kill_agent, wait_agent.
+
+**Actions disponibles:**
+- status  — Lecture pure de l'état (pid, status, sessionId, outputBuffer)
+- stream  — Lecture de l'output en temps réel + indicateur isComplete
+- kill    — Arrêt forcé du process tree (irréversible)
+- wait    — Blocage async jusqu'à terminaison (max timeoutMs)
+
+**Use-cases:**
+- Dashboard temps réel (status/stream)
+- Orchestration séquentielle ou parallèle (wait)
+- Kill-switch d'urgence (kill)
+- Resume après crash OverMind (orphan detection)`,
+    parameters: agentControlSchema,
+    execute: agentControl,
   });
 
   return server;

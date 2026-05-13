@@ -4,6 +4,37 @@ import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
+import { registerProcess, appendOutput, updateProcessStatus, linkSessionToPid } from '../lib/processRegistry.js';
+
+/**
+ * Interpole les variables d'environnement dans les valeurs de type $VAR
+ * Ex: "$ANTHROPIC_MODEL_Z" → process.env.ANTHROPIC_MODEL_Z
+ */
+function interpolateEnvVars(obj: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {};
+
+  console.error(`[ClaudeRunner] 🔧 Interpolating ${Object.keys(obj).length} env variables...`);
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === 'string' && value.startsWith('$')) {
+      const varName = value.substring(1); // Enlever le $
+      const envValue = process.env[varName];
+
+      if (envValue !== undefined) {
+        result[key] = envValue;
+        console.error(`[ClaudeRunner] ✅ ${key} = $${varName} → "${envValue}"`);
+      } else {
+        console.error(`[ClaudeRunner] ⚠️  Variable $${varName} non trouvée, garde la valeur littérale: ${value}`);
+        result[key] = value;
+      }
+    } else {
+      result[key] = value;
+      console.error(`[ClaudeRunner] 📋 ${key} = "${value}" (pas d'interpolation nécessaire)`);
+    }
+  }
+
+  return result;
+}
 
 export interface RunAgentOptions {
   prompt: string;
@@ -80,7 +111,8 @@ export class ClaudeRunner {
 
           if (settings.env) {
             // Mémoriser l'env configuré pour l'injection
-            Object.assign(agentCustomEnv, settings.env);
+            const interpolatedEnv = interpolateEnvVars(settings.env);
+            Object.assign(agentCustomEnv, interpolatedEnv);
 
             // --- SMART NICKNAME FALLBACK ---
             const currentModel = settings.env.ANTHROPIC_MODEL;
@@ -151,12 +183,23 @@ export class ClaudeRunner {
         // car le CLI Claude ne valide pas les surnoms dynamiques en interne
         const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
         const tempSettings = JSON.parse(JSON.stringify(settings));
+
+        // IMPORTANT: Mettre à jour toutes les variables env avec les valeurs interpolées
+        // pour éviter que le CLI Claude ne reçoive les valeurs $VAR littérales
+        if (tempSettings.env) {
+          for (const [key, value] of Object.entries(agentCustomEnv)) {
+            if (key !== 'AGENT_NICKNAME' && key !== 'AGENT_TIMEOUT_MS' && key !== 'API_TIMEOUT_MS') {
+              tempSettings.env[key] = value;
+            }
+          }
+        }
         tempSettings.env.ANTHROPIC_MODEL = agentCustomEnv.ANTHROPIC_MODEL;
 
         const tmpSettingsPath = path.join(os.tmpdir(), `settings-${agentName || 'agent'}-${Date.now()}.json`);
         fs.writeFileSync(tmpSettingsPath, JSON.stringify(tempSettings, null, 2));
         finalSettingsPath = tmpSettingsPath;
         tmpSettingsPathToDelete = tmpSettingsPath;
+        console.error(`[ClaudeRunner] 📝 Settings temporaire créé avec variables interpolées`);
       } catch (e) {
         console.error(`[ClaudeRunner] ⚠️ Erreur lors de la création du settings temporaire: ${e}`);
       }
@@ -219,22 +262,33 @@ export class ClaudeRunner {
       }
 
       if (isWin) {
-        const claudePath = 'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\claude.ps1';
-        if (fs.existsSync(claudePath)) {
-          command = 'powershell.exe';
-          spawnArgs = [
-            '-NoProfile',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-File',
-            claudePath,
-            ...argsSpawn,
-            '-p',
-            finalPrompt,
-          ];
+        // Spawn claude.exe directly to bypass PowerShell/cmd argument
+        // re-tokenization that mangles multi-line prompts containing patterns
+        // like "0-100" into a stray "-100" flag.
+        const claudeExe =
+          'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe';
+        if (fs.existsSync(claudeExe)) {
+          command = claudeExe;
+          spawnArgs = [...argsSpawn, '-p', finalPrompt];
         } else {
-          command = 'cmd.exe';
-          spawnArgs = ['/c', 'claude', ...argsSpawn, '-p', finalPrompt];
+          // Fallback: powershell wrapper (may mishandle multi-line prompts).
+          const claudePath = 'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\claude.ps1';
+          if (fs.existsSync(claudePath)) {
+            command = 'powershell.exe';
+            spawnArgs = [
+              '-NoProfile',
+              '-ExecutionPolicy',
+              'Bypass',
+              '-File',
+              claudePath,
+              ...argsSpawn,
+              '-p',
+              finalPrompt,
+            ];
+          } else {
+            command = 'cmd.exe';
+            spawnArgs = ['/c', 'claude', ...argsSpawn, '-p', finalPrompt];
+          }
         }
       } else {
         spawnArgs = [...argsSpawn, '-p', finalPrompt];
@@ -263,6 +317,14 @@ export class ClaudeRunner {
         },
       });
 
+      // Register this process in the registry for agent_control visibility
+      if (child.pid) {
+        registerProcess(child.pid, {
+          agentName: agentName || 'unknown',
+          runner: 'claude',
+        }).catch(() => {});
+      }
+
       let stdout = '';
       let stderr = '';
 
@@ -273,6 +335,10 @@ export class ClaudeRunner {
           if (agentName) {
             const id = agentCustomEnv.AGENT_NICKNAME || agentName;
             process.stderr.write(`[ClaudeRunner:${id}] ${chunk}`);
+          }
+          // Append to registry for stream tracking
+          if (child.pid) {
+            appendOutput(child.pid, chunk).catch(() => {});
           }
         });
       }
@@ -289,6 +355,9 @@ export class ClaudeRunner {
 
       const timeout = setTimeout(() => {
         child.kill();
+        if (child.pid) {
+          updateProcessStatus(child.pid, 'failed', null).catch(() => {});
+        }
         cleanupTmpFiles();
         resolve({ result: '', error: `TIMEOUT`, rawOutput: stdout });
       }, customTimeoutMs);
@@ -296,6 +365,12 @@ export class ClaudeRunner {
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
         cleanupTmpFiles();
+
+        // Update process registry status
+        if (child.pid) {
+          const status = code === 0 ? 'done' : 'failed';
+          updateProcessStatus(child.pid, status, code).catch(() => {});
+        }
 
         const detectError = (text: string) => {
           const lower = text.toLowerCase();
@@ -335,6 +410,9 @@ export class ClaudeRunner {
 
           if (agentName && response.session_id) {
             await saveSessionId(agentName, response.session_id);
+            if (child.pid) {
+              linkSessionToPid(response.session_id, child.pid).catch(() => {});
+            }
           }
 
           resolve({

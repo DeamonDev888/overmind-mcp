@@ -3,6 +3,7 @@ import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
+import { registerProcess, appendOutput, updateProcessStatus } from '../lib/processRegistry.js';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -77,19 +78,34 @@ export class QwenRunner {
         },
       });
 
+      if (child.pid) {
+        registerProcess(child.pid, { agentName: agentName || 'unknown', runner: 'qwencli' }).catch(() => {});
+      }
+
       let stdout = '';
       let stderr = '';
 
-      if (child.stdout) child.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
-      if (child.stderr) child.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+      if (child.stdout) {
+        child.stdout.on('data', (d: Buffer) => {
+          stdout += d.toString();
+          if (child.pid) appendOutput(child.pid, d.toString()).catch(() => {});
+        });
+      }
+      if (child.stderr) {
+        child.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+      }
 
       const timeout = setTimeout(() => {
         child.kill();
+        if (child.pid) updateProcessStatus(child.pid, 'failed', null).catch(() => {});
         resolve({ result: '', error: 'TIMEOUT', rawOutput: stdout });
       }, customTimeoutMs);
 
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
+        if (child.pid) {
+          updateProcessStatus(child.pid, code === 0 ? 'done' : 'failed', code).catch(() => {});
+        }
 
         if (code !== 0 && !stdout) {
           return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr });
