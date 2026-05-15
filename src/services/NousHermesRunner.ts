@@ -6,8 +6,8 @@ import { promisify } from 'util';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
-import { resolveKiloModel } from '../lib/modelMapping.js';
 import { withSpan } from '../lib/telemetry.js';
+import { loadEnvQuietly } from '../lib/loadEnv.js';
 import pino from 'pino';
 import {
   registerProcess,
@@ -185,6 +185,11 @@ export class NousHermesRunner {
     const { prompt, agentName, autoResume, silent } = options;
     let { sessionId } = options;
 
+    // --- Load .env files first (before anything else) ---
+    const cwd = options.cwd || process.cwd();
+    loadEnvQuietly(path.join(cwd, '.env'));
+    loadEnvQuietly(path.join(cwd, '../Workflow/.env'));
+
     // --- Auto Resume ---
     if (autoResume && agentName && !sessionId) {
       const lastId = await getLastSessionId(agentName, options.configPath, 'hermes');
@@ -213,7 +218,7 @@ export class NousHermesRunner {
 
     // --- Isolation / Settings / Prompt ---
     const overmindHermesPath = path.resolve(
-      process.cwd(),
+      cwd,
       '.overmind',
       'hermes',
       agentName ? `agent_${agentName}` : 'central',
@@ -232,6 +237,48 @@ export class NousHermesRunner {
       agentCustomEnv.USERPROFILE = overmindHermesPath;
     } else {
       agentCustomEnv.HOME = overmindHermesPath;
+    }
+
+    // ─── Pre-write API keys to HERMES_HOME/.env ───────────────────────────────
+    // Hermes (et son credential pool) lisent ~/.hermes/.env très tôt au démarrage,
+    // avant même que le credential pool soit initialisé. On écrit les clés
+    // critiques dans:
+    //   1. HERMES_HOME/.env (notre isolation)
+    //   2. ~/.hermes/.env (fallback pour l'init Hermes avant lecture HERMES_HOME)
+    const writeHermesDotEnv = (dotEnvPath: string) => {
+      const dotEnvEntries: string[] = [];
+      const dotEnvKeys = [
+        'MINIMAXI_API_KEY',
+        'MINIMAX_API_KEY',
+        'ANTHROPIC_AUTH_TOKEN',
+        'OPENROUTER_API_KEY',
+        'OPENAI_API_KEY',
+        'Z_AI_API_KEY',
+        'MISTRAL_API_KEY',
+        'NVIDIA_API_KEY',
+      ];
+      for (const key of dotEnvKeys) {
+        if (agentCustomEnv[key]) {
+          dotEnvEntries.push(`${key}=${agentCustomEnv[key]}`);
+        }
+      }
+      if (dotEnvEntries.length > 0) {
+        const existingContent = fs.existsSync(dotEnvPath)
+          ? fs.readFileSync(dotEnvPath, 'utf8')
+          : '';
+        const newContent = dotEnvEntries.join('\n') + '\n';
+        const finalContent = existingContent ? newContent + existingContent : newContent;
+        fs.writeFileSync(dotEnvPath, finalContent, 'utf8');
+        if (!silent) console.error(`[NousHermesRunner] Wrote ${dotEnvEntries.length} keys to ${dotEnvPath}`);
+      }
+    };
+    // Write to our isolation dir
+    writeHermesDotEnv(path.join(overmindHermesSubPath, '.env'));
+    // Also write to default ~/.hermes/.env (Hermes init peut lire ~/.hermes avant HERMES_HOME)
+    const defaultHermesHome = path.join(process.env.HOME || process.env.USERPROFILE || '', '.hermes');
+    if (defaultHermesHome !== overmindHermesSubPath) {
+      if (!fs.existsSync(defaultHermesHome)) fs.mkdirSync(defaultHermesHome, { recursive: true });
+      writeHermesDotEnv(path.join(defaultHermesHome, '.env'));
     }
 
     let systemPrompt = '';
@@ -269,7 +316,8 @@ export class NousHermesRunner {
 
         const rawSettings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
         const settings = interpolateEnvVars(rawSettings) as Record<string, any>;
-        if (!options.model && settings.model) {
+        // Only use settings.model if it's a string (not a config object like {provider:"custom",...})
+        if (!options.model && typeof settings.model === 'string') {
           options.model = settings.model;
         }
         if (!options.model && settings.env?.ANTHROPIC_MODEL) {
@@ -316,6 +364,31 @@ export class NousHermesRunner {
             }
           }
           Object.assign(agentCustomEnv, envCopy);
+
+          // ─── Resolve $VAR placeholders in agentCustomEnv values ───────────────
+          // Hermes reads from process.env, so any "$ANTHROPIC_AUTH_TOKEN_2" style
+          // placeholders must be resolved NOW before Hermes is spawned.
+          // We iterate all keys and replace known placeholders with resolved values.
+          const placeholders: Record<string, string | undefined> = {
+            'ANTHROPIC_AUTH_TOKEN_2': process.env.ANTHROPIC_AUTH_TOKEN_2,
+            'ANTHROPIC_AUTH_TOKEN_Y': process.env.ANTHROPIC_AUTH_TOKEN_Y,
+            'ANTHROPIC_AUTH_TOKEN_E': process.env.ANTHROPIC_AUTH_TOKEN_E,
+            'ANTHROPIC_BASE_URL_2': process.env.ANTHROPIC_BASE_URL_2,
+            'ANTHROPIC_BASE_URL_Y': process.env.ANTHROPIC_BASE_URL_Y,
+            'ANTHROPIC_BASE_URL_E': process.env.ANTHROPIC_BASE_URL_E,
+            'MINIMAXI_API_KEY_2': process.env.MINIMAXI_API_KEY_2,
+            'OPENAI_API_KEY_2': process.env.OPENAI_API_KEY_2,
+            'Z_AI_API_KEY_2': process.env.Z_AI_API_KEY_2,
+          };
+          for (const [key, value] of Object.entries(agentCustomEnv)) {
+            if (typeof value === 'string' && value.startsWith('$')) {
+              const resolved = placeholders[value.substring(1)];
+              if (resolved) {
+                agentCustomEnv[key] = resolved;
+                if (!silent) console.error(`[NousHermesRunner] Resolved ${key}=${value.substring(1)} (resolved)`);
+              }
+            }
+          }
         }
 
         // --- Load System Prompt (agents/agentName.md) ---
@@ -369,6 +442,10 @@ export class NousHermesRunner {
             }
             fs.writeFileSync(configYamlPath, yamlContent, 'utf8');
 
+            // Remove the model config append - it uses 'provider: custom' which Hermes doesn't accept
+            // Instead, rely on MINIMAX_BASE_URL_OVERRIDE + MINIMAXI_API_KEY env vars for MiniMaxi
+            // The model config in config.yaml is not the right approach
+
             if (!silent)
               console.error(
                 `[NousHermesRunner] 🛠️  Hermes configs (mcp.json & config.yaml) generated in ${hermesConfigDir}`,
@@ -403,7 +480,11 @@ export class NousHermesRunner {
     // --- Model & Provider selection ---
     const DEFAULT_MODEL = 'tencent/hy3-preview:free'; // Modèle OpenRouter gratuit
     const originalModel = options.model || DEFAULT_MODEL;
-    const model = resolveKiloModel(originalModel);
+    // Guard: ensure model is always a string (not an object from settings.model)
+    const modelStr = typeof originalModel === 'string' ? originalModel : DEFAULT_MODEL;
+    // Don't use resolveKiloModel here - it adds provider prefix like "minimax/" which
+    // causes Hermes to route to OpenRouter instead of MiniMaxi
+    const model = modelStr;
 
     const isNvidiaModel = model.includes('deepseek') || model.includes('nvidia');
     const hasNvidiaKey = !!(agentCustomEnv.NVIDIA_API_KEY || agentCustomEnv.NVAPI_KEY);
@@ -415,8 +496,8 @@ export class NousHermesRunner {
       lowModel.includes('o3');
     const hasOpenAIKey = !!agentCustomEnv.OPENAI_API_KEY;
 
-    const isMiniMaxModel = lowModel.includes('minimax');
-    const hasMiniMaxKey = !!agentCustomEnv.MINIMAXI_API_KEY;
+    const isMiniMaxModel = lowModel.includes('minimax') || lowModel.includes('mini-max');
+    const hasMiniMaxKey = !!(agentCustomEnv.MINIMAXI_API_KEY || agentCustomEnv.ANTHROPIC_AUTH_TOKEN);
 
     const isGLMModel = lowModel.includes('glm');
     const hasGLMKey = !!agentCustomEnv.Z_AI_API_KEY;
@@ -437,11 +518,32 @@ export class NousHermesRunner {
       delete agentCustomEnv.MINIMAXI_API_KEY;
       delete agentCustomEnv.Z_AI_API_KEY;
     } else if (isMiniMaxModel && hasMiniMaxKey) {
-      logger.info({ model, provider: 'minimax' }, 'Using MiniMax provider');
-      cleanArgs.push('--provider', 'minimax');
-      // Nettoyage des clés conflictuelles
+      // Use minimax-cn provider which correctly uses api.minimaxi.com (NOT api.minimax.io)
+      // The minimax provider hardcodes api.minimax.io which is wrong for MiniMaxi
+      logger.info({ model, provider: 'minimax-cn' }, 'Using MiniMax via minimax-cn provider');
+      cleanArgs.push('--provider', 'minimax-cn');
+      // Write base_url to config.yaml later (see below, after config generation)
+      const resolvedMiniMaxKey = agentCustomEnv.MINIMAXI_API_KEY ||
+        (agentCustomEnv.ANTHROPIC_AUTH_TOKEN && !agentCustomEnv.ANTHROPIC_AUTH_TOKEN.startsWith('$')
+          ? agentCustomEnv.ANTHROPIC_AUTH_TOKEN
+          : undefined) ||
+        process.env.ANTHROPIC_AUTH_TOKEN_2 ||
+        process.env.MINIMAXI_API_KEY;
+      if (resolvedMiniMaxKey) {
+        agentCustomEnv.ANTHROPIC_TOKEN = resolvedMiniMaxKey;
+        agentCustomEnv.ANTHROPIC_AUTH_TOKEN = resolvedMiniMaxKey;
+        agentCustomEnv.MINIMAXI_API_KEY = resolvedMiniMaxKey;
+        agentCustomEnv.MINIMAX_API_KEY = resolvedMiniMaxKey;
+        // minimax-cn provider reads MINIMAX_CN_API_KEY specifically
+        agentCustomEnv.MINIMAX_CN_API_KEY = resolvedMiniMaxKey;
+        // Store base_url override for config generation
+        agentCustomEnv.MINIMAX_BASE_URL_OVERRIDE = 'https://api.minimaxi.com/v1';
+        if (!silent) console.error(`[NousHermesRunner] Set ANTHROPIC_TOKEN + MINIMAX_BASE_URL_OVERRIDE for MiniMax`);
+      }
       delete agentCustomEnv.OPENROUTER_API_KEY;
+      delete agentCustomEnv.OVERMIND_EMBEDDING_KEY;
       delete agentCustomEnv.NVIDIA_API_KEY;
+      delete agentCustomEnv.NVIDIA_API_BASE;
       delete agentCustomEnv.NVAPI_KEY;
       delete agentCustomEnv.OPENAI_API_KEY;
       delete agentCustomEnv.Z_AI_API_KEY;

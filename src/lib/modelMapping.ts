@@ -71,7 +71,7 @@ export const PROVIDER_MAPPING: Record<string, string> = {
   // ── MiniMax ──────────────────────────────────────────────────────────────────
   minimax: 'MiniMax-Text-01',
   'minimax-text-01': 'MiniMax-Text-01',
-  'mini-max-m2.7-highspeed': 'anthropic/mini-max-m2.7-highspeed',
+  'mini-max-m2.7-highspeed': 'minimax/mini-max-m2.7-highspeed',
   // ── DeepSeek ─────────────────────────────────────────────────────────────────
   'deepseek-reasoner': 'deepseek/deepseek-reasoner',
   // ── Moonshot ─────────────────────────────────────────────────────────────────

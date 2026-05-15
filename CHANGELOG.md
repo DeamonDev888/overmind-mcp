@@ -13,6 +13,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.7.0] - 2026-05-15
+
+### 🪶 Hermes MiniMaxi Integration — Final Fix
+
+After the polyglote Hermes integration in 2.6.0, the MiniMaxi provider routing was broken due to hardcoded `api.minimax.io` URLs and missing API key environment variable.
+
+#### 🔧 Corrections
+
+- **Provider routing** : Changed from `--provider minimax` (hardcodes `api.minimax.io/anthropic`) to `--provider minimax-cn` which correctly uses `https://api.minimaxi.com/anthropic` → rewritten to `/v1`
+- **API key injection** : Added `MINIMAX_CN_API_KEY` environment variable — the `minimax-cn` provider reads this specific variable name (not `MINIMAXI_API_KEY`)
+- **Model type guard** : Fixed `model.toLowerCase is not a function` error — `settings.model` was an object `{provider:"custom",base_url:"..."}` instead of a string. Added `typeof settings.model === 'string'` guard before assignment
+- **Removed unused import** : `resolveKiloModel` was imported but not used after removing the provider prefix transformation
+
+#### 📊 Routing provider updated
+
+| Modèle détecté | Provider | Endpoint |
+| :--- | :--- | :--- |
+| `minimax*`, `mini-max*` | `--provider minimax-cn` | `api.minimaxi.com/v1` |
+
+#### ✅ Validation
+
+- `build` : `dist/` généré
+- `lint` : 2 warnings (types `any` acceptables, 0 errors)
+- Test node direct : `Bonjour ! Comment allez-vous ?` ✓
+
+---
+
 ## [2.6.0] - 2026-05-14
 
 ### 🪶 Hermes Runner — Polyglote, Windows-safe, Interpolation Universelle
