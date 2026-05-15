@@ -19,6 +19,32 @@ const execAsync = promisify(exec);
 
 const logger = pino({ name: 'NousHermesRunner' });
 
+// Sur Windows, child.kill() ne tue que le wrapper cmd.exe — le child réel devient
+// orphelin. On utilise taskkill /F /T pour propager au sous-arbre complet.
+const killProcessTree = (child: ChildProcess): void => {
+  if (!child || child.exitCode !== null) return;
+  if (process.platform === 'win32' && child.pid) {
+    exec(`taskkill /F /T /PID ${child.pid}`, () => {
+      // taskkill peut échouer si déjà mort — ignoré
+    });
+  } else {
+    try {
+      child.kill('SIGTERM');
+    } catch {
+      // Ignored
+    }
+    setTimeout(() => {
+      if (child.exitCode === null && !child.killed) {
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // Ignored
+        }
+      }
+    }, 5000);
+  }
+};
+
 export interface RunAgentOptions {
   prompt: string;
   agentName?: string;
@@ -70,6 +96,10 @@ async function findHermesBinary(): Promise<string> {
   // 3. Platform-specific paths
   const platformPaths = isWin
     ? [
+        // Officiel installer Windows (install.ps1) — chemin natif
+        path.join(process.env.LOCALAPPDATA || '', 'hermes', 'bin', 'hermes.exe'),
+        path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes.exe'),
+        // Fallback installations via pip (legacy)
         path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'Scripts', 'hermes.exe'),
         path.join(process.env.APPDATA || '', 'Python', 'Python312', 'Scripts', 'hermes.exe'),
         path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'Scripts', 'hermes.exe'),
@@ -117,6 +147,13 @@ async function findHermesBinary(): Promise<string> {
   return 'hermes';
 }
 
+/**
+ * NousHermesRunner — Runner polyglote pour Hermes Agent.
+ * • Providers : OpenAI, MiniMax, Zhipu/GLM, Mistral, NVIDIA NIM, OpenRouter (fallback)
+ * • Lit settings/agents/.mcp depuis .claude/ comme les autres runners
+ * • Interpolation $VAR et ${VAR} sur tout settings + mcp config (via envUtils)
+ * • Isolation : .overmind/hermes/agent_<name>/ (HERMES_HOME)
+ */
 export class NousHermesRunner {
   private timeoutMs: number;
   private tempFiles: string[] = [];
@@ -230,7 +267,8 @@ export class NousHermesRunner {
           };
         }
 
-        const settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+        const rawSettings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+        const settings = interpolateEnvVars(rawSettings) as Record<string, any>;
         if (!options.model && settings.model) {
           options.model = settings.model;
         }
@@ -240,13 +278,11 @@ export class NousHermesRunner {
         if (settings.env) {
           // Fusion intelligente : préserver les clés critiques (API keys)
           const criticalKeys = [
-            'OPENROUTER_API_KEY',
-            'NVIDIA_API_KEY',
-            'NVIDIA_API_BASE',
-            'OVERMIND_EMBEDDING_KEY',
+            // OpenAI
             'OPENAI_API_KEY',
             'OPENAI_API_BASE',
             'OPENAI_BASE_URL',
+            // Mistral
             'MISTRAL_API_KEY',
             'MISTRAL_API_KEY_2',
             'MISTRAL_API_KEY_3',
@@ -254,11 +290,25 @@ export class NousHermesRunner {
             'MISTRAL_API_KEY_5',
             'MISTRAL_API_KEY_6',
             'MISTRAL_API_KEY_7',
+            // NVIDIA
+            'NVIDIA_API_KEY',
+            'NVAPI_KEY',
+            'NVIDIA_API_BASE',
+            // OpenRouter / Overmind
+            'OPENROUTER_API_KEY',
+            'OVERMIND_EMBEDDING_KEY',
+            // MiniMax
+            'MINIMAXI_API_KEY',
+            // ZhipuAI / GLM
+            'Z_AI_API_KEY',
+            // Google / Gemini
+            'GOOGLE_API_KEY',
+            'GEMINI_API_KEY',
+            // Anthropic
+            'ANTHROPIC_API_KEY',
+            'ANTHROPIC_AUTH_TOKEN',
           ];
-          let envCopy = { ...settings.env };
-
-          // --- ENV VARIABLE SUBSTITUTION ($VAR_NAME) ---
-          envCopy = interpolateEnvVars(envCopy);
+          const envCopy = { ...settings.env };
 
           for (const key of criticalKeys) {
             if (agentCustomEnv[key] && !envCopy[key]) {
@@ -286,7 +336,8 @@ export class NousHermesRunner {
 
         if (fs.existsSync(agentMcpPath)) {
           try {
-            const mcpConfig = JSON.parse(fs.readFileSync(agentMcpPath, 'utf8'));
+            const rawMcpConfig = JSON.parse(fs.readFileSync(agentMcpPath, 'utf8'));
+            const mcpConfig = interpolateEnvVars(rawMcpConfig) as Record<string, any>;
             const hermesConfigDir = overmindHermesSubPath;
             if (!fs.existsSync(hermesConfigDir)) fs.mkdirSync(hermesConfigDir, { recursive: true });
 
@@ -361,10 +412,14 @@ export class NousHermesRunner {
     const isOpenAIModel =
       lowModel.includes('gpt') ||
       lowModel.includes('o1') ||
-      lowModel.includes('o3') ||
-      lowModel.includes('minimax') ||
-      lowModel.includes('glm');
+      lowModel.includes('o3');
     const hasOpenAIKey = !!agentCustomEnv.OPENAI_API_KEY;
+
+    const isMiniMaxModel = lowModel.includes('minimax');
+    const hasMiniMaxKey = !!agentCustomEnv.MINIMAXI_API_KEY;
+
+    const isGLMModel = lowModel.includes('glm');
+    const hasGLMKey = !!agentCustomEnv.Z_AI_API_KEY;
 
     const isMistralModel =
       model.includes('mistral') || model.includes('codestral') || model.includes('devstral');
@@ -379,6 +434,26 @@ export class NousHermesRunner {
       delete agentCustomEnv.OPENROUTER_API_KEY;
       delete agentCustomEnv.NVIDIA_API_KEY;
       delete agentCustomEnv.NVAPI_KEY;
+      delete agentCustomEnv.MINIMAXI_API_KEY;
+      delete agentCustomEnv.Z_AI_API_KEY;
+    } else if (isMiniMaxModel && hasMiniMaxKey) {
+      logger.info({ model, provider: 'minimax' }, 'Using MiniMax provider');
+      cleanArgs.push('--provider', 'minimax');
+      // Nettoyage des clés conflictuelles
+      delete agentCustomEnv.OPENROUTER_API_KEY;
+      delete agentCustomEnv.NVIDIA_API_KEY;
+      delete agentCustomEnv.NVAPI_KEY;
+      delete agentCustomEnv.OPENAI_API_KEY;
+      delete agentCustomEnv.Z_AI_API_KEY;
+    } else if (isGLMModel && hasGLMKey) {
+      logger.info({ model, provider: 'zhipuai' }, 'Using ZhipuAI/GLM provider');
+      cleanArgs.push('--provider', 'zhipuai');
+      // Nettoyage des clés conflictuelles
+      delete agentCustomEnv.OPENROUTER_API_KEY;
+      delete agentCustomEnv.NVIDIA_API_KEY;
+      delete agentCustomEnv.NVAPI_KEY;
+      delete agentCustomEnv.OPENAI_API_KEY;
+      delete agentCustomEnv.MINIMAXI_API_KEY;
     } else if (isMistralModel && hasMistralKey) {
       logger.info({ model, provider: 'mistral' }, 'Using Mistral provider');
       cleanArgs.push('--provider', 'mistral');
@@ -417,9 +492,11 @@ export class NousHermesRunner {
         }
       };
 
+      // shell: false if absolute path (direct binary), true if just "hermes" (needs PATH resolution)
+      const useShell = !path.isAbsolute(spawnCommand);
       const child: ChildProcess = spawn(spawnCommand, cleanArgs, {
         cwd: options.cwd || process.cwd(),
-        shell: true, // TRUE: permet de résoudre via PATH et gère les wrappers Python/Scripts sur Windows
+        shell: useShell,
         windowsHide: true,
         env: agentCustomEnv as NodeJS.ProcessEnv,
       });
@@ -455,13 +532,7 @@ export class NousHermesRunner {
       });
 
       const timeout = setTimeout(() => {
-        child.kill();
-        // Fallback to SIGKILL after 5 seconds if process still running
-        setTimeout(() => {
-          if (!child.killed) {
-            child.kill('SIGKILL');
-          }
-        }, 5000);
+        killProcessTree(child);
         if (child.pid) void updateProcessStatus(child.pid, 'failed', null, options.configPath);
         safeResolve({
           result: stdout.trim(),

@@ -39,7 +39,10 @@ export const CLIS_METADATA: Record<string, CLIInfo> = {
     name: 'Hermes Agent',
     command: 'hermes',
     versionCmd: 'hermes --version',
-    installCmd: 'pip install git+https://github.com/NousResearch/hermes-agent.git',
+    installCmd:
+      process.platform === 'win32'
+        ? 'powershell -Command "irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex"'
+        : 'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash',
     url: 'https://github.com/NousResearch/hermes-agent',
   },
   gemini: {

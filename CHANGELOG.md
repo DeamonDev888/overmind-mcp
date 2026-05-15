@@ -13,6 +13,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.6.0] - 2026-05-14
+
+### 🪶 Hermes Runner — Polyglote, Windows-safe, Interpolation Universelle
+
+Intégration **Hermes Agent** désormais nominale dans l'écosystème Overmind, au même niveau que Claude/Kilo/Gemini.
+
+#### 🔧 Corrections critiques Windows
+
+- **`killProcessTree()`** : remplace `child.kill('SIGKILL')` (signal POSIX invalide sur Windows) par `taskkill /F /T /PID <pid>`. Le sous-arbre de process Hermes est désormais tué proprement (plus de processus orphelin).
+- **Vrai PID Hermes tracké** : `spawn` utilise `shell: false` lorsque le chemin du binaire est absolu, donc `child.pid` correspond au véritable `hermes.exe` au lieu du wrapper `cmd.exe`. `agent_control({ action: 'kill' })` cible maintenant le bon process.
+- **Découverte du binaire** : ajout en priorité du chemin natif `%LOCALAPPDATA%\hermes\bin\hermes.exe` (installer officiel `install.ps1`) avant les chemins pip legacy.
+
+#### 🌐 Routing provider polyglote
+
+Hermes route maintenant chaque modèle vers son provider natif au lieu de tout coller sur OpenAI :
+
+| Modèle détecté | Provider | Clé requise |
+| :--- | :--- | :--- |
+| `gpt-*`, `o1`, `o3` | `--provider openai` | `OPENAI_API_KEY` |
+| `minimax*` | `--provider minimax` | `MINIMAXI_API_KEY` |
+| `glm*` | `--provider zhipuai` | `Z_AI_API_KEY` |
+| `mistral*`, `codestral*`, `devstral*` | `--provider mistral` | `MISTRAL_API_KEY` |
+| `deepseek*`, `nvidia*` | `--provider nvidia` | `NVIDIA_API_KEY` |
+| Tout autre | `--provider openrouter` (fallback) | `OPENROUTER_API_KEY` |
+
+Liste `criticalKeys` étendue : MiniMax, ZhipuAI, Google (`GOOGLE_API_KEY`, `GEMINI_API_KEY`), Anthropic (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`), NVAPI préservées dans la fusion d'environnement.
+
+#### 💉 Interpolation `$VAR` universelle
+
+- `interpolateEnvVars()` appliqué sur l'**objet `settings` complet** (plus seulement `settings.env`) → `"model": "$MY_MODEL"` est désormais résolu.
+- `interpolateEnvVars()` appliqué sur `mcpConfig` avant génération de `mcp.json` / `config.yaml` → les `env` des serveurs MCP avec `$VAR` sont résolus pour Hermes.
+
+#### 📜 Convention `.claude/` partagée
+
+Hermes lit les **3 fichiers standard** comme tous les autres runners :
+
+- `.claude/agents/<agentName>.md` (prompt système)
+- `.claude/settings_<agentName>.json` (config, env, modèle)
+- `.claude/.mcp.<agentName>.json` (serveurs MCP)
+
+Aucune divergence d'arborescence — un même agent peut être exécuté par Claude, Kilo, ou Hermes sans modification de fichier.
+
+#### 📦 Installation cross-platform
+
+`InstallHelper.ts` propose désormais l'installateur officiel :
+
+- **Windows** : `irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex`
+- **Linux/macOS** : `curl -fsSL .../install.sh | bash`
+
+(au lieu du `pip install git+...` obsolète)
+
+#### ✅ Validation
+
+- `check-types` : 0 erreur
+- `lint` : 0 warning
+- `build` : `dist/` généré
+- `test` : 76 passed, 3 skipped
+
+---
+
 ## [2.3.3] - 2026-05-10
 
 ### 🐛 Fixes
