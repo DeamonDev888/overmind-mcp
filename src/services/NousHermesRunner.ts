@@ -479,10 +479,10 @@ export class NousHermesRunner {
       cliPrompt = cliPrompt.substring(0, MAX_PROMPT_LEN);
     }
 
-    // Hermes CLI does NOT support --exit-after or --name flags.
-    // --exit-after is Claude-specific; Hermes uses interactive mode by default.
-    // --name is not a valid Hermes flag - session naming works differently.
-    // We only add --resume (valid) and --mcp-config (valid) plus provider/model args.
+    // Hermes CLI does NOT support --exit-after, --name, --no-tty flags.
+    // These are Claude-specific or unsupported in Hermes v0.11.0.
+    // We use only the minimal valid args that Hermes accepts:
+    // chat -q <prompt> --source tool [--model X --provider Y] [--resume SESSION] [--mcp-config PATH]
     const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool'];
     // if (!silent) cleanArgs.push('-v'); // verbose flag removed - causes TTY pause
 
@@ -707,15 +707,26 @@ export class NousHermesRunner {
         }
       }
 
-      child.on('close', async (code: number | null) => {
+child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
         if (child.pid) void updateProcessStatus(child.pid, code === 0 ? 'done' : 'failed', code, options.configPath);
 
+        // Parse session ID from Hermes output (e.g. "Session: 20260515_204158_7093cd")
+        // This works even when Hermes exits with error, as the banner is still printed
+        let parsedSessionId = sessionId;
+        const sessionMatch = stdout.match(/Session:\s+(\S+)/);
+        if (sessionMatch) {
+          parsedSessionId = sessionMatch[1];
+        }
+
+        // Hermes exits code 2 on API errors (e.g. max_tokens > 40000).
+        // When stdout has content, return it even on non-zero exit — it's useful output.
         if (code !== 0 && !stdout) {
           return safeResolve({
             result: '',
             error: `EXIT_CODE_${code}`,
             rawOutput: stderr || stdout,
+            sessionId: parsedSessionId,
             model,
             nickname: originalModel !== model ? originalModel : undefined,
           });
@@ -723,7 +734,7 @@ export class NousHermesRunner {
 
         safeResolve({
           result: stdout.trim(),
-          sessionId: sessionId,
+          sessionId: parsedSessionId,
           rawOutput: stdout,
           model,
           nickname: originalModel !== model ? originalModel : undefined,
