@@ -54,6 +54,7 @@ export interface RunAgentOptions {
   configPath?: string;
   silent?: boolean;
   model?: string;
+  signal?: AbortSignal;
 }
 
 export interface RunAgentResult {
@@ -481,10 +482,14 @@ export class NousHermesRunner {
     // En version 0.11.0, on simplifie pour éviter les erreurs d'arguments
     // IMPORTANT: Pour MiniMaxi, n'ajoute PAS --system car le serveur retourne 500
     // avec un system prompt long. On passe le system dans le prompt directement.
-    // --source tool causait des 500 avec MiniMaxi.
-    // --exit-after exits Hermes immediately after response (no TTY prompt).
     // Pas de -v (verbose) qui affiche le prompt "Appuyez sur une touche".
-    const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool', '--exit-after'];
+    //
+    // --exit-after: ONLY use when NOT resuming AND no sessionId.
+    // When resuming, Hermes must stay alive to continue the conversation.
+    // When a new session starts without resume, --exit-after makes it a one-shot.
+    const isResume = !!(autoResume || sessionId);
+    const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool'];
+    if (!isResume) cleanArgs.push('--exit-after');
     // if (!silent) cleanArgs.push('-v'); // verbose flag removed - causes TTY pause
 
     // --- Model & Provider selection ---
@@ -603,17 +608,34 @@ export class NousHermesRunner {
       cleanArgs.push('--provider', 'openrouter');
     }
 
+    // --- Hermes-native flags: --name, --resume, --mcp-config ---
+    // These must be added AFTER provider selection (cleanArgs is finalized here)
+
+    // --name: identifier for Hermes session naming (like Claude's --name)
+    if (agentName) {
+      cleanArgs.push('--name', agentName);
+    }
+
+    // --resume: continue existing session (MUST NOT be combined with --exit-after)
+    // sessionId is set at line 186 and may come from autoResume or explicit argument
+    if (sessionId) {
+      cleanArgs.push('--resume', sessionId);
+    }
+
+    // --mcp-config: point Hermes to our generated config.yaml
+    // Generated at lines 419-448 in overmindHermesSubPath
+    const configYamlPath = path.join(overmindHermesSubPath, 'config.yaml');
+    if (fs.existsSync(configYamlPath)) {
+      cleanArgs.push('--mcp-config', configYamlPath);
+      this.tempFiles.push(path.join(overmindHermesSubPath, 'mcp.json'), configYamlPath);
+    }
+
     // --- Find Hermes Binary (cross-platform) ---
     const spawnCommand = await findHermesBinary();
 
     if (!silent) {
       logger.info({ command: spawnCommand, args: cleanArgs }, 'Starting Hermes Agent');
     }
-
-    // Track temp files for MCP config
-    const mcpJsonPath = path.join(overmindHermesSubPath, 'mcp.json');
-    const configYamlPath = path.join(overmindHermesSubPath, 'config.yaml');
-    this.tempFiles.push(mcpJsonPath, configYamlPath);
 
     return new Promise((resolve) => {
       let resolved = false;
@@ -674,6 +696,27 @@ export class NousHermesRunner {
           nickname: originalModel !== model ? originalModel : undefined,
         });
       }, this.timeoutMs);
+
+      // AbortSignal support (like ClaudeRunner)
+      if (options.signal) {
+        const onAbort = () => {
+          clearTimeout(timeout);
+          killProcessTree(child);
+          if (child.pid) void updateProcessStatus(child.pid, 'failed', null, options.configPath);
+          safeResolve({
+            result: stdout.trim(),
+            error: 'ABORTED',
+            rawOutput: stdout + '\n\n' + stderr,
+            model,
+            nickname: originalModel !== model ? originalModel : undefined,
+          });
+        };
+        if (options.signal.aborted) {
+          onAbort();
+        } else {
+          options.signal.addEventListener('abort', onAbort, { once: true });
+        }
+      }
 
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);

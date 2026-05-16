@@ -19,6 +19,7 @@ export const runHermesSchema = z
       .describe(
         'Le modèle à utiliser. Priorité OpenAI (ex: gpt-4o), NVIDIA NIM (ex: deepseek-ai/deepseek-v4-pro) ou OpenRouter (ex: tencent/hy3-preview)',
       ),
+    signal: z.custom<AbortSignal>().optional().describe("AbortSignal pour annuler l'agent"),
   })
   .passthrough();
 
@@ -44,6 +45,7 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
     config: argConfig,
     silent,
     model,
+    signal,
   } = args;
   const finalPath = argPath || getWorkspaceDir();
   const finalConfig = argConfig || getWorkspaceDir();
@@ -58,6 +60,7 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
     configPath: finalConfig,
     silent,
     model,
+    signal,
   });
 
   // Retry if session invalid
@@ -72,6 +75,7 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
       configPath: finalConfig,
       silent,
       model,
+      signal,
     });
   }
 
@@ -102,8 +106,6 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
       ...(result.sessionId
         ? [{ type: 'text' as const, text: `SESSION_ID: ${result.sessionId}` }]
         : []),
-      // ...(result.model ? [{ type: 'text' as const, text: `MODEL: ${result.model}` }] : []),
-      // ...(result.nickname ? [{ type: 'text' as const, text: `USING: ${result.nickname}` }] : []),
     ],
   };
 }
