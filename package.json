@@ -9,7 +9,7 @@
   "bin": {
     "overmind": "./dist/bin/cli.js",
     "overmind-setup": "./scripts/setup.mjs",
-    "overmind-postgres": "./scripts/postgres-manager.mjs",
+    "overmind-postgres-mcp": "./scripts/postgres-manager.mjs",
     "overmind-uninstall": "./scripts/uninstall.mjs"
   },
   "exports": {
@@ -45,14 +45,14 @@
     "version": "changeset version && node scripts/auto-changelog.mjs",
     "release": "pnpm run build && changeset publish",
     "prepublishOnly": "pnpm run rebuild",
-    "postinstall": "node scripts/postinstall.mjs",
+    "postinstall": "node scripts/postinstall.mjs || exit 0",
     "setup": "overmind-setup",
     "setup:deps": "node scripts/install-dependencies.mjs",
-    "postgres:up": "overmind-postgres up",
-    "postgres:down": "overmind-postgres down",
-    "postgres:status": "overmind-postgres status",
-    "postgres:logs": "overmind-postgres logs",
-    "postgres:reset": "overmind-postgres reset"
+    "postgres:up": "overmind-postgres-mcp up",
+    "postgres:down": "overmind-postgres-mcp down",
+    "postgres:status": "overmind-postgres-mcp status",
+    "postgres:logs": "overmind-postgres-mcp logs",
+    "postgres:reset": "overmind-postgres-mcp reset"
   },
   "keywords": [
     "mcp",
