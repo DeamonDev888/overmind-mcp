@@ -479,17 +479,11 @@ export class NousHermesRunner {
       cliPrompt = cliPrompt.substring(0, MAX_PROMPT_LEN);
     }
 
-    // En version 0.11.0, on simplifie pour éviter les erreurs d'arguments
-    // IMPORTANT: Pour MiniMaxi, n'ajoute PAS --system car le serveur retourne 500
-    // avec un system prompt long. On passe le system dans le prompt directement.
-    // Pas de -v (verbose) qui affiche le prompt "Appuyez sur une touche".
-    //
-    // --exit-after: ONLY use when NOT resuming AND no sessionId.
-    // When resuming, Hermes must stay alive to continue the conversation.
-    // When a new session starts without resume, --exit-after makes it a one-shot.
-    const isResume = !!(autoResume || sessionId);
+    // Hermes CLI does NOT support --exit-after or --name flags.
+    // --exit-after is Claude-specific; Hermes uses interactive mode by default.
+    // --name is not a valid Hermes flag - session naming works differently.
+    // We only add --resume (valid) and --mcp-config (valid) plus provider/model args.
     const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool'];
-    if (!isResume) cleanArgs.push('--exit-after');
     // if (!silent) cleanArgs.push('-v'); // verbose flag removed - causes TTY pause
 
     // --- Model & Provider selection ---
@@ -608,16 +602,11 @@ export class NousHermesRunner {
       cleanArgs.push('--provider', 'openrouter');
     }
 
-    // --- Hermes-native flags: --name, --resume, --mcp-config ---
-    // These must be added AFTER provider selection (cleanArgs is finalized here)
+    // --- Hermes-native flags: --resume, --mcp-config ---
+    // IMPORTANT: --name is NOT supported by Hermes CLI (unrecognized argument).
+    // Session naming works via --resume or --continue, not --name.
 
-    // --name: identifier for Hermes session naming (like Claude's --name)
-    if (agentName) {
-      cleanArgs.push('--name', agentName);
-    }
-
-    // --resume: continue existing session (MUST NOT be combined with --exit-after)
-    // sessionId is set at line 186 and may come from autoResume or explicit argument
+    // --resume: continue existing session
     if (sessionId) {
       cleanArgs.push('--resume', sessionId);
     }
