@@ -251,6 +251,11 @@ export class NousHermesRunner {
         'MINIMAXI_API_KEY',
         'MINIMAX_API_KEY',
         'ANTHROPIC_AUTH_TOKEN',
+        'ANTHROPIC_AUTH_TOKEN_1',
+        'ANTHROPIC_AUTH_TOKEN_2',
+        'ANTHROPIC_AUTH_TOKEN_3',
+        'ANTHROPIC_AUTH_TOKEN_4',
+        'MINIMAX_CN_API_KEY',
         'OPENROUTER_API_KEY',
         'OPENAI_API_KEY',
         'Z_AI_API_KEY',
@@ -474,8 +479,13 @@ export class NousHermesRunner {
     }
 
     // En version 0.11.0, on simplifie pour éviter les erreurs d'arguments
-    const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool', '-Q'];
-    if (!silent) cleanArgs.push('-v');
+    // IMPORTANT: Pour MiniMaxi, n'ajoute PAS --system car le serveur retourne 500
+    // avec un system prompt long. On passe le system dans le prompt directement.
+    // --source tool causait des 500 avec MiniMaxi.
+    // --exit-after exits Hermes immediately after response (no TTY prompt).
+    // Pas de -v (verbose) qui affiche le prompt "Appuyez sur une touche".
+    const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool', '--exit-after'];
+    // if (!silent) cleanArgs.push('-v'); // verbose flag removed - causes TTY pause
 
     // --- Model & Provider selection ---
     const DEFAULT_MODEL = 'tencent/hy3-preview:free'; // Modèle OpenRouter gratuit
@@ -497,7 +507,14 @@ export class NousHermesRunner {
     const hasOpenAIKey = !!agentCustomEnv.OPENAI_API_KEY;
 
     const isMiniMaxModel = lowModel.includes('minimax') || lowModel.includes('mini-max');
-    const hasMiniMaxKey = !!(agentCustomEnv.MINIMAXI_API_KEY || agentCustomEnv.ANTHROPIC_AUTH_TOKEN);
+    const hasMiniMaxKey = !!(
+        agentCustomEnv.MINIMAXI_API_KEY ||
+        agentCustomEnv.ANTHROPIC_AUTH_TOKEN ||
+        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_1 ||
+        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_2 ||
+        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_3 ||
+        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_4
+      );
 
     const isGLMModel = lowModel.includes('glm');
     const hasGLMKey = !!agentCustomEnv.Z_AI_API_KEY;
@@ -523,22 +540,35 @@ export class NousHermesRunner {
       logger.info({ model, provider: 'minimax-cn' }, 'Using MiniMax via minimax-cn provider');
       cleanArgs.push('--provider', 'minimax-cn');
       // Write base_url to config.yaml later (see below, after config generation)
-      const resolvedMiniMaxKey = agentCustomEnv.MINIMAXI_API_KEY ||
-        (agentCustomEnv.ANTHROPIC_AUTH_TOKEN && !agentCustomEnv.ANTHROPIC_AUTH_TOKEN.startsWith('$')
-          ? agentCustomEnv.ANTHROPIC_AUTH_TOKEN
-          : undefined) ||
-        process.env.ANTHROPIC_AUTH_TOKEN_2 ||
+      const resolvedMiniMaxKey = agentCustomEnv.ANTHROPIC_AUTH_TOKEN_4 ||
+        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_3 ||
+        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_2 ||
+        agentCustomEnv.ANTHROPIC_AUTH_TOKEN ||
+        agentCustomEnv.MINIMAXI_API_KEY ||
         process.env.MINIMAXI_API_KEY;
       if (resolvedMiniMaxKey) {
         agentCustomEnv.ANTHROPIC_TOKEN = resolvedMiniMaxKey;
         agentCustomEnv.ANTHROPIC_AUTH_TOKEN = resolvedMiniMaxKey;
+        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_4 = resolvedMiniMaxKey;
         agentCustomEnv.MINIMAXI_API_KEY = resolvedMiniMaxKey;
         agentCustomEnv.MINIMAX_API_KEY = resolvedMiniMaxKey;
         // minimax-cn provider reads MINIMAX_CN_API_KEY specifically
         agentCustomEnv.MINIMAX_CN_API_KEY = resolvedMiniMaxKey;
-        // Store base_url override for config generation
-        agentCustomEnv.MINIMAX_BASE_URL_OVERRIDE = 'https://api.minimaxi.com/v1';
-        if (!silent) console.error(`[NousHermesRunner] Set ANTHROPIC_TOKEN + MINIMAX_BASE_URL_OVERRIDE for MiniMax`);
+        // Force rewrite the auth.json so Hermes picks up the new key
+        try {
+          const authPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.hermes', 'auth.json');
+          if (fs.existsSync(authPath)) {
+            const auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+            if (auth.credential_pool?.['minimax-cn']?.[0]) {
+              auth.credential_pool['minimax-cn'][0].access_token = resolvedMiniMaxKey;
+              auth.credential_pool['minimax-cn'][0].last_status = null;
+              auth.credential_pool['minimax-cn'][0].last_error_code = null;
+              fs.writeFileSync(authPath, JSON.stringify(auth, null, 2), 'utf8');
+              if (!silent) console.error(`[NousHermesRunner] Updated minimax-cn credential in auth.json`);
+            }
+          }
+        } catch (e) { /* non-critical */ }
+        if (!silent) console.error(`[NousHermesRunner] Set ANTHROPIC_AUTH_TOKEN_4 for MiniMax via minimax-cn`);
       }
       delete agentCustomEnv.OPENROUTER_API_KEY;
       delete agentCustomEnv.OVERMIND_EMBEDDING_KEY;
@@ -674,9 +704,8 @@ export class NousHermesRunner {
         safeResolve({ result: '', error: `SPAWN_ERROR: ${err.message}`, rawOutput: '' });
       });
 
-      if (child.stdin) {
-        child.stdin.end();
-      }
+      // Do NOT call child.stdin.end() — it sends EOF and Hermes closes.
+      // Keep stdin open so Hermes stays alive for resume.
     });
   }
 }
