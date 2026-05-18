@@ -14,7 +14,7 @@ export interface DispatchOptions {
   waitAll: boolean;
 }
 
-// ─── Result type (opaque, avoids tight coupling to runner internals) ────────────
+// ─── Result type ────────────────────────────────────────────────────────────────
 
 export interface AgentDispatchResult {
   label: string;
@@ -49,6 +49,7 @@ export async function runAgentsLocally(
 
   const controllers = agents.map(() => new AbortController());
   const settled = new Array(agents.length).fill(false);
+  let resolved = false;
 
   const promises = agents.map(
     async (agentArgs: AgentSpec, index: number): Promise<AgentDispatchResult> => {
@@ -119,10 +120,21 @@ export async function runAgentsLocally(
       isError: errorCount === results.length,
     };
   } else {
+    // Race mode: get first result, abort others, AND catch unhandled rejections
     const firstResult = await Promise.race(promises);
+
+    // Abort all unsettled agents
     for (let i = 0; i < controllers.length; i++) {
       if (!settled[i]) {
         controllers[i].abort();
+      }
+    }
+
+    // Catch any remaining promises to prevent unhandled rejections
+    // (they may reject after being aborted)
+    for (let i = 0; i < promises.length; i++) {
+      if (!settled[i]) {
+        promises[i].catch(() => {}); // Silently absorb abort rejections
       }
     }
 
@@ -151,6 +163,5 @@ export async function runAgentsLocally(
 // ─── Dispatcher ────────────────────────────────────────────────────────────────
 
 export async function dispatchAgents(agents: AgentSpec[], opts: DispatchOptions) {
-  // Local execution (Temporal/RabbitMQ removed)
   return runAgentsLocally(agents, opts);
 }

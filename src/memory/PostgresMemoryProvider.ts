@@ -77,6 +77,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
   private coreDbName = 'overmind_core';
   private dbVectorSupport = new Map<string, boolean>();
   private dbCreationInProgress = new Set<string>(); // Track DB creation to avoid race conditions
+  private poolCleanupHandlers = new Map<string, () => void>(); // Track cleanup handlers to prevent listener leak
 
   constructor() {
     // We use the default pool for maintenance operations (creating other DBs)
@@ -127,8 +128,8 @@ export class PostgresMemoryProvider implements MemoryProvider {
       (poolOptions.port as number | undefined) || parseInt(process.env.POSTGRES_PORT || '5432', 10);
     const user =
       (poolOptions.user as string | undefined) || process.env.POSTGRES_USER || 'postgres';
-    const max = (poolOptions.max as number | undefined) || 10;
-    const idleTimeoutMillis = (poolOptions.idleTimeoutMillis as number | undefined) || 30000;
+    const max = (poolOptions.max as number | undefined) || 2;
+    const idleTimeoutMillis = (poolOptions.idleTimeoutMillis as number | undefined) || 5000;
 
     logger.info({ dbName, host, user }, 'Creating connection pool for database');
 
@@ -147,6 +148,22 @@ export class PostgresMemoryProvider implements MemoryProvider {
       // Test connection immediately
       const testClient = await newPool.connect();
       testClient.release();
+
+      // Register error handler to prevent unhandled pool errors
+      newPool.on('error', (err) => {
+        logger.error({ dbName, error: err.message }, 'PostgreSQL pool error — will recreate on next use');
+      });
+
+      // Register pool for cleanup on process exit (prevents connection leaks on long-running servers)
+      // Only register once per dbName to prevent listener accumulation
+      if (!this.poolCleanupHandlers.has(dbName)) {
+        const cleanup = () => {
+          void newPool.end().catch(() => {});
+        };
+        process.on('uncaughtException', cleanup);
+        process.on('exit', cleanup);
+        this.poolCleanupHandlers.set(dbName, cleanup);
+      }
 
       this.pools.set(dbName, newPool);
       return newPool;
@@ -226,7 +243,11 @@ export class PostgresMemoryProvider implements MemoryProvider {
       const res = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName]);
       if (res.rows.length === 0) {
         console.error(`[PostgresMemory] 🏗️  Creating new physical database: ${dbName}`);
-        // Double quote database name to handle special characters or names
+        // Validate dbName is a safe PostgreSQL identifier (alphanumeric + underscore only)
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(dbName)) {
+          throw new Error(`Invalid database name: ${dbName}. Only alphanumeric and underscore characters allowed.`);
+        }
+        // Double quote database name to handle reserved words
         await client.query(`CREATE DATABASE "${dbName}"`);
         console.error(`[PostgresMemory] ✅ Database ${dbName} created.`);
       } else {

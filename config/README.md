@@ -9,26 +9,39 @@ Ce dossier contient les fichiers de configuration MCP pour OverMind.
 
 ## 🚀 Modes d'utilisation
 
-### Mode 1 : Installation globale npm (Recommandé)
+### Mode 1 : HTTP Singleton (Recommandé)
 
-Après `npm install -g overmind-mcp`, utilisez cette configuration :
+Les serveurs MCP tournent en HTTP sur des ports dédiés. Plus de node.exe par agent = plus de zombies.
 
 ```json
 {
   "mcpServers": {
     "overmind": {
-      "command": "overmind"
+      "transport": "http-stream",
+      "url": "http://localhost:3099"
+    },
+    "memory": {
+      "transport": "http-stream",
+      "url": "http://localhost:3099"
+    },
+    "postgresql": {
+      "transport": "http-stream",
+      "url": "http://localhost:5433"
     }
   }
 }
 ```
 
-**Avantages :**
-- ✅ Aucun chemin à spécifier
-- ✅ Binaires disponibles partout dans le système
-- ✅ Mises à jour automatiques avec `npm update -g overmind-mcp`
+**Ports par défaut :**
+| Serveur | Port |
+|---------|------|
+| Overmind | 3099 |
+| PostgreSQL | 5433 |
+| Discord | 3141 |
+| X | 3142 |
+| Debats | 3100 |
 
-### Mode 2 : Développement local
+### Mode 2 : Développement local (stdio)
 
 Depuis le dossier du projet avec `npm link` ou `pnpm install` :
 
@@ -37,7 +50,7 @@ Depuis le dossier du projet avec `npm link` ou `pnpm install` :
   "mcpServers": {
     "overmind": {
       "command": "node",
-      "args": ["./Workflow/dist/bin/cli.js"]
+      "args": ["./dist/bin/cli.js", "--transport", "http-stream", "--port", "3099"]
     }
   }
 }
@@ -45,43 +58,9 @@ Depuis le dossier du projet avec `npm link` ou `pnpm install` :
 
 **Note :** Nécessite que le projet soit compilé (`npm run build`)
 
-### Mode 3 : Avec le serveur PostgreSQL intégré
+## 🔌 Serveurs MCP Disponibles
 
-```json
-{
-  "mcpServers": {
-    "overmind-postgres": {
-      "command": "overmind-postgres-mcp"
-    }
-  }
-}
-```
-
-## 🔧 Configuration complète
-
-```json
-{
-  "mcpServers": {
-    "overmind": {
-      "command": "overmind",
-      "description": "OverMind-MCP principal - Orchestration d'agents IA"
-    },
-    "memory": {
-      "command": "overmind",
-      "args": ["--memory-only"],
-      "description": "OverMind-MCP mémoire - Gestion mémoire vectorielle"
-    },
-    "overmind-postgres": {
-      "command": "overmind-postgres-mcp",
-      "description": "OverMind-PostgreSQL-MCP - Serveur PostgreSQL vectoriel"
-    }
-  }
-}
-```
-
-## 📖 Outils disponibles
-
-### overmind (Principal)
+### overmind (port 3099)
 - **run_agent** : Exécuter un agent IA
 - **create_agent** : Créer un nouvel agent
 - **list_agents** : Lister les agents
@@ -92,54 +71,49 @@ Depuis le dossier du projet avec `npm link` ou `pnpm install` :
 - **memory_store** : Stocker dans la mémoire
 - **memory_runs** : Voir l'historique des runs
 
-### memory (Mode mémoire uniquement)
+### memory (port 3099, scope limité)
 - **memory_search** : Recherche sémantique
 - **memory_store** : Stockage de connaissances
-- **vectorize_row** : Vectoriser une ligne
+- **memory_runs** : Voir l'historique des runs
 
-### overmind-postgres (Base de données)
+### postgresql (port 5433)
 - **MCP_PG_VECTOR** : Exécution SQL directe
 - **intelligent_search** : Recherche hybride texte + vecteur
 - **manage_vectors** : Gestion des vecteurs
 - **pgvector_stats** : Statistiques vectorielles
 
-## 🔍 Validation
+### discord (port 3141)
+- Outils Discord (members, roles, channels, embeds, interactions...)
 
-Pour vérifier que la configuration fonctionne :
+### x (port 3142)
+- Outils X/Twitter (scraping, publication...)
 
-```bash
-# Tester la commande overmind
-overmind --version
+### debats (port 3100)
+- Outils débats et analyse
 
-# Lister les outils MCP disponibles
-# Via votre client MCP ou : 
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | overmind
+## 🛡️ Anti-Zombie Architecture
+
+L'ancien problème : chaque agent spawn son propre node.exe MCP server → zombies.
+
+La solution : 1 seul serveur HTTP par service, partagé par tous les agents.
+
 ```
+Agent 1 ──┐
+Agent 2 ──┼──→ Overmind:3099 (1 process)
+Agent 3 ──┘
+```
+
+Plus de node.exe par agent = plus de zombies.
 
 ## ⚠️ Dépannage
 
-### Commande 'overmind' non trouvée
-```bash
-# Vérifier l'installation
-npm list -g overmind-mcp
-
-# Réinstaller
-npm install -g overmind-mcp@latest
-```
+### "Failed to connect to host"
+→ Le serveur HTTP n'est pas démarré. Lancez la commande de démarrage correspondante.
 
 ### Erreur de permission
 ```bash
 # Sous Linux/macOS, utiliser sudo
 sudo npm install -g overmind-mcp
-```
-
-### Binaires non dans le PATH
-```bash
-# Ajouter le npm global bin au PATH
-export PATH=$(npm prefix -g)/bin:$PATH
-
-# Ou ajouter au ~/.bashrc ou ~/.zshrc
-echo 'export PATH=$(npm prefix -g)/bin:$PATH' >> ~/.bashrc
 ```
 
 ## 📚 Documentation complémentaire

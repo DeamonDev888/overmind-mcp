@@ -54,6 +54,9 @@ export interface RunAgentOptions {
   configPath?: string;
   silent?: boolean;
   model?: string;
+  provider?: string;
+  hermesArgs?: string[];
+  mcpConfigPath?: string;
   signal?: AbortSignal;
 }
 
@@ -97,6 +100,8 @@ async function findHermesBinary(): Promise<string> {
   // 3. Platform-specific paths
   const platformPaths = isWin
     ? [
+        // Hermes venv (Nous Research install) — PRIORITÉ haute (v0.13.0, supporte -z)
+        path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent', 'venv', 'Scripts', 'hermes.exe'),
         // Officiel installer Windows (install.ps1) — chemin natif
         path.join(process.env.LOCALAPPDATA || '', 'hermes', 'bin', 'hermes.exe'),
         path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes.exe'),
@@ -260,6 +265,8 @@ export class NousHermesRunner {
         'OPENROUTER_API_KEY',
         'OPENAI_API_KEY',
         'Z_AI_API_KEY',
+        'GLM_API_KEY',
+        'Z_AI_API_KEY_2',
         'MISTRAL_API_KEY',
         'NVIDIA_API_KEY',
       ];
@@ -278,14 +285,6 @@ export class NousHermesRunner {
         if (!silent) console.error(`[NousHermesRunner] Wrote ${dotEnvEntries.length} keys to ${dotEnvPath}`);
       }
     };
-    // Write to our isolation dir
-    writeHermesDotEnv(path.join(overmindHermesSubPath, '.env'));
-    // Also write to default ~/.hermes/.env (Hermes init peut lire ~/.hermes avant HERMES_HOME)
-    const defaultHermesHome = path.join(process.env.HOME || process.env.USERPROFILE || '', '.hermes');
-    if (defaultHermesHome !== overmindHermesSubPath) {
-      if (!fs.existsSync(defaultHermesHome)) fs.mkdirSync(defaultHermesHome, { recursive: true });
-      writeHermesDotEnv(path.join(defaultHermesHome, '.env'));
-    }
 
     let systemPrompt = '';
     if (agentName) {
@@ -322,12 +321,27 @@ export class NousHermesRunner {
 
         const rawSettings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
         const settings = interpolateEnvVars(rawSettings) as Record<string, any>;
+
+        // Create a temporary settings file with interpolated values (same approach as ClaudeRunner)
+        // This ensures $VAR placeholders are resolved before Hermes reads them
+        const tmpSettingsPath = path.join(
+          path.dirname(agentSettingsPath),
+          `settings_${agentName}_tmp.json`,
+        );
+        fs.writeFileSync(tmpSettingsPath, JSON.stringify(settings, null, 2), 'utf8');
+        this.tempFiles.push(tmpSettingsPath);
+        const interpolatedSettingsPath = tmpSettingsPath;
         // Only use settings.model if it's a string (not a config object like {provider:"custom",...})
         if (!options.model && typeof settings.model === 'string') {
           options.model = settings.model;
         }
-        if (!options.model && settings.env?.ANTHROPIC_MODEL) {
+        // Extract ANTHROPIC_MODEL from env (used by some agents like sniperbot_analyst)
+        if (!options.model && settings.env?.ANTHROPIC_MODEL && !settings.env.ANTHROPIC_MODEL.startsWith('$')) {
           options.model = settings.env.ANTHROPIC_MODEL;
+        }
+        // Extract ANTHROPIC_PROVIDER from env if present
+        if (!options.provider && settings.env?.ANTHROPIC_PROVIDER && !settings.env.ANTHROPIC_PROVIDER.startsWith('$')) {
+          options.provider = settings.env.ANTHROPIC_PROVIDER;
         }
         if (settings.env) {
           // Fusion intelligente : préserver les clés critiques (API keys)
@@ -393,6 +407,16 @@ export class NousHermesRunner {
                 agentCustomEnv[key] = resolved;
                 if (!silent) console.error(`[NousHermesRunner] Resolved ${key}=${value.substring(1)} (resolved)`);
               }
+            }
+          }
+
+          // Map ANTHROPIC_AUTH_TOKEN to provider-specific env vars
+          // Hermes z-ai provider needs GLM_API_KEY, not ANTHROPIC_AUTH_TOKEN
+          const providerForEnv = options.provider || settings.env?.ANTHROPIC_PROVIDER || '';
+          if (providerForEnv.toLowerCase().includes('z-ai') || providerForEnv.toLowerCase().includes('zai')) {
+            if (agentCustomEnv.ANTHROPIC_AUTH_TOKEN && !agentCustomEnv['GLM_API_KEY']) {
+              agentCustomEnv['GLM_API_KEY'] = agentCustomEnv.ANTHROPIC_AUTH_TOKEN;
+              if (!silent) console.error(`[NousHermesRunner] Mapped ANTHROPIC_AUTH_TOKEN → GLM_API_KEY for z-ai provider`);
             }
           }
         }
@@ -479,12 +503,12 @@ export class NousHermesRunner {
       cliPrompt = cliPrompt.substring(0, MAX_PROMPT_LEN);
     }
 
-    // Hermes CLI does NOT support --exit-after, --name, --no-tty flags.
-    // These are Claude-specific or unsupported in Hermes v0.11.0.
-    // We use only the minimal valid args that Hermes accepts:
-    // chat -q <prompt> --source tool [--model X --provider Y] [--resume SESSION] [--mcp-config PATH]
-    const cleanArgs = ['chat', '-q', cliPrompt, '--source', 'tool'];
-    // if (!silent) cleanArgs.push('-v'); // verbose flag removed - causes TTY pause
+    // Hermes CLI modes:
+    // - `hermes -z <prompt>` : top-level one-shot (no banner, clean stdout, auto-exit)
+    // - `hermes chat -q <prompt>` : query mode with banner (interactive)
+    // - `hermes chat -z <prompt>` : INVALID (subcommand doesn't accept -z)
+    // We use top-level `-z` for runner mode (clean output, auto-exit).
+    const cleanArgs = ['-z', cliPrompt];
 
     // --- Model & Provider selection ---
     const DEFAULT_MODEL = 'tencent/hy3-preview:free'; // Modèle OpenRouter gratuit
@@ -577,14 +601,20 @@ export class NousHermesRunner {
       delete agentCustomEnv.OPENAI_API_KEY;
       delete agentCustomEnv.Z_AI_API_KEY;
     } else if (isGLMModel && hasGLMKey) {
-      logger.info({ model, provider: 'zhipuai' }, 'Using ZhipuAI/GLM provider');
-      cleanArgs.push('--provider', 'zhipuai');
+      logger.info({ model, provider: 'z-ai' }, 'Using ZhipuAI/GLM provider');
+      cleanArgs.push('--provider', 'z-ai');
+      // Hermes z-ai provider needs GLM_API_KEY specifically
+      const resolvedGLMKey = agentCustomEnv.Z_AI_API_KEY;
+      if (resolvedGLMKey) {
+        agentCustomEnv['GLM_API_KEY'] = resolvedGLMKey;
+      }
       // Nettoyage des clés conflictuelles
       delete agentCustomEnv.OPENROUTER_API_KEY;
       delete agentCustomEnv.NVIDIA_API_KEY;
       delete agentCustomEnv.NVAPI_KEY;
       delete agentCustomEnv.OPENAI_API_KEY;
       delete agentCustomEnv.MINIMAXI_API_KEY;
+      delete agentCustomEnv.ANTHROPIC_AUTH_TOKEN_4;
     } else if (isMistralModel && hasMistralKey) {
       logger.info({ model, provider: 'mistral' }, 'Using Mistral provider');
       cleanArgs.push('--provider', 'mistral');
@@ -602,8 +632,13 @@ export class NousHermesRunner {
       cleanArgs.push('--provider', 'openrouter');
     }
 
+    // Re-write .env with all provider-specific keys now resolved (e.g. GLM_API_KEY for z-ai)
+    const defaultHermesHome = path.join(process.env.HOME || process.env.USERPROFILE || '', '.hermes');
+    writeHermesDotEnv(path.join(overmindHermesSubPath, '.env'));
+    writeHermesDotEnv(path.join(defaultHermesHome, '.env'));
+
     // --- Hermes-native flags: --resume, --mcp-config ---
-    // IMPORTANT: --name is NOT supported by Hermes CLI (unrecognized argument).
+    // NOTE: --name is NOT supported by Hermes CLI v0.11.0+ (unrecognized argument error).
     // Session naming works via --resume or --continue, not --name.
 
     // --resume: continue existing session
@@ -618,6 +653,10 @@ export class NousHermesRunner {
       cleanArgs.push('--mcp-config', configYamlPath);
       this.tempFiles.push(path.join(overmindHermesSubPath, 'mcp.json'), configYamlPath);
     }
+
+    // --hermes-dir: isolate this agent's hermes state (auth.json, .env, sessions)
+    // Pass via HERMES_DIR env var (not as CLI flag — --hermes-dir is only for subcommands like "chat")
+    const hermesDirEnv = { HERMES_DIR: overmindHermesSubPath };
 
     // --- Find Hermes Binary (cross-platform) ---
     const spawnCommand = await findHermesBinary();
@@ -641,7 +680,7 @@ export class NousHermesRunner {
         cwd: options.cwd || process.cwd(),
         shell: useShell,
         windowsHide: true,
-        env: agentCustomEnv as NodeJS.ProcessEnv,
+        env: { ...agentCustomEnv, HERMES_DIR: overmindHermesSubPath } as NodeJS.ProcessEnv,
       });
 
       if (child.pid) {

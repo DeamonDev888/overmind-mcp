@@ -14,6 +14,13 @@ import {
   appendOutput,
   updateProcessStatus,
 } from '../lib/processRegistry.js';
+import {
+  registerLiveAgent,
+  appendLiveOutput,
+  setLiveStatus,
+  unregisterLiveAgent,
+  type LiveAgent,
+} from '../lib/agent_lifecycle.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -488,12 +495,31 @@ export class ClaudeRunner {
             signal: options.signal,
           });
 
-          // Register process immediately after spawn
+          // Register: disk persistence + in-memory lifecycle
           if (currentChildRef.pid) {
-            void registerProcess(currentChildRef.pid, {
+            const pid = currentChildRef.pid;
+            void registerProcess(pid, {
               agentName: agentName || '',
               runner: 'claude',
               configPath: options.configPath,
+            });
+            registerLiveAgent({
+              pid,
+              runner: 'claude',
+              agentName: agentName || '',
+              sessionId: currentSessionId || '',
+              cleanupFn: async () => {
+                if (currentChildRef) await killProcessTree(currentChildRef);
+              },
+              childRef: currentChildRef,
+            });
+
+            // Cleanup on exit: lifecycle state only (setLiveStatus + unregister).
+            // processRegistry.updateProcessStatus is handled by the 'close' handler below.
+            currentChildRef.once('exit', (code) => {
+              const exitCode = code ?? null;
+              setLiveStatus(pid, code === 0 ? 'done' : 'failed', exitCode);
+              unregisterLiveAgent(pid);
             });
           }
 
@@ -501,6 +527,7 @@ export class ClaudeRunner {
             currentChildRef.stdout.on('data', (d: Buffer) => {
               const chunk = d.toString();
               if (currentChildRef && currentChildRef.pid && chunk) {
+                appendLiveOutput(currentChildRef.pid, chunk);
                 void appendOutput(currentChildRef.pid, chunk, options.configPath);
               }
               if (currentStdout.length + chunk.length > MAX_BUF)
@@ -516,6 +543,7 @@ export class ClaudeRunner {
             currentChildRef.stderr.on('data', (d: Buffer) => {
               const chunk = d.toString();
               if (currentChildRef && currentChildRef.pid && chunk) {
+                appendLiveOutput(currentChildRef.pid, chunk);
                 void appendOutput(currentChildRef.pid, chunk, options.configPath);
               }
               if (currentStderr.length + chunk.length > MAX_BUF)
@@ -618,10 +646,7 @@ export class ClaudeRunner {
                     `\n\x1b[41m\x1b[37m[ClaudeRunner] ❌ Tous les tokens fallback épuisés. Error retryable finale.\x1b[0m\n`,
                   );
                 }
-                if (currentChildRef?.pid) {
-                  void updateProcessStatus(currentChildRef.pid, 'failed', code, options.configPath);
-                }
-                cleanupTmpFiles();
+                // Status updated by the 'exit' handler registered above
                 safeResolve({
                   result: '',
                   error: 'RETRYABLE_ERROR_ALL_FALLBACKS_EXHAUSTED',

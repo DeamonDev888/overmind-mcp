@@ -15,18 +15,17 @@ _Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Cod
   <a href="https://deamondev888.github.io/overmind-mcp/"><img src="https://img.shields.io/badge/Documentation-Live-00fff5?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Live Doc"></a>
 </p>
 
-**OverMind-MCP** est une conscience supérieure conçue pour orchestrer, commander et automatiser une flotte illimitée d'agents IA. Compatible avec **Claude-Code, Gemini-cli, QwenCli, Nous Hermes, Kilo/Cline, OpenClaw**, et prêt pour **GLM, Minimax, Kimi, Ollama** et bien d'autres. Plus qu'un simple runner, c'est le **Cortex Central** de votre infrastructure IA.
+**OverMind-MCP** est une conscience supérieure conçue pour orchestrer, commander et automatiser une flotte illimitée d'agents IA. Compatible avec **Claude-Code, Gemini-cli, QwenCli, Nous Hermes, Kilo/Cline, OpenClaw**, et prêt pour **GLM, Minimax, Kimi, Ollama** et bien d'autres.
 
-Il transforme les outils CLI isolés en une force coordonnée, pilotable par API ou par MCP, capable d'exécuter des missions complexes en 2 secondes chrono. de creer et d orchestrer des pipeline de plusieurs agent. il est expert en outils MCP et peu etre scripté pour les faire fonctionner ensemble et les mettre en productions
+Il transforme les outils CLI isolés en une force coordonnée, pilotable par API ou par MCP, capable d'exécuter des missions complexes. Expert en outils MCP, il peut être scripté pour les faire fonctionner ensemble et les mettre en production.
 
 - 🔌 **Contrôle Total** : Lancez des missions complexes via MCP ou directement via le code (Claude, Gemini, QwenCli, Hermes).
 - 🏗️ **Architecture Pro** : Basé sur des services (`AgentManager`, `ClaudeRunner`, `PromptManager`) pour une stabilité maximale.
-- 🧠 **Mémoire Haute-Performance (4096D)** : Système RAG intégré via PostgreSQL + `pgvector` supportant les embeddings SOTA (Qwen 8B).
-- 🕵️ **Auto-Diagnostic CLI** : Détecte automatiquement les runners manquants et fournit les instructions/liens officiels pour l'installation.
-- 🛡️ **Mémoire Ségréguée** : Chaque agent peut posséder ses propres souvenirs isolés tout en ayant accès au socle de connaissances global.
-- 🛠️ **Capacités Étendues** : L'agent piloté peut utiliser VOS outils (Base de données, Scrapers, etc.).
+- 🧠 **Mémoire Haute-Performance (4096D)** : Système RAG intégré via PostgreSQL + `pgvector`.
+- 🛡️ **Mémoire Ségréguée** : Chaque agent peut posséder ses propres souvenirs isolés tout en ayant accès au socle global.
 - 🤖 **Multi-Agents** : Créez, configurez et gérez des personnalités d'agents isolées (Prompts & Settings dédiés).
 - 📦 **Prêt pour l'Intégration** : Importable comme un module NPM dans vos autres projets.
+- 🅾️ **HTTP Singleton** : Plus de zombies — 1 serveur HTTP partagé par tous les agents.
 
 ---
 
@@ -38,30 +37,25 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 npm install -g overmind-mcp@latest
 ```
 
-**🎯 Ce qui est installé automatiquement :**
+### Configuration MCP (HTTP)
 
-1. **Détection Docker** - Compatible avec Docker Desktop, Podman, Rancher Desktop, Colima, OrbStack
-2. **PostgreSQL + pgvector** - Container Docker avec extension vectorielle (si absent)
-3. **overmind-postgres-mcp** - Serveur MCP PostgreSQL vectoriel installé automatiquement
-4. **Configuration complète** - Fichiers .env et .mcp.json générés automatiquement
-5. **Base de données initialisée** - Tables OverMind créées automatiquement
-
-**✅ Installation ultra-simplifiée :**
-- 📦 **Taille** : 1-5 GB (au lieu de 8 GB)
-- ⚡ **Rapide** : ~15 secondes chrono
-- 🎯 **Automatique** : Tout configuré pour vous
-- 🛡️ **Sécurisé** - Vos containers personnels sont protégés
-
-### Configuration MCP
-
-Pour utiliser OverMind dans votre IDE ou CLI préféré :
+Après installation, configurez votre client MCP avec le模式下 :
 
 ```json
 {
   "mcpServers": {
     "overmind": {
-      "command": "npx",
-      "args": ["-y", "overmind-mcp@latest"]
+      "transport": "http-stream",
+      "url": "http://localhost:3099"
+    },
+    "memory": {
+      "transport": "http-stream",
+      "url": "http://localhost:3099"
+    },
+"postgresql": {
+      "transport": "http-stream",
+      "url": "http://localhost:5433",
+      "description": "PostgreSQL MCP - Base de données vectorielle"
     }
   }
 }
@@ -69,27 +63,53 @@ Pour utiliser OverMind dans votre IDE ou CLI préféré :
 
 ---
 
-## 🔧 Installation Locale (Dev)
+## 🅾️ Démarrage des Serveurs HTTP
 
-Si vous souhaitez contribuer au projet :
+Les serveurs doivent être démarrés avant utilisation :
 
 ```bash
-# Cloner le repo
+# Overmind (complet) — port 3099
+node dist/bin/cli.js --transport http-stream --port 3099
+
+# PostgreSQL — port 5433
+cd ../serveur_PostGreSQL
+FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=5433 node dist/index.js
+
+# Discord — port 3141
+cd ../serveur_discord
+FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3141 node dist/index.js
+
+# X — port 3142
+cd ../X
+FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3142 node dist/src/server.js
+
+# Debats — port 3100
+cd ../debats-mcp-server
+FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3100 node dist/index.js
+```
+
+| Serveur | Port | Outils |
+|---------|------|--------|
+| Overmind | 3099 | 14 (run_agent, create_agent, memory...) |
+| PostgreSQL | 5433 | 30+ (SQL, vectors, search...) |
+| Discord | 3141 | 88 (members, roles, channels, embeds...) |
+| X | 3142 | Outils X/Twitter |
+| Debats | 3100 | Outils débats |
+
+---
+
+## 🔧 Installation Locale (Dev)
+
+```bash
 git clone https://github.com/DeamonDev888/overmind-mcp.git
 cd overmind-mcp
-
-# Installer les dépendances
 pnpm install
-
-# Builder le projet
 pnpm run build
 ```
 
 ---
 
 ### Utilisation comme Bibliothèque
-
-Vous pouvez utiliser OverMind-MCP comme un module dans vos propres projets TypeScript/JavaScript :
 
 ```typescript
 import { runAgent, AgentManager, updateConfig } from 'overmind-mcp';
@@ -118,70 +138,42 @@ if (!isError) {
 
 ## 📂 Structure du Projet
 
-OverMind-MCP est organisé de manière modulaire pour faciliter la navigation et la maintenance.
-
 ```
 Workflow/
 ├── 📦 bin/                    # Scripts d'installation
-├── 📋 changelog/             # Historique des versions
-├── 🐳 docker/                # Configuration Docker
-├── 🗄️ db/                    # Scripts base de données
-├── ⚙️ config/               # Configurations MCP
-├── 📚 docs/                  # Documentation complète
-├── 💻 src/                   # Code source
-│   ├── bin/                  # Points d'entrée CLI
-│   ├── lib/                  # Bibliothèques partagées
-│   ├── services/             # Services métier
+├── 🐳 docker/                 # Configuration Docker
+├── 🗄️ db/                     # Scripts base de données
+├── ⚙️ config/                 # Configurations MCP
+├── 📚 docs/                   # Documentation
+├── 💻 src/                    # Code source
+│   ├── bin/                   # Points d'entrée CLI
+│   ├── lib/                   # Bibliothèques partagées
+│   ├── services/              # Services métier
 │   └── tools/                # Outils MCP
-├── 🧪 tests/                 # Tests unitaires
-└── 🔧 scripts/              # Scripts de maintenance
+├── 🧪 tests/                  # Tests unitaires
+└── 🔧 scripts/               # Scripts de maintenance
 ```
-
-**📖 Documentation détaillée** : Voir [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) pour une explication complète de chaque dossier.
-
-**Points clés :**
-- `src/services/` : Le cœur du système (Logique métier isolée en services)
-- `src/tools/` : Les outils MCP qui appellent les services
-- `src/bin/cli.ts` : Le point d'entrée exécutable pour le terminal
-- `src/server.ts` : La définition du serveur FastMCP
-- `.claude/` : Stockage des agents (Prompts `.md` et Settings `.json`)
 
 ---
 
-## ⚙️ Configuration MCP (après installation globale)
+## 🛡️ Anti-Zombie Architecture
 
-Après `npm install -g overmind-mcp`, voici la configuration MCP recommandée pour votre client (Claude Code, Cline, etc.) :
+L'ancien problème : chaque agent spawn son propre node.exe MCP server → zombies.
 
-```json
-{
-  "mcpServers": {
-    "overmind": {
-      "command": "overmind",
-      "description": "OverMind-MCP principal - Orchestration d'agents IA"
-    },
-    "memory": {
-      "command": "overmind",
-      "args": ["--memory-only"],
-      "description": "OverMind-MCP mémoire - Gestion mémoire vectorielle"
-    },
-    "overmind-postgres": {
-      "command": "overmind-postgres-mcp",
-      "description": "OverMind-PostgreSQL-MCP - Serveur PostgreSQL vectoriel optimisé pour OverMind"
-    }
-  },
-  "description": "Configuration MCP OverMind-MCP optimisée pour installation globale npm",
-  "version": "2.2.6",
-  "installation": "npm install -g overmind-mcp",
-  "note": "Après installation globale, les commandes 'overmind' et 'overmind-postgres-mcp' sont disponibles directement dans le système. Cette configuration utilise les binaires globaux installés par npm."
-}
+La solution : 1 seul serveur HTTP par service, partagé par tous les agents.
+
+```
+Agent 1 ──┐
+Agent 2 ──┼──→ Overmind:3099 (1 process)
+Agent 3 ──┘
+         └──→ PostgreSQL:5433 (1 process)
+         └──→ Discord:3141 (1 process)
 ```
 
-**📖 Exemples de configuration détaillée** : Voir `config/README.md` pour plus de scénarios d'utilisation.
+Plus de node.exe par agent = plus de zombies.
 
 ---
 
 ![Aperçu du Terminal](https://cdn.jsdelivr.net/npm/overmind-mcp@1.0.8/assets/terminal_preview.png)
-
-_Note : L'**OverMind** punit et martyrise les **OpenClaw** qui n'écoutent pas._ 😈
 
 _Projet propulsé par DeaMoN888 - 2026_

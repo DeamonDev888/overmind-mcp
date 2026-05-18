@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { validateAgentName } from './AgentManager.js';
 
 export class PromptManager {
   private baseDir: string;
@@ -22,6 +23,7 @@ export class PromptManager {
     name: string,
     content: string,
   ): Promise<{ filePath: string; existed: boolean }> {
+    validateAgentName(name);
     await fs.mkdir(this.agentsDir, { recursive: true });
     const filePath = path.join(this.agentsDir, `${name}.md`);
 
@@ -39,6 +41,7 @@ export class PromptManager {
     search: string,
     replace: string,
   ): Promise<{ success: boolean; filePath?: string; error?: string }> {
+    validateAgentName(name);
     const filePath = path.join(this.agentsDir, `${name}.md`);
 
     try {
@@ -58,6 +61,7 @@ export class PromptManager {
   }
 
   async getPromptContent(name: string): Promise<string | null> {
+    validateAgentName(name);
     const filePath = path.join(this.agentsDir, `${name}.md`);
     try {
       return await fs.readFile(filePath, 'utf-8');

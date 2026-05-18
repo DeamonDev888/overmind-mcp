@@ -34,16 +34,27 @@ export interface ConfigType {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Version read from package.json at build time
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+let PKG_VERSION = '2.7.0';
+try {
+  const pkg = require('../../package.json');
+  PKG_VERSION = pkg.version || PKG_VERSION;
+} catch { /* fallback */ }
+
+export { PKG_VERSION };
+
 export const DEFAULT_CONFIG: ConfigType = {
-  TIMEOUT_MS: 3000000, // 50 minutes (timeout global par défaut)
-  KEEPALIVE_INTERVAL_MS: 900000, // 15 minutes
+  TIMEOUT_MS: 900000, // 15 minutes
+  KEEPALIVE_INTERVAL_MS: 300000, // 5 minutes (must be < TIMEOUT_MS to actually extend)
   HARD_TIMEOUT_MS: 60000, // 1 minute extra after keepalive
   CLAUDE: {
     CORE: '--output-format json',
-    PERMISSIONS: '--dangerously-skip-permissions',
+    PERMISSIONS: '--dangerously-skip-permissions', // Feature: autonomous mode by default
     PATHS: {
       SETTINGS: './.claude/settings.json',
-      MCP: '.mcp.json', // Will be resolved dynamically
+      MCP: '.mcp.json',
     },
   },
   KILO: {
@@ -61,12 +72,18 @@ export const DEFAULT_CONFIG: ConfigType = {
   },
 };
 
-export const CONFIG = { ...DEFAULT_CONFIG };
+// Deep clone to prevent shared references with DEFAULT_CONFIG
+export const CONFIG: ConfigType = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 
 let cachedWorkspaceDir: string | null = null;
 
 export function resetWorkspaceCache() {
   cachedWorkspaceDir = null;
+}
+
+/** Validate agent name to prevent path traversal */
+export function isValidAgentName(name: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(name) && name.length > 0 && name.length <= 128;
 }
 
 export function getWorkspaceDir(): string {
@@ -76,7 +93,6 @@ export function getWorkspaceDir(): string {
   if (process.env.OVERMIND_WORKSPACE) {
     workspaceDir = path.resolve(process.env.OVERMIND_WORKSPACE);
   } else {
-    // 2. Local Project mode if config exists in current working directory
     const cwd = process.cwd();
     if (
       fs.existsSync(path.join(cwd, '.mcp.json')) ||
@@ -84,7 +100,6 @@ export function getWorkspaceDir(): string {
     ) {
       workspaceDir = cwd;
     } else {
-      // 3. Search up the tree
       let current = cwd;
       while (path.dirname(current) !== current) {
         if (
@@ -98,7 +113,6 @@ export function getWorkspaceDir(): string {
       }
 
       if (!workspaceDir) {
-        // 4. Auto-detect from code location
         const codeRoot = path.resolve(__dirname, '../..');
         if (
           fs.existsSync(path.join(codeRoot, '.mcp.json')) ||
@@ -106,15 +120,19 @@ export function getWorkspaceDir(): string {
         ) {
           workspaceDir = codeRoot;
         } else {
-          // 4. Global fallback
           const homedir = os.homedir();
           workspaceDir = path.join(homedir, '.overmind-mcp');
-          if (!fs.existsSync(workspaceDir)) {
-            fs.mkdirSync(workspaceDir, { recursive: true });
-            fs.writeFileSync(
-              path.join(workspaceDir, '.mcp.json'),
-              JSON.stringify({ mcpServers: {} }, null, 2),
-            );
+          try {
+            if (!fs.existsSync(workspaceDir)) {
+              fs.mkdirSync(workspaceDir, { recursive: true });
+              fs.writeFileSync(
+                path.join(workspaceDir, '.mcp.json'),
+                JSON.stringify({ mcpServers: {} }, null, 2),
+              );
+            }
+          } catch {
+            // Permission errors — fall back to cwd
+            workspaceDir = cwd;
           }
         }
       }
@@ -137,6 +155,11 @@ export function resolveConfigPath(configPath: string, workspaceDirOverride?: str
 
   const workspaceDir = workspaceDirOverride || getWorkspaceDir();
   const fullPath = path.resolve(workspaceDir, configPath);
+
+  // Prevent path traversal beyond workspace
+  if (!fullPath.startsWith(path.resolve(workspaceDir))) {
+    throw new Error(`Path traversal detected: ${configPath} resolves outside workspace`);
+  }
 
   // Special handling for MCP config to support .local variant
   if (configPath === '.mcp.json' && !fs.existsSync(fullPath)) {

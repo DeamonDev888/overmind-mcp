@@ -122,10 +122,54 @@ netstat -an | findstr ":3000 " >nul && echo %ESC%[93m[WARN] Port 3000 utilise%ES
 echo.
 
 REM ============================================================
-REM STEP 5: PostgreSQL intelligent
+REM STEP 5: Configuration MCP HTTP
 REM ============================================================
 echo %ESC%[36m=======================================================%ESC%
-echo %ESC%[36m[ STEP 5/8 ] POSTGRESQL INTELLIGENT%ESC%
+echo %ESC%[36m[ STEP 5/8 ] CONFIGURATION MCP HTTP%ESC%
+echo %ESC%[36m=======================================================%ESC%
+echo.
+echo [INFO] Creation configuration MCP HTTP singleton...
+if not exist "%USERPROFILE%\.overmind\config" mkdir "%USERPROFILE%\.overmind\config"
+
+(
+    echo {
+    echo   "mcpServers": {
+    echo     "overmind": {
+    echo       "transport": "http-stream",
+    echo       "url": "http://localhost:3099"
+    echo     },
+    echo     "memory": {
+    echo       "transport": "http-stream",
+    echo       "url": "http://localhost:3099"
+    echo     },
+    echo     "postgresql": {
+    echo       "transport": "http-stream",
+    echo       "url": "http://localhost:5433"
+    echo     },
+    echo     "discord": {
+    echo       "transport": "http-stream",
+    echo       "url": "http://localhost:3141"
+    echo     },
+    echo     "x": {
+    echo       "transport": "http-stream",
+    echo       "url": "http://localhost:3142"
+    echo     }
+    echo   }
+    echo }
+) > "%USERPROFILE%\.overmind\config\mcp-servers.json"
+
+echo %ESC%[92m[OK] Configuration MCP creee: %USERPROFILE%\.overmind\config\mcp-servers.json%ESC%
+echo.
+echo [INFO] Ports a lancer manuellement apres installation:
+echo    Overmind:   node cli.js --transport http-stream --port 3099
+echo    PostgreSQL: node dist/index.js (FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=5433)
+echo    Discord:    node dist/index.js (FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3141)
+echo    X:          node dist/src/server.js (FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3142)
+echo.
+
+REM STEP 6: PostgreSQL intelligent
+echo %ESC%[36m=======================================================%ESC%
+echo %ESC%[36m[ STEP 6/8 ] POSTGRESQL INTELLIGENT%ESC%
 echo %ESC%[36m=======================================================%ESC%
 echo.
 
@@ -153,10 +197,10 @@ if "%USE_EXTERNAL_POSTGRES%"=="1" (
 echo.
 
 REM ============================================================
-REM STEP 6: Configuration intelligente
+REM STEP 7: Configuration MCP .mcp.json
 REM ============================================================
 echo %ESC%[36m=======================================================%ESC%
-echo %ESC%[36m[ STEP 6/8 ] CONFIGURATION ADAPTATIVE%ESC%
+echo %ESC%[36m[ STEP 7/8 ] CONFIGURATION MCP .MCP.JSON%ESC%
 echo %ESC%[36m=======================================================%ESC%
 echo.
 
@@ -193,10 +237,10 @@ if not exist "%USERPROFILE%\.overmind\.env" (
 echo.
 
 REM ============================================================
-REM STEP 7: Telecharger docker-compose
+REM STEP 8: Telechargement docker-compose
 REM ============================================================
 echo %ESC%[36m=======================================================%ESC%
-echo %ESC%[36m[ STEP 7/8 ] TELECHARGEMENT CONFIG%ESC%
+echo %ESC%[36m[ STEP 8/8 ] TELECHARGEMENT CONFIG%ESC%
 echo %ESC%[36m=======================================================%ESC%
 echo.
 
@@ -282,7 +326,7 @@ REM ============================================================
 REM STEP 8: Demarrage intelligent
 REM ============================================================
 echo %ESC%[36m=======================================================%ESC%
-echo %ESC%[36m[ STEP 8/8 ] DEMARRAGE DOCKER%ESC%
+echo %ESC%[36m[ STEP 8/8 ] DEMARRAGE DOCKER ET SERVEURS HTTP%ESC%
 echo %ESC%[36m=======================================================%ESC%
 echo.
 

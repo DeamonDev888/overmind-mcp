@@ -4,6 +4,19 @@ import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
 import { getMemoryProvider } from '../memory/MemoryFactory.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 
+/**
+ * Validate agent name to prevent path traversal attacks.
+ * Only allows alphanumeric, underscores, hyphens — no path separators or special chars.
+ */
+const SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+export function validateAgentName(name: string): void {
+  if (!SAFE_NAME_RE.test(name)) {
+    throw new Error(
+      `Invalid agent name "${name}": only alphanumeric, underscores, and hyphens allowed (no path separators or special chars)`,
+    );
+  }
+}
+
 export interface AgentConfigUpdates {
   model?: string;
   mcpServers?: string[];
@@ -121,6 +134,7 @@ export class AgentManager {
   }
 
   async deleteAgent(name: string): Promise<{ deletedFiles: string[]; errors: string[] }> {
+    validateAgentName(name);
     const agentsDir = path.join(this.claudeDir, 'agents');
     const promptPath = path.join(agentsDir, `${name}.md`);
     const settingsPath = path.join(this.claudeDir, `settings_${name}.json`);
@@ -144,6 +158,7 @@ export class AgentManager {
   }
 
   async updateAgentConfig(name: string, updates: AgentConfigUpdates): Promise<string[]> {
+    validateAgentName(name);
     const changes: string[] = [];
     const claudeDir = this.claudeDir;
 
@@ -334,9 +349,19 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
     await fs.writeFile(promptPath, finalPrompt, 'utf-8');
 
     // Default mandatory environment variables according to user request
+    // SECURITY: Never default to placeholder tokens — require real env vars
+    const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
+    if (!authToken) {
+      return {
+        promptPath: '',
+        settingsPath: '',
+        error: 'MISSING_AUTH_TOKEN: ANTHROPIC_AUTH_TOKEN is not set in environment. Cannot create agent securely.',
+      };
+    }
+
     let envVars: Record<string, string> = {
       ANTHROPIC_MODEL: model,
-      ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN || 'VOTRE_TOKEN_ANTHROPIC',
+      ANTHROPIC_AUTH_TOKEN: authToken,
       ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
       ANTHROPIC_DEFAULT_HAIKU_MODEL:
         process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || 'claude-3-5-haiku-20241022',
@@ -370,6 +395,10 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
     if (copyEnvFrom && projectRoot) {
       try {
         const sourceSettingsPath = path.resolve(projectRoot, copyEnvFrom);
+        // Prevent path traversal: source must be inside projectRoot
+        if (!sourceSettingsPath.startsWith(path.resolve(projectRoot))) {
+          throw new Error(`copyEnvFrom path escapes project root: ${copyEnvFrom}`);
+        }
         const sourceContent = await fs.readFile(sourceSettingsPath, 'utf-8');
         const sourceJson = JSON.parse(sourceContent);
         if (sourceJson.env) envVars = { ...envVars, ...sourceJson.env };
@@ -445,6 +474,7 @@ Serveurs MCP activés : ${mcpServers.join(', ')}.`,
   }
 
   async getDetailedConfigs(name: string): Promise<Record<string, string>> {
+    validateAgentName(name);
     const agentsDir = path.join(this.claudeDir, 'agents');
     const promptPath = path.join(agentsDir, `${name}.md`);
     const settingsPath = path.join(this.claudeDir, `settings_${name}.json`);

@@ -7,6 +7,7 @@ import { AgentManager } from '../services/AgentManager.js';
 export const createAgentSchema = z.object({
   name: z
     .string()
+    .regex(/^[a-zA-Z0-9_-]+$/, "Agent name must only contain alphanumeric, underscores, and hyphens (no path separators)")
     .describe(
       "Nom unique de l'agent (ex: 'sniper_analyst'). Ce nom servira d'identifiant pour sa mémoire sémantique isolée.",
     ),
@@ -41,6 +42,14 @@ export const createAgentSchema = z.object({
     ),
   cliPath: z
     .string()
+    .refine((val) => {
+      // Allow simple basenames (no path separators) or absolute paths
+      // Reject relative paths with .. or . components
+      if (val.includes('..')) return false;
+      if (path.isAbsolute(val)) return true;
+      // Simple command name (no separators)
+      return /^[a-zA-Z0-9_-]+$/.test(val);
+    }, 'cliPath must be a simple command name or absolute path (no ".." or relative paths)')
     .optional()
     .describe('Chemin vers l\'exécutable CLI (ex: "cline", "opencode")'),
 });

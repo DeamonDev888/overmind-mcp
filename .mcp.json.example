@@ -1,21 +1,41 @@
 {
   "mcpServers": {
-    "overmind": {
-      "command": "overmind",
-      "description": "OverMind-MCP principal - Orchestration d'agents IA"
+    "memory-server": {
+      "transport": "httpStream",
+      "url": "http://localhost:3099/mcp",
+      "description": "OverMind MCP - memory singleton sur port 3099"
     },
-    "memory": {
-      "command": "overmind",
-      "args": ["--memory-only"],
-      "description": "OverMind-MCP mémoire - Gestion mémoire vectorielle"
+    "postgresql": {
+      "transport": "httpStream",
+      "url": "http://localhost:5433/mcp",
+      "description": "PostgreSQL MCP - vector search sur port 5433"
     },
-    "overmind-postgres": {
-      "command": "overmind-postgres-mcp",
-      "description": "OverMind-PostgreSQL-MCP - Serveur PostgreSQL vectoriel optimisé pour OverMind"
+    "discord-server": {
+      "transport": "httpStream",
+      "url": "http://localhost:3141/mcp",
+      "description": "Discord MCP - 88 outils sur port 3141"
+    },
+    "x-mcp-server": {
+      "transport": "httpStream",
+      "url": "http://localhost:3142/mcp",
+      "description": "X/Twitter MCP - scraping/publish sur port 3142"
+    },
+    "debats-mcp-server": {
+      "transport": "httpStream",
+      "url": "http://localhost:3100/mcp",
+      "description": "Débats MCP - analyse/arguments sur port 3100"
+    },
+    "news-btc-mcp": {
+      "transport": "httpStream",
+      "url": "http://localhost:3143/mcp",
+      "description": "News BTC MCP - actualité crypto sur port 3143"
+    },
+    "news-core-mcp": {
+      "transport": "httpStream",
+      "url": "http://localhost:3144/mcp",
+      "description": "News Core MCP - scraped news sur port 3144"
     }
   },
-  "description": "Configuration MCP OverMind-MCP optimisée pour installation globale npm",
-  "version": "2.2.6",
-  "installation": "npm install -g overmind-mcp",
-  "note": "Après installation globale, les commandes 'overmind' et 'overmind-postgres-mcp' sont disponibles directement dans le système. Cette configuration utilise les binaires globaux installés par npm."
+  "description": "Configuration MCP HTTP Singleton - Anti-Zombie. Tous les serveurs doivent être démarrés.",
+  "version": "2.4.0"
 }

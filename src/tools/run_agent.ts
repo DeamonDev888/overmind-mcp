@@ -37,8 +37,7 @@ export const runAgentSchema = z
       .describe(
         "Nom du modèle. Pour Hermes : priorité OpenAI ou NVIDIA. Pour Kilo (gratuits) : 'tencent/hy3-preview:free' ou 'step 3.5 flash'.",
       ),
-  })
-  .passthrough();
+  });
 
 // AbortSignal n'est pas serialisable en JSON Schema (FastMCP rejette z.custom<>).
 // On le passe en interne via un type augmente, hors schema MCP.

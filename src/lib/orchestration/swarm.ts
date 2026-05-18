@@ -61,6 +61,7 @@ export class SwarmOrchestrator {
   private maxParallelTasks: number;
   private enableLoadBalancing: boolean;
   private enableTaskPriority: boolean;
+  private roundRobinIndex: number = 0;
 
   constructor(config: SwarmConfig) {
     this.agents = new Map();
@@ -142,8 +143,10 @@ export class SwarmOrchestrator {
   }
 
   private selectByRoundRobin(agents: AgentCapability[]): AgentCapability {
-    // Stratégie simple: premier agent disponible
-    return agents[0];
+    // True round-robin: rotate through available agents
+    const index = this.roundRobinIndex % agents.length;
+    this.roundRobinIndex++;
+    return agents[index];
   }
 
   private calculateAgentScore(agent: AgentCapability, _task: SwarmTask): number {
@@ -258,10 +261,10 @@ export class SwarmOrchestrator {
 
       this.results.set(task.id, completedResult);
 
-      // Release agent load
+      // Release agent load (guard against underflow)
       const agent = this.agents.get(allocation.agentName);
       if (agent) {
-        agent.currentLoad--;
+        agent.currentLoad = Math.max(0, agent.currentLoad - 1);
       }
 
       logger.info(
@@ -287,10 +290,10 @@ export class SwarmOrchestrator {
 
       this.results.set(task.id, failedResult);
 
-      // Release agent load
+      // Release agent load (guard against underflow)
       const agent = this.agents.get(allocation.agentName);
       if (agent) {
-        agent.currentLoad--;
+        agent.currentLoad = Math.max(0, agent.currentLoad - 1);
       }
 
       logger.error(
@@ -343,8 +346,8 @@ export class SwarmOrchestrator {
     const running = results.filter((r) => r.status === 'running' || r.status === 'assigned').length;
     const pending = this.getPendingTasks().length;
 
-    const totalLoad = Array.from(this.agents.values()).reduce((sum, a) => sum + a.currentLoad, 0);
-    const averageLoad = totalLoad / this.agents.size;
+    const totalLoad = Array.from(this.agents.values()).reduce((sum, a) => sum + Math.max(0, a.currentLoad), 0);
+    const averageLoad = this.agents.size > 0 ? totalLoad / this.agents.size : 0;
 
     return {
       totalTasks: this.taskQueue.length,

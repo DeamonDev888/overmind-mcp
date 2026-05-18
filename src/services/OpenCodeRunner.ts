@@ -10,6 +10,7 @@ import {
   registerProcess,
   appendOutput,
   updateProcessStatus,
+  killProcessTree,
 } from '../lib/processRegistry.js';
 
 const logger = pino({ name: 'OpenCodeRunner' });
@@ -155,18 +156,24 @@ export class OpenCodeRunner {
           else stderr += d.toString();
         });
 
-      const timeout = setTimeout(() => {
-        child.kill('SIGTERM');
-        hardTimeoutTimer = setTimeout(() => {
-          if (!child.killed) child.kill('SIGKILL');
+      const timeout = setTimeout(async () => {
+        // Use killProcessTree to prevent zombie processes on Windows
+        if (child.pid) await killProcessTree(child.pid);
+        else child.kill('SIGTERM');
+        hardTimeoutTimer = setTimeout(async () => {
+          if (!child.killed) {
+            if (child.pid) await killProcessTree(child.pid);
+            else child.kill('SIGKILL');
+          }
         }, 5000);
-        cleanup();
+        // Don't call cleanup() here — let the 'close' handler do it
         if (child.pid) void updateProcessStatus(child.pid, 'failed', null, options.configPath);
         resolve({ result: '', error: 'TIMEOUT', rawOutput: stdout });
       }, customTimeoutMs);
 
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
+        cleanup(); // Moved here: cleanup after process actually exits
         if (child.pid) void updateProcessStatus(child.pid, code === 0 ? 'done' : 'failed', code, options.configPath);
 
         if (code !== 0 && !stdout) {

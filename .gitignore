@@ -1,24 +1,33 @@
-# Dependencies
+# ═══════════════════════════════════════════════════════════════════════════════
+# OVERMIND MCP — .gitignore
+# ═══════════════════════════════════════════════════════════════════════════════
+# Règle : tout ce qui contient des secrets, des données personnelles,
+# ou qui est regeneré automatiquement par le projet ne doit PAS être commité.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── Dependencies ───────────────────────────────────────────────────────────────
+
 node_modules/
+.pnp
+.pnp.js
 
-browser_data
+# ─── Build output ───────────────────────────────────────────────────────────────
 
-# Build output
 dist/
 *.tsbuildinfo
 
-# Environment & Secrets
+# ─── Environment & Secrets ─────────────────────────────────────────────────────
+
 .env
-.env.*
+.env.*                  # includes .env.local, .env.production, .env.test, etc.
+!.env.example            # SAUF le template (qui ne contient que des placeholders)
 .npmrc
+.overmind.env           # legacy
 
-# IDE & OS
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
+# ─── Agent configs & session data ──────────────────────────────────────────────
+# Contains API keys, tokens, absolute paths, session history
+# Each agent gets its own .mcp.<name>.json with credentials
 
-# AI Agents internal
 .claude/
 .gemini/
 .kilo/
@@ -27,33 +36,42 @@ Thumbs.db
 .agent/
 browser_data/
 
-# Local config (contains absolute paths)
+# Per-agent config files (contain runner auth tokens)
 .mcp.json
 mcp.json
 .mcp.sniperbot_analyst.json
 .mcp.local.json
+.mcp.*.json
 
+# ─── Local development ───────────────────────────────────────────────────────────
 
-# Backups & scripts (local dev only)
-backup/
-scripts/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs (can contain sensitive data in raw form)
 logs/
-
-# Test coverage
-coverage/
-
-# Misc local files
 *.log
-*.txt
-votes_sentinel.csv
-embed-analytics.json
+
+# Local scripts & test files
+# (some scripts are tracked — see git ls-files scripts/)
+!scripts/auto-changelog.mjs
+!scripts/postinstall.mjs
+scripts/
+backup/
 create_test_agent.js
 run_mission.js
 verify_memory.js
+scratch/
+embed-analytics.json
+votes_sentinel.csv
 
-# Browser data (Chrome User Data) - TEMPORARY FILES
-btc_ingest/browser_data/
-**/browser_data/
+# ─── Database & cache ───────────────────────────────────────────────────────────
+
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
@@ -63,31 +81,35 @@ Cookies/
 Cache/
 Code Cache/
 
-# Agent multi-specific
+# ─── Agent sub-projects ────────────────────────────────────────────────────────
+
 agent_multi/node_modules/
 agent_multi/dist/
 agent_multi/.claude/
 
-# ─────────────────────────────────────────────────────────────────────────────────
-# DOCKER & INFRASTRUCTURE
-# ─────────────────────────────────────────────────────────────────────────────────
-# Docker volumes data (persist on host)
+# ─── Docker ────────────────────────────────────────────────────────────────────
+
 docker-volumes/
-
-# Docker config files (use .example versions)
-config/prometheus.yml
-config/otel-collector.yml
-!config/prometheus.example.yml
-!config/otel-collector.example.yml
-!config/*.example.yml
-
-# Docker Compose override files (local customisation)
 docker-compose.override.yml
 docker-compose.*.local.yml
 
-# Docker secrets (NEVER commit these)
+# Docker secrets (never commit)
 *.secret
 *.password
 *.key
 *.pem
 .secrets/
+
+# Example configs (keep the template, ignore local overrides)
+!config/*.example.yml
+config/prometheus.yml
+config/otel-collector.yml
+
+# ─── Coverage ──────────────────────────────────────────────────────────────────
+
+coverage/
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+
+*.txt
+notes/

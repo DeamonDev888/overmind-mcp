@@ -72,13 +72,14 @@ function wrapExecute(toolName: string, fn: ToolExecute) {
   return (...args: Parameters<ToolExecute>) => withSpan(`tool.${toolName}`, () => fn(...args));
 }
 
-export function createServer(name: string = 'OverMind-MCP') {
+export function createServer(name: string = 'OverMind-MCP', memoryOnly = false, memoryToolsOnly = false) {
   const server = new FastMCP({
-    name,
-    version: '1.0.0',
-  });
+    name: memoryOnly ? `${name}-Memory` : (memoryToolsOnly ? `${name}-MemoryTools` : name),
+    version: '2.7.0',
+});
 
-  // ─── 1. run_agent ─────────────────────────────────────────────────────────────
+  if (!memoryOnly && !memoryToolsOnly) {
+    // ─── 1. run_agent ─────────────────────────────────────────────────────────────
   server.addTool({
     name: 'run_agent',
     description: `Exécute une commande sur un agent IA via le runner spécifié.
@@ -159,7 +160,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     description:
       "Liste tous les agents disponibles. Option 'details=true' pour voir la config complète.",
     parameters: listAgentsSchema,
-    execute: listAgents,
+    execute: wrapExecute('list_agents', listAgents),
   });
 
   // ─── 5. delete_agent ───────────────────────────────────────────────────────
@@ -167,7 +168,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     name: 'delete_agent',
     description: 'Supprime définitivement un agent (Prompt et Config)',
     parameters: deleteAgentSchema,
-    execute: deleteAgent,
+    execute: wrapExecute('delete_agent', deleteAgent),
   });
 
   // ─── 6. update_agent_config ────────────────────────────────────────────────
@@ -176,7 +177,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     description:
       "Modifie la configuration technique d'un agent (Runner, Modèle, Serveurs MCP, Variables d'environnement) OU réécrit entièrement l'un des 4 fichiers (prompt, settings, mcp, skill)",
     parameters: updateAgentConfigSchema,
-    execute: updateAgentConfig,
+    execute: wrapExecute('update_agent_config', updateAgentConfig),
   });
 
   // ─── 7. create_prompt ───────────────────────────────────────────────────────
@@ -184,7 +185,7 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     name: 'create_prompt',
     description: 'Crée ou écrase un fichier prompt Markdown (Persona)',
     parameters: createPromptSchema,
-    execute: createPrompt,
+    execute: wrapExecute('create_prompt', createPrompt),
   });
 
   // ─── 8. edit_prompt ─────────────────────────────────────────────────────────
@@ -192,8 +193,9 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     name: 'edit_prompt',
     description: 'Modifie un prompt existant en remplaçant un bloc de texte spécifique',
     parameters: editPromptSchema,
-    execute: editPrompt,
+    execute: wrapExecute('edit_prompt', editPrompt),
   });
+  }
 
   // ─── 9. memory_search ──────────────────────────────────────────────────────
   server.addTool({
@@ -218,10 +220,11 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     description:
       "Liste l'historique des runs d'agents enregistrés par OverMind (avec stats optionnelles)",
     parameters: memoryRunsSchema,
-    execute: memoryRunsTool,
+execute: memoryRunsTool,
   });
 
-  // ─── 12. get_agent_configs ─────────────────────────────────────────────────
+  if (!memoryOnly && !memoryToolsOnly) {
+    // ─── 12. get_agent_configs ─────────────────────────────────────────────────
   server.addTool({
     name: 'get_agent_configs',
     description:
@@ -287,6 +290,7 @@ agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "wait", tim
     parameters: agentControlSchema,
     execute: agentControl,
   });
+  }
 
   return server;
 }
