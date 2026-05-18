@@ -1,12 +1,10 @@
 import { z } from 'zod';
 
-export const configExampleSchema = z
-  .object({
-    provider: z
-      .enum(['glm', 'minimax', 'openrouter', 'ilmu', 'minimaxi', 'overmind'])
-      .describe('Le fournisseur pour lequel vous voulez un exemple de configuration.'),
-  })
-  .passthrough();
+export const configExampleSchema = z.object({
+  provider: z
+    .enum(['glm', 'minimax', 'openrouter', 'ilmu', 'minimaxi', 'overmind'])
+    .describe('Le fournisseur pour lequel vous voulez un exemple de configuration.'),
+});
 
 export async function configExample(args: z.infer<typeof configExampleSchema>) {
   const { provider } = args;

@@ -12,6 +12,7 @@ import {
   linkSessionToPid,
   appendOutput,
   updateProcessStatus,
+  killProcessTree,
 } from '../lib/processRegistry.js';
 
 export interface RunAgentOptions {
@@ -51,7 +52,7 @@ export class KiloRunner {
 
 **Option B — CLI Standalone (Binaire)**
 1. Téléchargez \`kilo-windows-x64.zip\` depuis : https://github.com/Kilo-Org/kilocode/releases
-2. Extrayez \`kilo.exe\` et placez-le dans un dossier de votre PATH (ex: \`C:\\Users\\Deamon\\AppData\\Roaming\\npm\\\`)
+2. Extrayez \`kilo.exe\` et placez-le dans un dossier de votre PATH (ex: \`%USERPROFILE%\AppData\Roaming\npm\`)
 
 **Option C — Scoop**
 \`scoop bucket add kilo https://github.com/Kilo-Org/scoop-kilo\`
@@ -479,8 +480,9 @@ export class KiloRunner {
             }
 
             const hardTimeoutDelay = CONFIG.HARD_TIMEOUT_MS || 60000;
-            hardTimeoutTimer = setTimeout(() => {
-              if (currentChild) currentChild.kill();
+            hardTimeoutTimer = setTimeout(async () => {
+              if (currentChild && currentChild.pid) await killProcessTree(currentChild.pid);
+              else if (currentChild) currentChild.kill();
               killTimer = setTimeout(() => {
                 if (currentChild && !currentChild.killed) currentChild.kill('SIGKILL');
               }, 5000);

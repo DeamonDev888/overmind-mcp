@@ -26,9 +26,19 @@ chmod +x install-overmind-unix.sh
 
 - OverMind MCP (NPM package)
 - PostgreSQL + pgvector (Docker)
-- RabbitMQ (Docker)
-- Temporal (Docker)
 - Prometheus (Docker)
 - Grafana (Docker)
 - Jaeger (Docker)
-- Redis (Docker)
+
+## 🅾️ Démarrage des Serveurs HTTP
+
+Après installation, lancez les serveurs MCP sur les ports suivants :
+
+| Serveur | Port | Commande |
+|---------|------|----------|
+| Overmind (complet) | 3099 | `node dist/bin/cli.js --transport http-stream --port 3099` |
+| Overmind (memory) | 3099 | `node dist/bin/cli.js --memory-tools-only --transport http-stream --port 3099` |
+| PostgreSQL | 5433 | `FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=5433 node dist/index.js` |
+| Discord | 3141 | `FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3141 node dist/index.js` |
+| X | 3142 | `FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3142 node dist/src/server.js` |
+| Debats | 3100 | `FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3100 node dist/index.js` |

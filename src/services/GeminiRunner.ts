@@ -12,6 +12,7 @@ import {
   linkSessionToPid,
   appendOutput,
   updateProcessStatus,
+  killProcessTree,
 } from '../lib/processRegistry.js';
 
 const logger = pino({ name: 'GeminiRunner' });
@@ -304,11 +305,15 @@ export class GeminiRunner {
           else stderr += d;
         });
 
-        const timeout = setTimeout(() => {
-          child.kill();
-          setTimeout(() => {
-            if (!child.killed) child.kill('SIGKILL');
-          }, 5000);
+        const timeout = setTimeout(async () => {
+          // Use killProcessTree to prevent zombie processes on Windows
+          if (child.pid) await killProcessTree(child.pid);
+          else child.kill();
+          await new Promise<void>((res) => setTimeout(res, 5000));
+          if (!child.killed) {
+            if (child.pid) await killProcessTree(child.pid);
+            else child.kill('SIGKILL');
+          }
           if (child.pid) {
             void updateProcessStatus(child.pid, 'failed', null, options.configPath);
           }

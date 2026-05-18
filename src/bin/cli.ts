@@ -7,21 +7,30 @@ import { PassThrough } from 'stream';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Helper to manually parse .env without any noisy console.logs from external packages (dotenvx corrupts MCP JSON streams)
 function loadEnvQuietly(envPath: string) {
   try {
     if (fs.existsSync(envPath)) {
       const content = fs.readFileSync(envPath, 'utf8');
       content.split('\n').forEach((line) => {
-        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-        if (match) {
-          const key = match[1];
-          let value = match[2] || '';
-          value = value.replace(/\s*#.*$/, '').trim();
-          if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
-          else if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
-          if (!process.env[key]) process.env[key] = value;
+        const trimmed = line.trim();
+        // Skip empty lines and full comment lines
+        if (!trimmed || trimmed.startsWith('#')) return;
+        // Parse KEY=VALUE (value can contain '=')
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx === -1) return;
+        const key = trimmed.slice(0, eqIdx).trim();
+        if (!key) return;
+        let value = trimmed.slice(eqIdx + 1).trim();
+        // Strip trailing comments only when preceded by whitespace (not in quoted values)
+        // e.g. FOO=hello # comment  → strips "# comment"
+        //      BAR=http://foo.com#fragment → preserves "#fragment"
+        if (!value.startsWith('"') && !value.startsWith("'")) {
+          value = value.replace(/\s+#.*$/, '').trim();
         }
+        // Strip quotes
+        if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+        else if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+        if (!process.env[key]) process.env[key] = value;
       });
     }
   } catch (_e) {
@@ -29,7 +38,14 @@ function loadEnvQuietly(envPath: string) {
   }
 }
 
-// 🪄 Auto-formatteur de .env — Classifie tous les providers connus, préserve les valeurs
+// Atomic write: write to temp file first, then rename (atomic on POSIX, prevents corruption on crash)
+function atomicWriteFile(filePath: string, content: string): void {
+  const tmp = filePath + '.tmp.' + Math.random().toString(36).slice(2);
+  fs.writeFileSync(tmp, content, 'utf8');
+  fs.renameSync(tmp, filePath);
+}
+
+// Auto-formatteur de .env — Classifie tous les providers connus, préserve les valeurs
 function autoFormatEnvFile(envPath: string) {
   try {
     if (!fs.existsSync(envPath)) return;
@@ -323,7 +339,7 @@ function autoFormatEnvFile(envPath: string) {
 
     // N'écrire sur le disque que si quelque chose a changé (optimisation I/O)
     if (content.trim() !== newContent.trim()) {
-      fs.writeFileSync(envPath, newContent.trim() + '\n', 'utf8');
+      atomicWriteFile(envPath, newContent.trim() + '\n');
     }
   } catch (_e) {
     // Ignorer silencieusement pour ne pas crasher le boot
@@ -334,28 +350,25 @@ const localEnvPath = path.resolve(__dirname, '../../.env');
 
 // Auto-détection et injection de OVERMIND_WORKSPACE s'il est manquant — NE PAS écraser s'il existe déjà
 try {
-  if (!fs.existsSync(localEnvPath)) {
-    const workspacePath = path.resolve(__dirname, '../../');
-    fs.writeFileSync(localEnvPath, `OVERMIND_WORKSPACE=${workspacePath}\n`, 'utf8');
-  } else {
-    const currentContent = fs.readFileSync(localEnvPath, 'utf8');
-    // Vérifier que OVERMIND_WORKSPACE n'existe pas OU n'a pas de valeur (ligne vide)
-    const match = currentContent.match(/^OVERMIND_WORKSPACE=(.*)$/m);
-    if (!match || !match[1]?.trim()) {
+    if (!fs.existsSync(localEnvPath)) {
       const workspacePath = path.resolve(__dirname, '../../');
-      if (!currentContent.includes('OVERMIND_WORKSPACE=')) {
-        fs.appendFileSync(localEnvPath, `\nOVERMIND_WORKSPACE=${workspacePath}\n`, 'utf8');
-      } else {
-        // Remplacer la ligne vide/videuse
-        const newContent = currentContent.replace(
-          /^OVERMIND_WORKSPACE=.*$/m,
-          `OVERMIND_WORKSPACE=${workspacePath}`,
-        );
-        fs.writeFileSync(localEnvPath, newContent, 'utf8');
+      atomicWriteFile(localEnvPath, `OVERMIND_WORKSPACE=${workspacePath}\n`);
+    } else {
+      const currentContent = fs.readFileSync(localEnvPath, 'utf8');
+      const match = currentContent.match(/^OVERMIND_WORKSPACE=(.*)$/m);
+      if (!match || !match[1]?.trim()) {
+        const workspacePath = path.resolve(__dirname, '../../');
+        if (!currentContent.includes('OVERMIND_WORKSPACE=')) {
+          atomicWriteFile(localEnvPath, currentContent.trim() + `\nOVERMIND_WORKSPACE=${workspacePath}\n`);
+        } else {
+          const newContent = currentContent.replace(
+            /^OVERMIND_WORKSPACE=.*$/m,
+            `OVERMIND_WORKSPACE=${workspacePath}`,
+          );
+          atomicWriteFile(localEnvPath, newContent);
+        }
       }
     }
-    // Si OVERMIND_WORKSPACE a déjà une valeur → ne rien faire, ne pas écraser
-  }
 } catch (_e) {
   // Ignorer l'erreur silencieusement
 }
@@ -551,6 +564,15 @@ const { updateConfig } = await import('../lib/config.js');
 
 const cliArgs = process.argv.slice(2);
 let settingsPath, mcpPath;
+let memoryOnly = false;
+let memoryToolsOnly = false;
+let sslCert: string | undefined;
+let sslKey: string | undefined;
+let sslCa: string | undefined;
+let transportType: 'stdio' | 'httpStream' = 'stdio';
+let httpPort = 3099;
+let httpHost = 'localhost';
+let httpEndpoint = '/mcp';
 
 for (let i = 0; i < cliArgs.length; i++) {
   if (cliArgs[i] === '--settings' && cliArgs[i + 1]) {
@@ -558,6 +580,34 @@ for (let i = 0; i < cliArgs.length; i++) {
     i++;
   } else if (cliArgs[i] === '--mcp-config' && cliArgs[i + 1]) {
     mcpPath = cliArgs[i + 1];
+    i++;
+  } else if (cliArgs[i] === '--memory-only') {
+    memoryOnly = true;
+  } else if (cliArgs[i] === '--memory-tools-only') {
+    memoryToolsOnly = true;
+  } else if (cliArgs[i] === '--transport' && cliArgs[i + 1]) {
+    const t = cliArgs[i + 1];
+    if (t === 'http-stream' || t === 'httpStream') {
+      transportType = 'httpStream';
+    }
+    i++;
+  } else if (cliArgs[i] === '--port' && cliArgs[i + 1]) {
+    httpPort = parseInt(cliArgs[i + 1], 10);
+    i++;
+  } else if (cliArgs[i] === '--host' && cliArgs[i + 1]) {
+    httpHost = cliArgs[i + 1];
+    i++;
+  } else if (cliArgs[i] === '--endpoint' && cliArgs[i + 1]) {
+    httpEndpoint = cliArgs[i + 1];
+    i++;
+  } else if (cliArgs[i] === '--ssl-cert' && cliArgs[i + 1]) {
+    sslCert = cliArgs[i + 1];
+    i++;
+  } else if (cliArgs[i] === '--ssl-key' && cliArgs[i + 1]) {
+    sslKey = cliArgs[i + 1];
+    i++;
+  } else if (cliArgs[i] === '--ssl-ca' && cliArgs[i + 1]) {
+    sslCa = cliArgs[i + 1];
     i++;
   }
 }
@@ -567,7 +617,35 @@ if (settingsPath || mcpPath) {
   // Do NOT log to stderr during MCP initialization as it can cause EOF errors in some clients
 }
 
-const server = createServer();
-rootLogger.info('[Overmind] [START] Démarrage du serveur...');
-server.start({ transportType: 'stdio' });
-rootLogger.info('[Overmind] [READY] Serveur prêt sur STDIO.');
+const server = createServer('OverMind-MCP', memoryOnly, memoryToolsOnly);
+rootLogger.info(memoryOnly ? '[Overmind] [START] Démarrage du serveur mémoire...' : (memoryToolsOnly ? '[Overmind] [START] Démarrage serveur (memory tools only)...' : '[Overmind] [START] Démarrage du serveur...'));
+
+// HTTP Singleton mode (OVERMIND_HTTP_MODE=true in .env)
+// Les serveurs memory et postgresql tournent deja en singleton sur leurs ports,
+// Overmind se configure en client HTTP pour aggreguer les outils
+if (process.env.OVERMIND_HTTP_MODE === 'true') {
+  rootLogger.info('[Overmind] [HTTP] Mode singleton actif — memory sur port ' + (process.env.MEMORY_HTTP_PORT || '3099') + ', postgresql sur port ' + (process.env.POSTGRES_HTTP_PORT || '5433'));
+  rootLogger.info('[Overmind] [HTTP] Les outils sont exposés via la couche HTTP des serveurs distants');
+  // En mode HTTP singleton, Overmind CLI ne démarre pas son propre serveur MCP
+  // Il agit comme client pour les serveurs distants (memory + postgresql)
+  // Les agents se connectent directement aux endpoints HTTP des serveurs distants
+  process.exit(0);
+}
+
+if (transportType === 'httpStream') {
+  const httpStreamConfig: any = {
+    port: httpPort,
+    host: httpHost,
+    endpoint: httpEndpoint as `/${string}`,
+    stateless: true,
+  };
+  if (sslCert) httpStreamConfig.sslCert = sslCert;
+  if (sslKey) httpStreamConfig.sslKey = sslKey;
+  if (sslCa) httpStreamConfig.sslCa = sslCa;
+  const protocol = sslCert && sslKey ? 'https' : 'http';
+  server.start({ transportType: 'httpStream', httpStream: httpStreamConfig });
+  rootLogger.info(`[Overmind] [READY] Serveur HTTP${sslCert ? 'S' : ''} sur ${protocol}://${httpHost}:${httpPort}${httpEndpoint}`);
+} else {
+  server.start({ transportType: 'stdio' });
+  rootLogger.info(memoryOnly ? '[Overmind] [READY] Serveur mémoire prêt sur STDIO.' : '[Overmind] [READY] Serveur prêt sur STDIO.');
+}

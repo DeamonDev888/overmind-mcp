@@ -13,11 +13,11 @@ export const listAgentsSchema = z.object({
 });
 
 export const deleteAgentSchema = z.object({
-  name: z.string().describe("Nom de l'agent à supprimer (ex: agent_finance)"),
+  name: z.string().regex(/^[a-zA-Z0-9_-]+$/, "Agent name must only contain alphanumeric, underscores, and hyphens").describe("Nom de l'agent à supprimer (ex: agent_finance)"),
 });
 
 export const updateAgentConfigSchema = z.object({
-  name: z.string().describe("Nom de l'agent à modifier"),
+  name: z.string().regex(/^[a-zA-Z0-9_-]+$/, "Agent name must only contain alphanumeric, underscores, and hyphens").describe("Nom de l'agent à modifier"),
   model: z
     .string()
     .optional()
@@ -46,6 +46,7 @@ export const updateAgentConfigSchema = z.object({
     .describe('Mode spécifique pour Kilo ou Cline'),
   cliPath: z
     .string()
+    .refine((val) => !val.includes('..') && (path.isAbsolute(val) || /^[a-zA-Z0-9_-]+$/.test(val)), 'cliPath must be a simple command name or absolute path')
     .optional()
     .describe("Chemin vers l'exécutable CLI (pour runners spécifiques)"),
   file: z

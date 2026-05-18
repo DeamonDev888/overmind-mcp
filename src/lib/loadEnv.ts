@@ -5,18 +5,23 @@ export function loadEnvQuietly(envPath: string): void {
     if (fs.existsSync(envPath)) {
       const content = fs.readFileSync(envPath, 'utf8');
       content.split('\n').forEach((line) => {
-        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?$/);
         if (match) {
           const key = match[1];
           let value = match[2] || '';
-          value = value.replace(/\s*#.*$/, '').trim();
+          // Strip inline comments ONLY after whitespace+#, not # inside values
+          // This preserves # in API keys, URLs with fragments, etc.
+          value = value.replace(/\s+#.*$/, '').trim();
           if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
           else if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
           if (!process.env[key]) process.env[key] = value;
         }
       });
     }
-  } catch {
-    // ignore errors
+  } catch (e) {
+    // Log malformed .env instead of silently swallowing
+    if (e instanceof Error) {
+      console.error(`[loadEnv] Warning: Failed to load ${envPath}: ${e.message}`);
+    }
   }
 }

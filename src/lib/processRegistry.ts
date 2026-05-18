@@ -1,385 +1,300 @@
+/**
+ * processRegistry.ts — Persistence layer (disk) + OS-level kill helpers
+ * =====================================================================
+ *
+ * ONLY handles:
+ *   - Read/write ProcessEntry to .claude/process-registry.json
+ *   - Background sweeper (cleanupRegistry every 5min)
+ *   - OS-level killProcessTree + isPidAlive (Windows tasklist / Unix kill -0)
+ *
+ * Hot-path state (outputBuffer, live status) lives in agent_lifecycle.
+ */
 import fs from 'fs/promises';
 import path from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { Mutex } from 'async-mutex';
+import { spawn } from 'child_process';
 import { getWorkspaceDir } from './config.js';
 
-const execAsync = promisify(exec);
-const registryMutex = new Mutex();
-
-const SESSIONS_FILE = '.claude/sessions.json';
-const PROCESS_TTL_MS = 60 * 60 * 1000; // 1h after done/failed → cleanup
+const REGISTRY_FILE = '.claude/process-registry.json';
+const PROCESS_TTL_MS = 60 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 export type ProcessStatus = 'running' | 'done' | 'failed' | 'orphaned';
 
 export interface ProcessEntry {
-  id: string; // sessionId
-  ts: number; // timestamp
+  id: string;
+  ts: number;
   pid?: number;
   runner?: string;
   agentName: string;
   status: ProcessStatus;
-  outputBuffer: string;
   exitCode?: number | null;
   lastOutputAt?: number;
 }
 
-interface SessionsStore {
-  [key: string]: ProcessEntry | string; // string = legacy sessionId-only
+interface RegistryStore {
+  processes: Record<string, ProcessEntry>;
+  version: number;
 }
 
-function getSessionsPath(workspaceDir?: string): string {
-  return path.resolve(workspaceDir || getWorkspaceDir(), SESSIONS_FILE);
+// ─── Path helpers ─────────────────────────────────────────────────────────────
+
+function getRegistryPath(workspaceDir?: string): string {
+  return path.resolve(workspaceDir || getWorkspaceDir(), REGISTRY_FILE);
 }
 
 function buildKey(runner: string | undefined, agentName: string): string {
   return runner ? `${runner}:${agentName}` : agentName;
 }
 
-async function readStore(
-  workspaceDir?: string,
-): Promise<{ store: SessionsStore; path: string }> {
-  const filePath = getSessionsPath(workspaceDir);
+// ─── Disk persistence ──────────────────────────────────────────────────────────
+
+async function readStore(workspaceDir?: string): Promise<{ store: RegistryStore; path: string }> {
+  const filePath = getRegistryPath(workspaceDir);
   try {
     const content = await fs.readFile(filePath, 'utf-8');
-    return { store: JSON.parse(content) as SessionsStore, path: filePath };
+    return { store: JSON.parse(content) as RegistryStore, path: filePath };
   } catch {
-    return { store: {}, path: filePath };
+    return { store: { processes: {}, version: 2 }, path: filePath };
   }
 }
 
-async function writeStore(
-  store: SessionsStore,
-  filePath: string,
-): Promise<void> {
-  const dir = path.dirname(filePath);
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2), 'utf-8');
-}
+let writeTimer: ReturnType<typeof setTimeout> | null = null;
+let writePending = false;
+const pendingWrites = new Map<string, RegistryStore>();
 
-/**
- * Check if a PID is still alive on the system.
- * On Windows: parse tasklist output to verify the PID actually appears.
- * On Unix: use `kill -0` which returns error if process doesn't exist.
- */
-export async function isPidAlive(pid: number): Promise<boolean> {
-  try {
-    if (process.platform === 'win32') {
-      const { stdout } = await execAsync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`);
-      // tasklist returns "INFO: No tasks are running." with exit code 0 when no match
-      const trimmed = stdout.trim();
-      if (trimmed.includes('No tasks are running') || !trimmed) {
-        return false;
-      }
-      // Output format: "imagename","pid","sessionname","sessionnum","memory"
-      // If PID appears, it will be in the second CSV field
-      const lines = trimmed.split('\n');
-      for (const line of lines) {
-        const parts = line.split(',');
-        if (parts.length >= 2) {
-          const pidStr = parts[1].replace(/"/g, '').trim();
-          if (pidStr === String(pid)) {
-            return true;
-          }
+async function writeStore(store: RegistryStore, filePath: string): Promise<void> {
+  pendingWrites.set(filePath, store);
+  if (writePending) return;
+  writePending = true;
+
+  await new Promise<void>((resolve) => {
+    writeTimer = setTimeout(async () => {
+      writePending = false;
+      writeTimer = null;
+      const entries = new Map(pendingWrites);
+      pendingWrites.clear();
+      for (const [fPath, s] of entries) {
+        try {
+          await fs.mkdir(path.dirname(fPath), { recursive: true });
+          const tmp = fPath + '.tmp.' + Math.random().toString(36).slice(2);
+          await fs.writeFile(tmp, JSON.stringify(s, null, 2), 'utf-8');
+          await fs.rename(tmp, fPath);
+        } catch (e) {
+          console.error(`[ProcessRegistry] Write failed for ${fPath}:`, e);
         }
       }
-      return false;
+      resolve();
+    }, 250);
+  });
+}
+
+// ─── OS-level process utilities ───────────────────────────────────────────────
+
+const pidCache = new Map<number, { alive: boolean; ts: number }>();
+const PID_CACHE_TTL = 2000;
+
+export async function isPidAlive(pid: number): Promise<boolean> {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+
+  const cached = pidCache.get(pid);
+  if (cached && Date.now() - cached.ts < PID_CACHE_TTL) return cached.alive;
+
+  try {
+    if (process.platform === 'win32') {
+      const result = await new Promise<boolean>((resolve) => {
+        const child = spawn('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        let out = '';
+        child.stdout.on('data', (d: Buffer) => { out += d.toString(); });
+        child.on('close', () => {
+          const trimmed = out.trim();
+          resolve(!trimmed.includes('No tasks are running') && trimmed.includes(String(pid)));
+        });
+        child.on('error', () => resolve(false));
+      });
+      pidCache.set(pid, { alive: result, ts: Date.now() });
+      return result;
     } else {
-      await execAsync(`kill -0 ${pid}`);
-      return true;
+      const { execFileSync } = await import('child_process');
+      try {
+        execFileSync('kill', ['-0', String(pid)], { timeout: 2000 });
+        pidCache.set(pid, { alive: true, ts: Date.now() });
+        return true;
+      } catch {
+        pidCache.set(pid, { alive: false, ts: Date.now() });
+        return false;
+      }
     }
   } catch {
     return false;
   }
 }
 
-/**
- * Kill a process tree (PID + all children) — Windows or Unix.
- */
 export async function killProcessTree(pid: number): Promise<void> {
+  if (!Number.isFinite(pid) || pid <= 0) return;
   try {
     if (process.platform === 'win32') {
-      await execAsync(`taskkill /F /T /PID ${pid}`);
+      await new Promise<void>((resolve) => {
+        const child = spawn('taskkill', ['/F', '/T', '/PID', String(pid)], {
+          windowsHide: true,
+          stdio: 'pipe',
+        });
+        child.on('close', () => resolve());
+        child.on('error', () => resolve());
+      });
     } else {
-      await execAsync(`kill -9 ${pid}`);
+      await new Promise<void>((resolve) => {
+        const child = spawn('kill', ['-9', String(pid)], { stdio: 'pipe' });
+        child.on('close', () => resolve());
+        child.on('error', () => resolve());
+      });
     }
+    pidCache.delete(pid);
   } catch {
-    // Process may have already exited — that's fine
+    // Already dead — fine
   }
 }
 
-/**
- * Register a new running process. Called immediately after spawn(),
- * before sessionId is known.
- */
+// ─── Registry operations ──────────────────────────────────────────────────────
+
 export async function registerProcess(
   pid: number,
-  meta: {
-    agentName: string;
-    runner?: string;
-    configPath?: string;
-  },
+  meta: { agentName: string; runner?: string; configPath?: string },
 ): Promise<void> {
-  return registryMutex.runExclusive(async () => {
-    const { store, path: filePath } = await readStore(meta.configPath);
-    const key = buildKey(meta.runner, meta.agentName);
-
-    // Preserve existing id/ts if any (legacy entry), just update pid/status
-    const existing = store[key];
-    const entry: ProcessEntry =
-      typeof existing === 'object' && existing !== null
-        ? { ...existing, pid, status: 'running', outputBuffer: existing.outputBuffer || '' }
-        : {
-            id: '',
-            ts: Date.now(),
-            pid,
-            runner: meta.runner,
-            agentName: meta.agentName,
-            status: 'running',
-            outputBuffer: '',
-          };
-
-    store[key] = entry;
-    await writeStore(store, filePath);
-  });
+  const { store, path: filePath } = await readStore(meta.configPath);
+  const key = buildKey(meta.runner, meta.agentName);
+  store.processes[key] = {
+    id: '',
+    ts: Date.now(),
+    pid,
+    runner: meta.runner,
+    agentName: meta.agentName,
+    status: 'running',
+    exitCode: null,
+  };
+  await writeStore(store, filePath);
 }
 
-/**
- * Link a sessionId to an already-registered PID.
- * Called when the runner emits a sessionId for the first time.
- */
 export async function linkSessionToPid(
   sessionId: string,
   pid: number,
   configPath?: string,
 ): Promise<void> {
-  return registryMutex.runExclusive(async () => {
-    const { store, path: filePath } = await readStore(configPath);
-
-    for (const key of Object.keys(store)) {
-      const entry = store[key];
-      if (typeof entry === 'object' && entry !== null && entry.pid === pid && !entry.id) {
-        entry.id = sessionId;
-        entry.ts = Date.now();
-        entry.lastOutputAt = Date.now();
-        store[key] = entry;
-        await writeStore(store, filePath);
-        return;
-      }
+  const { store, path: filePath } = await readStore(configPath);
+  for (const key of Object.keys(store.processes)) {
+    const entry = store.processes[key];
+    if (entry.pid === pid) {
+      entry.id = sessionId;
+      entry.ts = Date.now();
+      store.processes[key] = entry;
+      await writeStore(store, filePath);
+      return;
     }
-  });
+  }
 }
 
-/**
- * Update output buffer for a running process.
- * Called in stdout 'data' handler to enable live streaming.
- */
-export async function appendOutput(
-  pid: number,
-  chunk: string,
-  configPath?: string,
-): Promise<void> {
-  return registryMutex.runExclusive(async () => {
-    const { store, path: filePath } = await readStore(configPath);
-
-    for (const key of Object.keys(store)) {
-      const entry = store[key];
-      if (typeof entry === 'object' && entry !== null && entry.pid === pid) {
-        entry.outputBuffer += chunk;
-        entry.lastOutputAt = Date.now();
-        store[key] = entry;
-        await writeStore(store, filePath);
-        return;
-      }
-    }
-  });
+/** appendOutput — NO-OP: agent_lifecycle handles output in RAM */
+export async function appendOutput(pid: number, chunk: string, configPath?: string): Promise<void> {
+  void pid; void chunk; void configPath;
 }
 
-/**
- * Mark a process as done/failed/orphaned.
- */
 export async function updateProcessStatus(
   pid: number,
   status: ProcessStatus,
   exitCode?: number | null,
   configPath?: string,
 ): Promise<void> {
-  return registryMutex.runExclusive(async () => {
-    const { store, path: filePath } = await readStore(configPath);
-
-    for (const key of Object.keys(store)) {
-      const entry = store[key];
-      if (typeof entry === 'object' && entry !== null && entry.pid === pid) {
-        entry.status = status;
-        entry.exitCode = exitCode ?? null;
-        entry.lastOutputAt = Date.now();
-        store[key] = entry;
-        await writeStore(store, filePath);
-        return;
-      }
+  const { store, path: filePath } = await readStore(configPath);
+  for (const key of Object.keys(store.processes)) {
+    const entry = store.processes[key];
+    if (entry.pid === pid) {
+      entry.status = status;
+      entry.exitCode = exitCode ?? null;
+      entry.lastOutputAt = Date.now();
+      store.processes[key] = entry;
+      await writeStore(store, filePath);
+      return;
     }
-  });
+  }
 }
 
-/**
- * Get current status + output for an agent.
- */
 export async function getProcessStatus(
   agentName: string,
   runner?: string,
   configPath?: string,
 ): Promise<ProcessEntry | null> {
-  return registryMutex.runExclusive(async () => {
-    const { store } = await readStore(configPath);
-    const key = buildKey(runner, agentName);
-    const entry = store[key];
-
-    if (!entry) return null;
-
-    if (typeof entry === 'string') {
-      return { id: entry, ts: Date.now(), agentName, status: 'done', outputBuffer: '' };
-    }
-
-    // Check if running process is actually dead
-    if (entry.status === 'running' && entry.pid) {
-      const alive = await isPidAlive(entry.pid);
-      if (!alive) {
-        entry.status = 'orphaned';
-      }
-    }
-
-    return entry;
-  });
+  const { store } = await readStore(configPath);
+  const key = buildKey(runner, agentName);
+  return store.processes[key] ?? null;
 }
 
-/**
- * Kill a running agent by PID.
- */
 export async function killAgent(
   agentName: string,
   runner?: string,
   configPath?: string,
 ): Promise<{ killed: boolean; pid?: number }> {
-  return registryMutex.runExclusive(async () => {
-    const { store, path: filePath } = await readStore(configPath);
-    const key = buildKey(runner, agentName);
-    const entry = store[key];
+  const { store, path: filePath } = await readStore(configPath);
+  const key = buildKey(runner, agentName);
+  const entry = store.processes[key];
+  if (!entry || entry.status !== 'running') return { killed: false };
 
-    if (!entry || typeof entry !== 'object' || entry.status !== 'running') {
-      return { killed: false };
-    }
+  const pid = entry.pid;
+  if (pid) await killProcessTree(pid);
 
-    const pid = entry.pid;
-    if (!pid) return { killed: false };
+  entry.status = 'failed';
+  entry.exitCode = null;
+  entry.lastOutputAt = Date.now();
+  store.processes[key] = entry;
+  await writeStore(store, filePath);
 
-    await killProcessTree(pid);
-
-    entry.status = 'failed';
-    entry.exitCode = null;
-    entry.lastOutputAt = Date.now();
-    store[key] = entry;
-    await writeStore(store, filePath);
-
-    return { killed: true, pid };
-  });
+  return { killed: true, pid };
 }
 
-/**
- * Unregister (remove) a process entry. Call after TTL expires.
- */
-export async function unregisterProcess(
-  pid: number,
-  configPath?: string,
-): Promise<void> {
-  return registryMutex.runExclusive(async () => {
-    const { store, path: filePath } = await readStore(configPath);
-    let changed = false;
-
-    for (const key of Object.keys(store)) {
-      const entry = store[key];
-      if (typeof entry === 'object' && entry !== null && entry.pid === pid) {
-        delete store[key];
-        changed = true;
-      }
+export async function unregisterProcess(pid: number, configPath?: string): Promise<void> {
+  const { store, path: filePath } = await readStore(configPath);
+  let changed = false;
+  for (const key of Object.keys(store.processes)) {
+    if (store.processes[key].pid === pid) {
+      delete store.processes[key];
+      changed = true;
     }
-
-    if (changed) {
-      await writeStore(store, filePath);
-    }
-  });
+  }
+  if (changed) await writeStore(store, filePath);
 }
 
-/**
- * Scan all entries and clean up dead processes and old entries.
- * Called on startup and periodically.
- */
 export async function cleanupRegistry(configPath?: string): Promise<{
   orphaned: number;
   expired: number;
 }> {
-  return registryMutex.runExclusive(async () => {
-    const { store, path: filePath } = await readStore(configPath);
-    const now = Date.now();
-    let orphaned = 0;
-    let expired = 0;
-    let changed = false;
+  const { store, path: filePath } = await readStore(configPath);
+  const now = Date.now();
+  let orphaned = 0;
+  let expired = 0;
+  let changed = false;
 
-    for (const key of Object.keys(store)) {
-      const entry = store[key];
-      if (typeof entry !== 'object' || entry === null) continue;
-
-      // Check running processes
-      if (entry.status === 'running' && entry.pid) {
-        const alive = await isPidAlive(entry.pid);
-        if (!alive) {
-          entry.status = 'orphaned';
-          orphaned++;
-          changed = true;
-        }
-      }
-
-      // TTL cleanup for done/failed/orphaned
-      if (entry.status !== 'running') {
-        const age = now - (entry.lastOutputAt || entry.ts);
-        if (age > PROCESS_TTL_MS) {
-          delete store[key];
-          expired++;
-          changed = true;
-        }
-      }
+  for (const key of Object.keys(store.processes)) {
+    const entry = store.processes[key];
+    if (entry.status === 'running' && entry.pid) {
+      const alive = await isPidAlive(entry.pid);
+      if (!alive) { entry.status = 'orphaned'; orphaned++; changed = true; }
     }
-
-    if (changed) {
-      await writeStore(store, filePath);
+    if (entry.status !== 'running') {
+      const age = now - (entry.lastOutputAt || entry.ts);
+      if (age > PROCESS_TTL_MS) { delete store.processes[key]; expired++; changed = true; }
     }
-
-    return { orphaned, expired };
-  });
+  }
+  if (changed) await writeStore(store, filePath);
+  return { orphaned, expired };
 }
 
-/**
- * Get all running processes.
- */
-export async function getRunningProcesses(
-  configPath?: string,
-): Promise<ProcessEntry[]> {
-  return registryMutex.runExclusive(async () => {
-    const { store } = await readStore(configPath);
-    const result: ProcessEntry[] = [];
+export async function getRunningProcesses(configPath?: string): Promise<ProcessEntry[]> {
+  const { store } = await readStore(configPath);
+  return Object.values(store.processes).filter((e) => e.status === 'running');
+}
 
-    for (const entry of Object.values(store)) {
-      if (typeof entry === 'object' && entry !== null && entry.status === 'running') {
-        if (entry.pid) {
-          const alive = await isPidAlive(entry.pid);
-          if (!alive) {
-            entry.status = 'orphaned';
-          }
-        }
-        result.push(entry);
-      }
-    }
-
-    return result;
-  });
+export function startAutoCleanup(configPath?: string): void {
+  cleanupRegistry(configPath).catch(() => {});
+  setInterval(() => { cleanupRegistry(configPath).catch(() => {}); }, CLEANUP_INTERVAL_MS);
 }
