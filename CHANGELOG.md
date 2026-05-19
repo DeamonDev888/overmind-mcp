@@ -13,6 +13,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.8.0] - 2026-05-18
+
+### 🧠 Hermes Memory Plugin — Overmind RAG Memory Provider
+
+Overmind Cortex MemoryProvider using Hermes Agent's memory infrastructure with PostgreSQL + pgvector RAG.
+
+#### 🚀 Features
+
+- **OvermindMemoryProvider** — Full MemoryProvider implementation with sync_turn, prefetch, on_session_end, on_memory_write, and on_delegation hooks
+- **HTTP MCP client** — Bypasses broken SDK (v3Schema.safeParse SSE bug) with direct HTTP/SSE implementation
+- **Per-agent isolation** — Separate PostgreSQL database per agent namespace (agent_hermes, agent_sniper, etc.)
+- **4096D semantic search** — Qwen 8B embeddings via OpenRouter with pgvector HNSW indexing
+- **Auto-store/search** — Every turn automatically stored and prefetched before next turn
+
+#### 🐛 Fixes
+
+- **EACCES during global install** — Corrected overmind-postgres-mcp binary name
+- **Session parsing** — hermes: session parsing + minimal valid args only
+- **Invalid CLI flags** — Removed invalid --exit-after and --name flags from Hermes CLI args
+
+#### 🔧 Infrastructure
+
+- **Two-layer lifecycle** — Lifecycle + security hardening
+- **Gitignore audit** — Cleaned gitignore for proper packaging
+
+---
+
 ## [2.7.0] - 2026-05-15
 
 ### 🪶 Hermes MiniMaxi Integration — Final Fix
