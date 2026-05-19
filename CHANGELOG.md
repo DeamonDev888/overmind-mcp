@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.8.2] - 2026-05-18
+
+### 📝 Documentation
+
+- **README.md** — Removed outdated "Démarrage des Serveurs HTTP" section (servers are now auto-managed via Docker/setup scripts)
+
+---
+
 ## [2.8.1] - 2026-05-18
 
 ### 📝 Documentation
