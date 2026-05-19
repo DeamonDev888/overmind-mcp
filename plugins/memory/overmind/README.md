@@ -48,7 +48,9 @@ The Overmind Memory plugin replaces Hermes' flat `MEMORY.md` / `USER.md` files w
 
 ```bash
 cd /path/to/Workflow
-./overmind-serve.bat start
+./bin/install-overmind-windows.bat
+# ou manuellement:
+node dist/bin/cli.js --transport httpStream --port 3099
 ```
 
 Verify it's running:
@@ -59,11 +61,41 @@ curl http://localhost:3099/health
 
 ### 2. PostgreSQL + pgvector
 
-Overmind stores all memory in PostgreSQL with pgvector indexes:
+Overmind stores all memory in PostgreSQL with pgvector indexes.
 
-- PostgreSQL running (default port 5432)
-- `pgvector` extension enabled
-- `OVERMIND_EMBEDDING_KEY` set in `Workflow/.env` (Qwen API via OpenRouter)
+**Database initialization** (runs automatically via Docker, or manually):
+
+```bash
+psql -h localhost -U postgres -d overmind_memory -f db/init-overmind-db.sql
+```
+
+Creates: `overmind_agents`, `overmind_memories` (4096D vector index), `overmind_sessions`.
+
+### 3. Environment variables (`.env`)
+
+Add these to `Workflow/.env`:
+
+```env
+# ── Database ────────────────────────────────────────────────────────────────
+OVERMIND_MEMORY_TYPE=postgres
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_password
+POSTGRES_DATABASE=overmind_memory   # per-agent: agent_hermes, agent_sniper, etc.
+POSTGRES_SSL=false
+
+# ── Embedding / OpenRouter ─────────────────────────────────────────────────
+OVERMIND_EMBEDDING_KEY=sk-or-v2-...     # OpenRouter API key
+OVERMIND_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
+OVERMIND_EMBEDDING_URL=https://openrouter.ai/api/v1
+OVERMIND_EMBEDDING_DIMENSIONS=4096
+
+# ── Server ─────────────────────────────────────────────────────────────────
+OVERMIND_HTTP_MODE=false
+OVERMIND_HTTP_PORT=3099
+OVERMIND_WORKSPACE=C:\path\to\Workflow
+```
 
 ---
 
@@ -117,6 +149,9 @@ mcp_servers:
     url: http://localhost:3099/mcp
   postgres:
     url: http://localhost:5433/mcp
+  memory:
+    type: http
+    url: http://localhost:3099/mcp
 ```
 
 ### Step 4 — Restart Hermes
@@ -253,7 +288,7 @@ overmind_memory_runs({
 
 ```bash
 cd /path/to/Workflow
-./overmind-serve.bat restart
+./bin/install-overmind-windows.bat restart
 ```
 
 ### Check Hermes logs

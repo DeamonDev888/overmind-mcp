@@ -459,34 +459,31 @@ console.log('Résultat:', result.error ?? result.result);
 
 ---
 
-## Outil : overmind-serve.bat
+## Outil : bin/install-overmind-windows.bat
 
 ```batch
-:: Lancer le serveur Overmind MCP
-overmind-serve.bat              Start (ou restart si déjà lancé)
-overmind-serve.bat stop         Arrêt propre
-overmind-serve.bat restart      Restart
-overmind-serve.bat status       Voir si ça tourne
-overmind-serve.bat tail         20 dernières lignes du log
-overmind-serve.bat kill         Kill forcé
-
-:: Fonctionne même si le script est lancé depuis un autre répertoire
-cd C:\ && overmind-serve.bat status
+:: Lancer le serveur Overmind MCP (via le script d'installation)
+bin\install-overmind-windows.bat          Start (ou restart si déjà lancé)
+bin\install-overmind-windows.bat stop     Arrêt propre
+bin\install-overmind-windows.bat restart  Restart
+bin\install-overmind-windows.bat status   Voir si ça tourne
+bin\install-overmind-windows.bat tail     20 dernières lignes du log
+bin\install-overmind-windows.bat kill     Kill forcé
 ```
 
-Log : `Workflow/logs/overmind.log`  
-PID file : `Workflow/overmind.pid`  
+Log : `Workflow/logs/overmind.log`
+PID file : `Workflow/overmind.pid`
 Health : `curl http://localhost:3099/health`
 
 ## Outil : overmind-pool.mjs (client CLI)
 
 ```bash
-node overmind-pool.mjs --status          # health check
-node overmind-pool.mjs --agents           # lister agents
-node overmind-pool.mjs --pool             # demo 5 agents
-node overmind-pool.mjs --run <n> <r> <p>  # run un agent
-node overmind-pool.mjs --create <n> <r> <p>  # créer un agent
-node overmind-pool.mjs --kill <name>       # tuer un agent
+node bin/overmind-pool.mjs --status          # health check
+node bin/overmind-pool.mjs --agents           # lister agents
+node bin/overmind-pool.mjs --pool             # demo 5 agents
+node bin/overmind-pool.mjs --run <n> <r> <p>  # run un agent
+node bin/overmind-pool.mjs --create <n> <r> <p>  # créer un agent
+node bin/overmind-pool.mjs --kill <name>       # tuer un agent
 ```
 
 ## Comparatif rapide

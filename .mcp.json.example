@@ -14,27 +14,7 @@
       "transport": "httpStream",
       "url": "http://localhost:3141/mcp",
       "description": "Discord MCP - 88 outils sur port 3141"
-    },
-    "x-mcp-server": {
-      "transport": "httpStream",
-      "url": "http://localhost:3142/mcp",
-      "description": "X/Twitter MCP - scraping/publish sur port 3142"
-    },
-    "debats-mcp-server": {
-      "transport": "httpStream",
-      "url": "http://localhost:3100/mcp",
-      "description": "Débats MCP - analyse/arguments sur port 3100"
-    },
-    "news-btc-mcp": {
-      "transport": "httpStream",
-      "url": "http://localhost:3143/mcp",
-      "description": "News BTC MCP - actualité crypto sur port 3143"
-    },
-    "news-core-mcp": {
-      "transport": "httpStream",
-      "url": "http://localhost:3144/mcp",
-      "description": "News Core MCP - scraped news sur port 3144"
-    }
+    } 
   },
   "description": "Configuration MCP HTTP Singleton - Anti-Zombie. Tous les serveurs doivent être démarrés.",
   "version": "2.4.0"
