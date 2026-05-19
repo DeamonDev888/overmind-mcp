@@ -63,41 +63,6 @@ Après installation, configurez votre client MCP avec le模式下 :
 
 ---
 
-## 🅾️ Démarrage des Serveurs HTTP
-
-Les serveurs doivent être démarrés avant utilisation :
-
-```bash
-# Overmind (complet) — port 3099
-node dist/bin/cli.js --transport http-stream --port 3099
-
-# PostgreSQL — port 5433
-cd ../serveur_PostGreSQL
-FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=5433 node dist/index.js
-
-# Discord — port 3141
-cd ../serveur_discord
-FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3141 node dist/index.js
-
-# X — port 3142
-cd ../X
-FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3142 node dist/src/server.js
-
-# Debats — port 3100
-cd ../debats-mcp-server
-FORCE_COLOR=0 FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3100 node dist/index.js
-```
-
-| Serveur | Port | Outils |
-|---------|------|--------|
-| Overmind | 3099 | 14 (run_agent, create_agent, memory...) |
-| PostgreSQL | 5433 | 30+ (SQL, vectors, search...) |
-| Discord | 3141 | 88 (members, roles, channels, embeds...) |
-| X | 3142 | Outils X/Twitter |
-| Debats | 3100 | Outils débats |
-
----
-
 ## 🔧 Installation Locale (Dev)
 
 ```bash
