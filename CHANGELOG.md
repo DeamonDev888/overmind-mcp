@@ -13,7 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2.8.2] - 2026-05-18
+## [2.8.3] - 2026-05-18
+
+### 🐛 Fixes
+
+- **Hermes MemoryProvider install path** — Plugin was placed in `hermes/plugins/memory/overmind/` (user dir) but Hermes Agent's venv `sys.path` resolves `plugins.memory` to `hermes-agent/plugins/memory/` (bundled). Fixed by copying the plugin to the bundled location so Hermes can discover and activate it.
+
+### 📦 Installation Fix for Hermes Users
+
+- Copy `plugins/memory/overmind/` to `hermes-agent/plugins/memory/overmind/` (bundled plugins directory) so Hermes Agent loads the MemoryProvider correctly
+
 
 ### 📝 Documentation
 
