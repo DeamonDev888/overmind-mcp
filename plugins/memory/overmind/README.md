@@ -149,6 +149,9 @@ mcp_servers:
     url: http://localhost:3099/mcp
   postgres:
     url: http://localhost:5433/mcp
+  memory:
+    type: http
+    url: http://localhost:3099/mcp
 ```
 
 ### Step 4 — Restart Hermes
