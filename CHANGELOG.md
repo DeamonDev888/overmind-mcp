@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.8.1] - 2026-05-18
+
+### 📝 Documentation
+
+- **Memory plugin README** — Added PostgreSQL init steps + full `.env` config reference (DB + OpenRouter/embedding vars)
+- **MCP expose config** — Added `memory: { type: http, url: http://localhost:3099/mcp }` to Step 3
+- **overmind-pool.mjs** — Moved to `bin/`
+- **overmind-serve.bat** — Removed (redundant with `bin/install-overmind-windows.bat`)
+- **agent-http-tutorial.md** — Updated paths for relocated files
+
+---
+
 ## [2.8.0] - 2026-05-18
 
 ### 🧠 Hermes Memory Plugin — Overmind RAG Memory Provider
