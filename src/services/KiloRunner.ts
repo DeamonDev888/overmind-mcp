@@ -42,6 +42,7 @@ export class KiloRunner {
   private config: typeof CONFIG.KILO;
   private timeoutMs: number;
 
+  /* eslint-disable no-useless-escape */
   static INSTALL_INSTRUCTIONS = `
 💡 **Comment installer/mettre à jour Kilo Code v7.2.14 :**
 

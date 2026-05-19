@@ -168,7 +168,7 @@ async function doStream(
     ? live.status !== 'running'
     : disk!.status !== 'running';
 
-  let output = live ? live.outputBuffer : '';
+  const output = live ? live.outputBuffer : '';
   if (sinceTimestamp && live) {
     // Ring buffer doesn't support per-chunk timestamps — best-effort: return last 2000
     void sinceTimestamp;
