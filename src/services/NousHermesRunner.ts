@@ -321,7 +321,7 @@ export class NousHermesRunner {
     let systemPrompt = '';
     if (agentName) {
       try {
-        const settingsDir = path.dirname(CONFIG.CLAUDE.PATHS.SETTINGS);
+        const settingsDir = path.dirname(CONFIG.HERMES.PATHS.SETTINGS);
         const agentSettingsPath = resolveConfigPath(
           path.join(settingsDir, `settings_${agentName}.json`),
           options.configPath,
@@ -477,13 +477,10 @@ export class NousHermesRunner {
             const hermesConfigDir = overmindHermesSubPath;
             if (!fs.existsSync(hermesConfigDir)) fs.mkdirSync(hermesConfigDir, { recursive: true });
 
-            const mcpJsonPath = path.join(hermesConfigDir, 'mcp.json');
             const configYamlPath = path.join(hermesConfigDir, 'config.yaml');
 
-            // Helper pour convertir le format MCP JSON vers le format mcp.json Hermes (identique à Claude Desktop)
-            fs.writeFileSync(mcpJsonPath, JSON.stringify(mcpConfig, null, 2), 'utf8');
-
-            // Generer aussi config.yaml (format snake_case attendu par Hermes)
+            // Generate config.yaml (Hermes-native snake_case format)
+            // mcp.json is NOT written — Hermes reads config.yaml from HERMES_HOME
             let yamlContent = 'mcp_servers:\n';
             for (const [name, server] of Object.entries(mcpConfig.mcpServers || {})) {
               const s = server as Record<string, unknown>;
@@ -511,7 +508,7 @@ export class NousHermesRunner {
 
             if (!silent)
               console.error(
-                `[NousHermesRunner] 🛠️  Hermes configs (mcp.json & config.yaml) generated in ${hermesConfigDir}`,
+                `[NousHermesRunner] 🛠️  Hermes config.yaml generated in ${hermesConfigDir}`,
               );
           } catch (err) {
             logger.error({ error: err }, 'Error translating MCP config');
@@ -544,7 +541,7 @@ export class NousHermesRunner {
     const cleanArgs = ['-z', cliPrompt];
 
     // --- Model & Provider selection ---
-    const DEFAULT_MODEL = 'tencent/hy3-preview:free'; // Modèle OpenRouter gratuit
+    const DEFAULT_MODEL = CONFIG.HERMES.DEFAULT_MODEL;
     const originalModel = options.model || DEFAULT_MODEL;
     // Guard: ensure model is always a string (not an object from settings.model)
     const modelStr = typeof originalModel === 'string' ? originalModel : DEFAULT_MODEL;
@@ -684,7 +681,7 @@ export class NousHermesRunner {
     const configYamlPath = path.join(overmindHermesSubPath, 'config.yaml');
     if (fs.existsSync(configYamlPath)) {
       cleanArgs.push('--mcp-config', configYamlPath);
-      this.tempFiles.push(path.join(overmindHermesSubPath, 'mcp.json'), configYamlPath);
+      this.tempFiles.push(configYamlPath);
     }
 
     // --hermes-dir: isolate this agent's hermes state (auth.json, .env, sessions)
