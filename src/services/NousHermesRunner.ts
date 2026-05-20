@@ -352,6 +352,7 @@ export class NousHermesRunner {
         }
 
         const rawSettings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const settings = interpolateEnvVars(rawSettings) as Record<string, any>;
 
         // Create a temporary settings file with interpolated values (same approach as ClaudeRunner)
@@ -362,7 +363,6 @@ export class NousHermesRunner {
         );
         fs.writeFileSync(tmpSettingsPath, JSON.stringify(settings, null, 2), 'utf8');
         this.tempFiles.push(tmpSettingsPath);
-        const interpolatedSettingsPath = tmpSettingsPath;
         // Only use settings.model if it's a string (not a config object like {provider:"custom",...})
         if (!options.model && typeof settings.model === 'string') {
           options.model = settings.model;
@@ -472,6 +472,7 @@ export class NousHermesRunner {
         if (fs.existsSync(agentMcpPath)) {
           try {
             const rawMcpConfig = JSON.parse(fs.readFileSync(agentMcpPath, 'utf8'));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const mcpConfig = interpolateEnvVars(rawMcpConfig) as Record<string, any>;
             const hermesConfigDir = overmindHermesSubPath;
             if (!fs.existsSync(hermesConfigDir)) fs.mkdirSync(hermesConfigDir, { recursive: true });
@@ -622,7 +623,7 @@ export class NousHermesRunner {
               if (!silent) console.error(`[NousHermesRunner] Updated minimax-cn credential in auth.json`);
             }
           }
-        } catch (e) { /* non-critical */ }
+        } catch (_e) { /* non-critical */ }
         if (!silent) console.error(`[NousHermesRunner] Set ANTHROPIC_AUTH_TOKEN_4 for MiniMax via minimax-cn`);
       }
       delete agentCustomEnv.OPENROUTER_API_KEY;
@@ -687,8 +688,7 @@ export class NousHermesRunner {
     }
 
     // --hermes-dir: isolate this agent's hermes state (auth.json, .env, sessions)
-    // Pass via HERMES_DIR env var (not as CLI flag — --hermes-dir is only for subcommands like "chat")
-    const hermesDirEnv = { HERMES_DIR: overmindHermesSubPath };
+    // HERMES_DIR is passed inline in the spawn env below (not as CLI flag — --hermes-dir is only for subcommands like "chat")
 
     // --- Find Hermes Binary (cross-platform) ---
     const spawnCommand = await findHermesBinary();
