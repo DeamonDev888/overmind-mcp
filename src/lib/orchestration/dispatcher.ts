@@ -49,7 +49,6 @@ export async function runAgentsLocally(
 
   const controllers = agents.map(() => new AbortController());
   const settled = new Array(agents.length).fill(false);
-  const resolved = false;
 
   const promises = agents.map(
     async (agentArgs: AgentSpec, index: number): Promise<AgentDispatchResult> => {

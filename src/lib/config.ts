@@ -22,6 +22,7 @@ export interface ConfigType {
   };
   HERMES: {
     CORE: string;
+    DEFAULT_MODEL: string;
     PATHS: {
       SETTINGS: string;
     };
@@ -66,8 +67,9 @@ export const DEFAULT_CONFIG: ConfigType = {
   },
   HERMES: {
     CORE: 'chat -q',
+    DEFAULT_MODEL: 'MiniMax-M2.7',
     PATHS: {
-      SETTINGS: './.hermes/settings.json',
+      SETTINGS: './.claude/settings.json',
     },
   },
 };
