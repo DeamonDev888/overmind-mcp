@@ -11,6 +11,7 @@ import { loadEnvQuietly } from '../lib/loadEnv.js';
 import pino from 'pino';
 import {
   registerProcess,
+  linkSessionToPid,
   appendOutput,
   updateProcessStatus,
 } from '../lib/processRegistry.js';
@@ -67,6 +68,7 @@ export interface RunAgentResult {
   rawOutput?: string;
   model?: string; // resolved real model ID
   nickname?: string; // original value from config (if different)
+  fallbackUsed?: string; // which fallback token was used (e.g. 'AUTH_FALLBACK_1')
 }
 
 /**
@@ -184,7 +186,37 @@ export class NousHermesRunner {
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
-    return runAgentWrapper.call(this, options);
+    try {
+      const result = await withSpan(
+        'hermes.runAgent',
+        async (span) => {
+          span.setAttribute('agentName', options.agentName || '');
+          span.setAttribute('model', options.model || '');
+          span.setAttribute('runner', 'hermes');
+          return await this.runAgentInternal(options);
+        },
+        {
+          agentName: options.agentName || '',
+          model: options.model || '',
+          runner: 'hermes',
+        },
+      );
+
+      this.cleanupTempFiles();
+
+      if (options.agentName && result.sessionId) {
+        await saveSessionId(options.agentName, result.sessionId, options.configPath, 'hermes');
+      }
+
+      return result;
+    } catch (error) {
+      this.cleanupTempFiles();
+      logger.error(
+        { error: error instanceof Error ? error.message : String(error), agentName: options.agentName },
+        'Hermes runner failed',
+      );
+      throw error;
+    }
   }
 
   async runAgentInternal(options: RunAgentOptions): Promise<RunAgentResult> {
@@ -685,6 +717,7 @@ export class NousHermesRunner {
 
       if (child.pid) {
         void registerProcess(child.pid, { agentName: agentName || '', runner: 'hermes', configPath: options.configPath });
+        if (sessionId) void linkSessionToPid(sessionId, child.pid, options.configPath);
       }
 
       let stdout = '';
@@ -722,6 +755,7 @@ export class NousHermesRunner {
           rawOutput: stdout + '\n\n' + stderr,
           model,
           nickname: originalModel !== model ? originalModel : undefined,
+          fallbackUsed: undefined,
         });
       }, this.timeoutMs);
 
@@ -737,6 +771,7 @@ export class NousHermesRunner {
             rawOutput: stdout + '\n\n' + stderr,
             model,
             nickname: originalModel !== model ? originalModel : undefined,
+            fallbackUsed: undefined,
           });
         };
         if (options.signal.aborted) {
@@ -768,6 +803,7 @@ child.on('close', async (code: number | null) => {
             sessionId: parsedSessionId,
             model,
             nickname: originalModel !== model ? originalModel : undefined,
+            fallbackUsed: undefined,
           });
         }
 
@@ -789,51 +825,5 @@ child.on('close', async (code: number | null) => {
       // Do NOT call child.stdin.end() — it sends EOF and Hermes closes.
       // Keep stdin open so Hermes stays alive for resume.
     });
-  }
-}
-
-/**
- * Run agent with proper cleanup and telemetry
- */
-async function runAgentWrapper(
-  this: NousHermesRunner,
-  options: RunAgentOptions,
-): Promise<RunAgentResult> {
-  try {
-    const result = await withSpan('hermes.runAgent', async (span) => {
-      span.setAttribute('agentName', options.agentName || '');
-      span.setAttribute('model', options.model || '');
-      span.setAttribute('runner', 'hermes');
-      return await this.runAgentInternal(options);
-    }, {
-      agentName: options.agentName || '',
-      model: options.model || '',
-      runner: 'hermes',
-    });
-
-    // Cleanup on success
-    this.cleanupTempFiles();
-
-    // Save session if needed
-    if (options.agentName && result.sessionId) {
-      await saveSessionId(
-        options.agentName,
-        result.sessionId,
-        options.configPath,
-        'hermes',
-      );
-    }
-
-    return result;
-  } catch (error) {
-    // Cleanup on error
-    this.cleanupTempFiles();
-
-    logger.error({
-      error: error instanceof Error ? error.message : String(error),
-      agentName: options.agentName,
-    }, 'Hermes runner failed');
-
-    throw error;
   }
 }

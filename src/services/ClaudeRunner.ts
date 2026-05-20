@@ -19,7 +19,6 @@ import {
   appendLiveOutput,
   setLiveStatus,
   unregisterLiveAgent,
-  type LiveAgent,
 } from '../lib/agent_lifecycle.js';
 
 const __filename = fileURLToPath(import.meta.url);

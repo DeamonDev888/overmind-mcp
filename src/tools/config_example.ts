@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const configExampleSchema = z.object({
   provider: z
-    .enum(['glm', 'minimax', 'openrouter', 'ilmu', 'minimaxi', 'overmind'])
+    .enum(['glm', 'minimax', 'openrouter', 'ilmu', 'minimaxi', 'overmind', 'hermes'])
     .describe('Le fournisseur pour lequel vous voulez un exemple de configuration.'),
 });
 
@@ -267,7 +267,51 @@ Les \`$VAR\` peuvent être sur n'importe quelle valeur de \`env\`.
 - Les tokens sont résolus **avant** le spawn de l'agent.
 - Le retry fonctionne sur erreur **401 (auth), 429 (rate limit), 500/502/503 (server error)** — pas sur les erreurs de réseau simples (timeout, DNS...).
 - Chaque token fallback ne sera testé qu'une seule fois par session d'agent.
-- Si tous les fallbacks sont épuisés, l'erreur finale est \`RETRYABLE_ERROR_ALL_FALLBACKS_EXHAUSTED\`.`;
+    - Si tous les fallbacks sont épuisés, l'erreur finale est \`RETRYABLE_ERROR_ALL_FALLBACKS_EXHAUSTED\`.`;
+      break;
+
+    case 'hermes':
+      text = `🤖 **EXEMPLE DE CONFIGURATION POUR HERMES (NOUS AGENT)**
+
+### 📂 .claude/settings_[nom_agent].json
+\`\`\`json
+{
+  "model": "MiniMax-M2.7",
+  "env": {
+    "HERMES_AUTH_TOKEN": "$HERMES_AUTH_TOKEN",
+    "HERMES_BASE_URL": "$HERMES_BASE_URL",
+    "HERMES_MODEL": "MiniMax-M2.7",
+    "MAX_TOKENS": "16000"
+  },
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": [
+    "postgresql-server",
+    "memory"
+  ],
+  "agent": "nom_agent",
+  "runner": "hermes"
+}
+\`\`\`
+
+### 📂 .env correspondant
+\`\`\`
+# Hermes / Nous Agent Configuration
+HERMES_AUTH_TOKEN=your_hermes_token_here
+HERMES_BASE_URL=https://api.minimax.io
+MAX_TOKENS=16000
+\`\`\`
+
+**Comment ça marche :**
+- Hermes utilise les **3 fichiers standard** comme les autres runners : \`.claude/settings_[agent].json\`, \`.claude/agents/[agent].md\`, \`.claude/.mcp.[agent].json\`
+- Le modèle par défaut est \`MiniMax-M2.7\` (défini dans \`CONFIG.HERMES.DEFAULT_MODEL\`)
+- Les agents sont définis via \`PromptManager\` (\`.claude/agents/[nom].md\`)
+- Les MCP servers sont configurés via \`.claude/.mcp.[agent].json\` (même format que Claude/Kilo)
+- HERMES_DIR est automatiquement injecté au spawn pour l'isolation
+- Pas de fallback token intégré (contrairement à Claude/Kilo) — à implémenter via le réseau de tokens Overmind si besoin
+
+**Modèle par défaut :** \`MiniMax-M2.7\` (via \`CONFIG.HERMES.DEFAULT_MODEL\`)
+
+${interpolationNotice}`;
       break;
   }
 

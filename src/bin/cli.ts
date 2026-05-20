@@ -633,7 +633,15 @@ if (process.env.OVERMIND_HTTP_MODE === 'true') {
 }
 
 if (transportType === 'httpStream') {
-  const httpStreamConfig: any = {
+  const httpStreamConfig: {
+    port: number;
+    host: string;
+    endpoint: `/${string}`;
+    stateless: boolean;
+    sslCert?: string;
+    sslKey?: string;
+    sslCa?: string;
+  } = {
     port: httpPort,
     host: httpHost,
     endpoint: httpEndpoint as `/${string}`,
