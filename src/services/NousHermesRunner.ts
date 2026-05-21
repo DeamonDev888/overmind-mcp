@@ -283,28 +283,21 @@ export class NousHermesRunner {
     // critiques dans:
     //   1. HERMES_HOME/.env (notre isolation)
     //   2. ~/.hermes/.env (fallback pour l'init Hermes avant lecture HERMES_HOME)
+    //
+    // AUTO-DISCOVERY: plutôt que de lister chaque var individuellement (ANTHROPIC_AUTH_TOKEN_Y,
+    // MINIMAXI_API_KEY_2, etc.), on collecte automatiquement toutes les vars dont le nom
+    // contient un suffixe typiquement associated à des credentials. Tout projet/.env qui
+    // suit les conventions de nommage standard (KEY, TOKEN, BASE_URL, ENDPOINT, URL)
+    // sera automatiquement exposée à Hermes — sans modification du code.
     const writeHermesDotEnv = (dotEnvPath: string) => {
       const dotEnvEntries: string[] = [];
-      const dotEnvKeys = [
-        'MINIMAXI_API_KEY',
-        'MINIMAX_API_KEY',
-        'ANTHROPIC_AUTH_TOKEN',
-        'ANTHROPIC_AUTH_TOKEN_1',
-        'ANTHROPIC_AUTH_TOKEN_2',
-        'ANTHROPIC_AUTH_TOKEN_3',
-        'ANTHROPIC_AUTH_TOKEN_4',
-        'MINIMAX_CN_API_KEY',
-        'OPENROUTER_API_KEY',
-        'OPENAI_API_KEY',
-        'Z_AI_API_KEY',
-        'GLM_API_KEY',
-        'Z_AI_API_KEY_2',
-        'MISTRAL_API_KEY',
-        'NVIDIA_API_KEY',
-      ];
-      for (const key of dotEnvKeys) {
-        if (agentCustomEnv[key]) {
-          dotEnvEntries.push(`${key}=${agentCustomEnv[key]}`);
+      for (const [k, v] of Object.entries(agentCustomEnv)) {
+        if (
+          typeof v === 'string' &&
+          v.length > 0 &&
+          /^(.*?)(_API_KEY|_AUTH_TOKEN|_BASE_URL|_ENDPOINT|_URL|API_KEY|AUTH_TOKEN|BASE_URL)(.*?)$/i.test(k)
+        ) {
+          dotEnvEntries.push(`${k}=${v}`);
         }
       }
       if (dotEnvEntries.length > 0) {
@@ -312,9 +305,10 @@ export class NousHermesRunner {
           ? fs.readFileSync(dotEnvPath, 'utf8')
           : '';
         const newContent = dotEnvEntries.join('\n') + '\n';
+        // Prepend so our vars take priority over any existing content
         const finalContent = existingContent ? newContent + existingContent : newContent;
         fs.writeFileSync(dotEnvPath, finalContent, 'utf8');
-        if (!silent) console.error(`[NousHermesRunner] Wrote ${dotEnvEntries.length} keys to ${dotEnvPath}`);
+        if (!silent) console.error(`[NousHermesRunner] Wrote ${dotEnvEntries.length} credential vars to ${dotEnvPath}`);
       }
     };
 
@@ -376,62 +370,35 @@ export class NousHermesRunner {
           options.provider = settings.env.ANTHROPIC_PROVIDER;
         }
         if (settings.env) {
-          // Fusion intelligente : préserver les clés critiques (API keys)
-          const criticalKeys = [
-            // OpenAI
-            'OPENAI_API_KEY',
-            'OPENAI_API_BASE',
-            'OPENAI_BASE_URL',
-            // Mistral
-            'MISTRAL_API_KEY',
-            'MISTRAL_API_KEY_2',
-            'MISTRAL_API_KEY_3',
-            'MISTRAL_API_KEY_4',
-            'MISTRAL_API_KEY_5',
-            'MISTRAL_API_KEY_6',
-            'MISTRAL_API_KEY_7',
-            // NVIDIA
-            'NVIDIA_API_KEY',
-            'NVAPI_KEY',
-            'NVIDIA_API_BASE',
-            // OpenRouter / Overmind
-            'OPENROUTER_API_KEY',
-            'OVERMIND_EMBEDDING_KEY',
-            // MiniMax
-            'MINIMAXI_API_KEY',
-            // ZhipuAI / GLM
-            'Z_AI_API_KEY',
-            // Google / Gemini
-            'GOOGLE_API_KEY',
-            'GEMINI_API_KEY',
-            // Anthropic
-            'ANTHROPIC_API_KEY',
-            'ANTHROPIC_AUTH_TOKEN',
-          ];
-          const envCopy = { ...settings.env };
+          // ─── Smart merge: inject env vars from process into settings.env ──────────
+          // This propagates API keys loaded from .env (loadEnvQuietly above) into the
+          // agent's env block. Only inject keys NOT already set in settings.env, so
+          // explicit agent settings always take priority.
+          // AUTO-DISCOVERY: matches any var with KEY/TOKEN/BASE_URL/ENDPOINT/URL in the name
+          // across ALL providers — no per-provider hardcoding needed.
+          const _isCredential = (k: string) =>
+            /^(.*?)(_API_KEY|_AUTH_TOKEN|_BASE_URL|_ENDPOINT|_URL|API_KEY|AUTH_TOKEN|BASE_URL)(.*?)$/i.test(k);
 
-          for (const key of criticalKeys) {
-            if (agentCustomEnv[key] && !envCopy[key]) {
-              envCopy[key] = agentCustomEnv[key];
+          const envCopy = { ...settings.env };
+          for (const [k, v] of Object.entries(agentCustomEnv)) {
+            if (typeof v === 'string' && v.length > 0 && _isCredential(k) && !envCopy[k]) {
+              envCopy[k] = v;
             }
           }
           Object.assign(agentCustomEnv, envCopy);
 
-          // ─── Resolve $VAR placeholders in agentCustomEnv values ───────────────
-          // Hermes reads from process.env, so any "$ANTHROPIC_AUTH_TOKEN_2" style
-          // placeholders must be resolved NOW before Hermes is spawned.
-          // We iterate all keys and replace known placeholders with resolved values.
-          const placeholders: Record<string, string | undefined> = {
-            'ANTHROPIC_AUTH_TOKEN_2': process.env.ANTHROPIC_AUTH_TOKEN_2,
-            'ANTHROPIC_AUTH_TOKEN_Y': process.env.ANTHROPIC_AUTH_TOKEN_Y,
-            'ANTHROPIC_AUTH_TOKEN_E': process.env.ANTHROPIC_AUTH_TOKEN_E,
-            'ANTHROPIC_BASE_URL_2': process.env.ANTHROPIC_BASE_URL_2,
-            'ANTHROPIC_BASE_URL_Y': process.env.ANTHROPIC_BASE_URL_Y,
-            'ANTHROPIC_BASE_URL_E': process.env.ANTHROPIC_BASE_URL_E,
-            'MINIMAXI_API_KEY_2': process.env.MINIMAXI_API_KEY_2,
-            'OPENAI_API_KEY_2': process.env.OPENAI_API_KEY_2,
-            'Z_AI_API_KEY_2': process.env.Z_AI_API_KEY_2,
-          };
+          // ─── Resolve $VAR placeholders before spawning Hermes ──────────────────────
+          // Hermes reads process.env — any "$ANTHROPIC_AUTH_TOKEN_Y" style placeholder
+          // in settings.env must be resolved here, in-process, before spawn.
+          // AUTO-DISCOVERY: the placeholder map starts empty and is populated by
+          // scanning process.env for credential vars. Any $VAR in settings.env that
+          // matches a var name present in process.env will be resolved — zero config.
+          const placeholders: Record<string, string | undefined> = {};
+          for (const [k, v] of Object.entries(process.env)) {
+            if (typeof v === 'string' && v.length > 0 && _isCredential(k)) {
+              placeholders[k] = v;
+            }
+          }
           for (const [key, value] of Object.entries(agentCustomEnv)) {
             if (typeof value === 'string' && value.startsWith('$')) {
               const resolved = placeholders[value.substring(1)];
@@ -441,19 +408,15 @@ export class NousHermesRunner {
               }
             }
           }
-
-          // Map ANTHROPIC_AUTH_TOKEN to provider-specific env vars
-          // Hermes z-ai provider needs GLM_API_KEY, not ANTHROPIC_AUTH_TOKEN
-          const providerForEnv = options.provider || settings.env?.ANTHROPIC_PROVIDER || '';
-          if (providerForEnv.toLowerCase().includes('z-ai') || providerForEnv.toLowerCase().includes('zai')) {
-            if (agentCustomEnv.ANTHROPIC_AUTH_TOKEN && !agentCustomEnv['GLM_API_KEY']) {
-              agentCustomEnv['GLM_API_KEY'] = agentCustomEnv.ANTHROPIC_AUTH_TOKEN;
-              if (!silent) console.error(`[NousHermesRunner] Mapped ANTHROPIC_AUTH_TOKEN → GLM_API_KEY for z-ai provider`);
-            }
+          if (!silent) {
+            const tokenCount = Object.entries(agentCustomEnv).filter(
+              ([k, v]) => typeof v === 'string' && v.length > 0 && _isCredential(k),
+            ).length;
+            console.error(`[DEBUG-PLACEHOLDER] ${tokenCount} credential vars in agentCustomEnv after resolution`);
           }
         }
 
-        // --- Load System Prompt (agents/agentName.md) ---
+          // --- Load System Prompt (agents/agentName.md) ---
         const agentPromptPath = resolveConfigPath(
           path.join(path.dirname(settingsDir), 'agents', `${agentName}.md`),
           options.configPath,
@@ -519,8 +482,6 @@ export class NousHermesRunner {
         logger.warn({ agentName, error: e }, 'Error processing agent settings');
       }
     }
-
-    // --- CLI Arguments & Prompt Handling ---
     const finalPrompt = systemPrompt ? `${systemPrompt}\n\n[USER QUERY]:\n${prompt}` : prompt;
 
     // Tronquer si nécessaire pour éviter les limites Windows (8191)
@@ -560,23 +521,55 @@ export class NousHermesRunner {
     const hasOpenAIKey = !!agentCustomEnv.OPENAI_API_KEY;
 
     const isMiniMaxModel = lowModel.includes('minimax') || lowModel.includes('mini-max');
-    const hasMiniMaxKey = !!(
-        agentCustomEnv.MINIMAXI_API_KEY ||
-        agentCustomEnv.ANTHROPIC_AUTH_TOKEN ||
-        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_1 ||
-        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_2 ||
-        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_3 ||
-        agentCustomEnv.ANTHROPIC_AUTH_TOKEN_4
+    const hasMiniMaxKey = (() => {
+      // Auto-discovery: toute variable contenant 'minimax'/'minimaxi'/'minimax_cn'
+      // avec suffixe credential (_API_KEY, _AUTH_TOKEN)
+      const _isMiniMaxRelated = (k: string) =>
+        /minimax/i.test(k);
+      const _hasCredentialSuffix = (k: string) =>
+        /_(api_key|auth_token|base_url|endpoint|url)$/i.test(k);
+      return Object.entries(agentCustomEnv).some(
+        ([k, v]) => typeof v === 'string' && v.length > 0 && _isMiniMaxRelated(k) && _hasCredentialSuffix(k),
       );
-
-    const isGLMModel = lowModel.includes('glm');
-    const hasGLMKey = !!agentCustomEnv.Z_AI_API_KEY;
+    })();
 
     const isMistralModel =
       model.includes('mistral') || model.includes('codestral') || model.includes('devstral');
     const hasMistralKey = !!agentCustomEnv.MISTRAL_API_KEY;
 
+    // ─── Detect which provider to use based on model name + available credentials ──────────
+    // Provider routing is based on model family (glm→z-ai, minimax→minimax-cn, etc.)
+    // and whether a corresponding API key is present. Credentials are auto-detected from
+    // the full agentCustomEnv — no per-provider key lists needed.
+    const isGLMModel = lowModel.includes('glm');
+    const hasGLMKey = (() => {
+      const glmRelated = ['glm', 'zai', 'z_ai', 'zhipu'];
+      return Object.entries(agentCustomEnv).some(
+        ([k, v]) =>
+          typeof v === 'string' &&
+          v.length > 0 &&
+          glmRelated.some((t) => k.toLowerCase().includes(t)) &&
+          /_(api_key|auth_token|base_url|endpoint|url)$/i.test(k),
+      );
+    })();
+
     cleanArgs.push('--model', model);
+
+    // DEBUG: trace GLM detection
+    if (!silent) {
+      const glmRelated = ['glm', 'zai', 'z_ai', 'zhipu'];
+      const glmCreds = Object.entries(agentCustomEnv).filter(
+        ([k, v]) =>
+          typeof v === 'string' &&
+          v.length > 0 &&
+          glmRelated.some((t) => k.toLowerCase().includes(t)) &&
+          /_(api_key|auth_token|base_url|endpoint|url)$/i.test(k),
+      );
+      console.error(
+        `[DEBUG-GLM-DETECT] model=${model} isGLM=${isGLMModel} hasGLMKey=${hasGLMKey} ` +
+        `matched_creds=${glmCreds.map(([k]) => k).join(',') || 'none'}`
+      );
+    }
 
     if (isOpenAIModel && hasOpenAIKey) {
       logger.info({ model, provider: 'openai' }, 'Using OpenAI provider');
@@ -631,20 +624,82 @@ export class NousHermesRunner {
       delete agentCustomEnv.OPENAI_API_KEY;
       delete agentCustomEnv.Z_AI_API_KEY;
     } else if (isGLMModel && hasGLMKey) {
+      // ════════════════════════════════════════════════════════════════════════════
+      // Z.AI / GLM via provider 'z-ai'
+      //
+      // ENDPOINT: https://api.z.ai/api/coding/paas/v4 (CODING PLAN uniquement)
+      //   → /paas/v4 standards = 429 Insufficient balance (CRÉDITS GLM INSUFFISANTS)
+      //   → /coding/paas/v4 = 200 OK ( glm-5.1, glm-5v-turbo, glm-4.7 )
+      //
+      // TOKEN: n'importe quelle variable contenant 'glm'/'z_ai'/'zai'/'zhipu'
+      //   avec suffixe _API_KEY ou _AUTH_TOKEN (auto-détectée, pas de nom codé)
+      //
+      // PRIORITÉ CLÉ API GLM:
+      //   1. Z_AI_API_KEY (fallback legacy)
+      //   2. auto-detect: premiere variable glm/zai + suffixe credential
+      //
+      // PRIORITÉ BASE URL:
+      //   1. ZAI_BASE_URL_3  → https://api.z.ai/api/coding/paas/v4  (CODING GLOBAL)
+      //   2. ZAI_BASE_URL_4  → https://open.bigmodel.cn/api/coding/paas/v4 (CODING CN)
+      //   3. auto-detect glm/zai URL (decouverte par suffixe _base_url/_url/_endpoint)
+      //   4. DEFAULT: https://api.z.ai/api/coding/paas/v4
+      //
+      // PROVIDER: z-ai (OpenAI-compatible /paas/v4)
+      // MODÈLES: glm-5.1, glm-5v-turbo, glm-4.7, glm-4-plus, etc.
+      // ════════════════════════════════════════════════════════════════════════════
+      const _glmTokenSuffix = /_(api_key|auth_token)$/i;
+      const _glmUrlSuffix = /_(base_url|endpoint|url)$/i;
+      const _isGlmRelated = (k: string) =>
+        /glm|z_?ai|zhipu/i.test(k);
+
+      // Cle API: premiere var glm/zai avec suffixe token
+      const glmKeyEntry = Object.entries(agentCustomEnv).find(
+        ([k, v]) =>
+          typeof v === 'string' &&
+          v.length > 0 &&
+          _isGlmRelated(k) &&
+          _glmTokenSuffix.test(k),
+      );
+      if (glmKeyEntry) {
+        agentCustomEnv['GLM_API_KEY'] = glmKeyEntry[1];
+        if (!silent) console.error(`[DEBUG-GLM] GLM_API_KEY <= ${glmKeyEntry[0]}`);
+      }
+
+      // URL: ZAI_BASE_URL_3 (coding plan) en priorite, puis auto-detect, puis default
+      const ZAI_CODING_ENDPOINT = 'https://api.z.ai/api/coding/paas/v4';
+      const zaiUrl3 = agentCustomEnv['ZAI_BASE_URL_3'];
+      const zaiUrl4 = agentCustomEnv['ZAI_BASE_URL_4'];
+      const glmUrlEntry = Object.entries(agentCustomEnv).find(
+        ([k, v]) =>
+          typeof v === 'string' &&
+          v.length > 0 &&
+          _isGlmRelated(k) &&
+          _glmUrlSuffix.test(k) &&
+          k !== 'ZAI_BASE_URL_3' &&
+          k !== 'ZAI_BASE_URL_4',
+      );
+      if (zaiUrl3) {
+        agentCustomEnv['GLM_BASE_URL'] = zaiUrl3;
+        if (!silent) console.error(`[DEBUG-GLM] GLM_BASE_URL <= ZAI_BASE_URL_3 (coding plan)`);
+      } else if (zaiUrl4) {
+        agentCustomEnv['GLM_BASE_URL'] = zaiUrl4;
+        if (!silent) console.error(`[DEBUG-GLM] GLM_BASE_URL <= ZAI_BASE_URL_4 (coding plan China)`);
+      } else if (glmUrlEntry) {
+        agentCustomEnv['GLM_BASE_URL'] = glmUrlEntry[1];
+        if (!silent) console.error(`[DEBUG-GLM] GLM_BASE_URL <= ${glmUrlEntry[0]}`);
+      } else {
+        agentCustomEnv['GLM_BASE_URL'] = ZAI_CODING_ENDPOINT;
+        if (!silent) console.error(`[DEBUG-GLM] GLM_BASE_URL <= ${ZAI_CODING_ENDPOINT} (default coding plan)`);
+      }
+
       logger.info({ model, provider: 'z-ai' }, 'Using ZhipuAI/GLM provider');
       cleanArgs.push('--provider', 'z-ai');
-      // Hermes z-ai provider needs GLM_API_KEY specifically
-      const resolvedGLMKey = agentCustomEnv.Z_AI_API_KEY;
-      if (resolvedGLMKey) {
-        agentCustomEnv['GLM_API_KEY'] = resolvedGLMKey;
-      }
-      // Nettoyage des clés conflictuelles
+      // Cleanup conflicting keys
       delete agentCustomEnv.OPENROUTER_API_KEY;
       delete agentCustomEnv.NVIDIA_API_KEY;
       delete agentCustomEnv.NVAPI_KEY;
       delete agentCustomEnv.OPENAI_API_KEY;
       delete agentCustomEnv.MINIMAXI_API_KEY;
-      delete agentCustomEnv.ANTHROPIC_AUTH_TOKEN_4;
     } else if (isMistralModel && hasMistralKey) {
       logger.info({ model, provider: 'mistral' }, 'Using Mistral provider');
       cleanArgs.push('--provider', 'mistral');
@@ -709,7 +764,7 @@ export class NousHermesRunner {
         cwd: options.cwd || process.cwd(),
         shell: useShell,
         windowsHide: true,
-        env: { ...agentCustomEnv, HERMES_DIR: overmindHermesSubPath } as NodeJS.ProcessEnv,
+        env: { ...agentCustomEnv, HERMES_HOME: overmindHermesSubPath } as NodeJS.ProcessEnv,
       });
 
       if (child.pid) {
