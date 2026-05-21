@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.8.4] - 2026-05-21
+
+### 🔄 Refactors
+
+- **NousHermesRunner: auto-discovery LLM providers** — GLM et MiniMax utilisent maintenant le même pattern d'auto-discovery par regex. Plus besoin de lister chaque variable individuellement.
+- **GLM/Z.AI**: `hasGLMKey` et résolution de `GLM_BASE_URL` refactorés en auto-discovery (glm/z_ai/zai/zhipu + suffix). Documentation complète: endpoint coding plan (`/coding/paas/v4`), priorité des URLs, pourquoi `/paas/v4` → 429.
+- **MiniMax**: `hasMiniMaxKey` refactoré de hardcoded `ANTHROPIC_AUTH_TOKEN_1-4` → auto-discovery par regex (minimax + suffix credential).
+- **.env réorganisé**: section Minimax avec `MINIMAX_CN_API_KEY` (clé officielle du provider `minimax-cn`), section Z.AI/GLM documentée (endpoints, tokens, résultats curl), `MINIMAXI_BASE_URL` supprimé (inutile — provider hardcode `api.minimaxi.com`).
+
+### 📝 Chores
+
+- Build: `tsc` clean, lint: 0 errors, 4 warnings pré-existantes
+
+---
+
 ## [2.8.3] - 2026-05-18
 
 ### 🐛 Fixes
