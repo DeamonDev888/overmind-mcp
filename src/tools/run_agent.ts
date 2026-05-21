@@ -102,6 +102,18 @@ const genericParamsSchema = z.object({
   signal: z.custom<AbortSignal>().optional(),
 });
 
+const hermesParamsSchema = z.object({
+  prompt: z.string(),
+  sessionId: z.string().optional(),
+  agentName: z.string().optional(),
+  autoResume: z.boolean().default(false),
+  model: z.string().optional(),
+  path: z.string().optional(),
+  config: z.string().optional(),
+  silent: z.boolean().default(false),
+  signal: z.custom<AbortSignal>().optional(),
+});
+
 // Validation manuelle des modes (déplacée ici pour compatibilité FastMCP)
 const RUNNER_MODES: Record<string, readonly string[] | undefined> = {
   kilo: ['code', 'architect', 'ask', 'debug', 'orchestrator'],
@@ -155,7 +167,7 @@ export async function runAgent(args: RunAgentInternalArgs) {
       case 'opencode':
         return runOpenCodeAgent(validateAndExtractParams(params, genericParamsSchema));
       case 'hermes':
-        return runHermesAgent(validateAndExtractParams(params, genericParamsSchema));
+        return runHermesAgent(validateAndExtractParams(params, hermesParamsSchema));
       default: {
         // Ce cas est théoriquement impossible grâce à la validation Zod de l'enum
         const error = `Runner inconnu: ${runner}`;

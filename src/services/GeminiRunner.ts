@@ -6,6 +6,7 @@ import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { withSpan, type Span } from '../lib/telemetry.js';
+import { loadEnvQuietly } from '../lib/loadEnv.js';
 import pino from 'pino';
 import {
   registerProcess,
@@ -33,6 +34,9 @@ export interface RunAgentResult {
   sessionId?: string;
   error?: string;
   rawOutput?: string;
+  model?: string; // resolved real model ID
+  nickname?: string; // original value from config (if different)
+  fallbackUsed?: string; // which fallback token was used (e.g. 'AUTH_FALLBACK_1')
 }
 
 export class GeminiRunner {
@@ -60,6 +64,11 @@ export class GeminiRunner {
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
+    // Load .env files first (before anything else) — same as ClaudeRunner/Hermes
+    const cwd = options.cwd || process.cwd();
+    loadEnvQuietly(path.join(cwd, '.env'));
+    loadEnvQuietly(path.join(cwd, '../Workflow/.env'));
+
     const { prompt, agentName, autoResume } = options;
     let { sessionId } = options;
     const { PATHS } = this.config;

@@ -7,6 +7,7 @@ import { interpolateEnvVars } from '../lib/envUtils.js';
 import { PromptManager } from './PromptManager.js';
 import { resolveKiloModel } from '../lib/modelMapping.js';
 import { withSpan, type Span } from '../lib/telemetry.js';
+import { loadEnvQuietly } from '../lib/loadEnv.js';
 import {
   registerProcess,
   linkSessionToPid,
@@ -71,7 +72,12 @@ export class KiloRunner {
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
-    const { prompt, agentName, autoResume, mode, cwd } = options;
+    // Load .env files first (before anything else) — same as ClaudeRunner/Hermes
+    const cwd = options.cwd || process.cwd();
+    loadEnvQuietly(path.join(cwd, '.env'));
+    loadEnvQuietly(path.join(cwd, '../Workflow/.env'));
+
+    const { prompt, agentName, autoResume, mode } = options;
     const startTime = Date.now();
     let { sessionId } = options;
     const { model } = options;
