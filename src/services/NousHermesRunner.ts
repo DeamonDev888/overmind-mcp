@@ -295,7 +295,10 @@ export class NousHermesRunner {
         if (
           typeof v === 'string' &&
           v.length > 0 &&
-          /^(.*?)(_API_KEY|_AUTH_TOKEN|_BASE_URL|_ENDPOINT|_URL|API_KEY|AUTH_TOKEN|BASE_URL)(.*?)$/i.test(k)
+          /^(.*?)(_API_KEY|_AUTH_TOKEN|_BASE_URL|_ENDPOINT|_URL|API_KEY|AUTH_TOKEN|BASE_URL)(.*?)$/i.test(k) &&
+          // Exclure les cles problématiques pour eviter qu'elles polluent le .env Hermes
+          k !== 'GLM_API_KEY_E' &&
+          k !== 'Z_AI_API_KEY'
         ) {
           dotEnvEntries.push(`${k}=${v}`);
         }
@@ -652,17 +655,35 @@ export class NousHermesRunner {
       const _isGlmRelated = (k: string) =>
         /glm|z_?ai|zhipu/i.test(k);
 
-      // Cle API: premiere var glm/zai avec suffixe token
+      // Cle API: priorite Z_AI_API_KEY > GLM_API_KEY_Y > GLM_API_KEY_E > premiere glm/zai
+      // Z_AI_API_KEY et GLM_API_KEY_Y sont les cles Z.AI veritables
+      // GLM_API_KEY_E est une cle ANTHROPIC (ne marche pas avec le provider z-ai)
+      // On filtre aussi les cles ANTHROPIC qui contiennent "glm" (ex: GLM_API_KEY_E)
+      // Z_AI_API_KEY=sk-fd9...6a93 est une cle INVALID pour Z.AI (format diff)
+      const _isExcludedGlm = (k: string) =>
+        /^ANTHROPIC/i.test(k) ||
+        /^(GLM_API_KEY_E|Z_AI_API_KEY)$/i.test(k); // pas des cles Z.AI reelles
       const glmKeyEntry = Object.entries(agentCustomEnv).find(
         ([k, v]) =>
           typeof v === 'string' &&
           v.length > 0 &&
           _isGlmRelated(k) &&
-          _glmTokenSuffix.test(k),
+          _glmTokenSuffix.test(k) &&
+          !_isExcludedGlm(k),
       );
       if (glmKeyEntry) {
         agentCustomEnv['GLM_API_KEY'] = glmKeyEntry[1];
         if (!silent) console.error(`[DEBUG-GLM] GLM_API_KEY <= ${glmKeyEntry[0]}`);
+        // Supprimer les clés glm/zai problématiques de l'env pour eviter qu'Hermes les trouve
+        delete agentCustomEnv['GLM_API_KEY_E'];
+        delete agentCustomEnv['Z_AI_API_KEY'];
+      }
+
+      // IMPORTANT: write GLM_API_KEY to agentCustomEnv explicitly.
+      // Le writeHermesDotEnv filter regex exclut GLM_API_KEY_Y (suffixe _Y != _API_KEY)
+      // donc on doit l'ecrire nous-meme pour que Hermes le trouve dans l'env.
+      if (agentCustomEnv['GLM_API_KEY_Y']) {
+        agentCustomEnv['GLM_API_KEY'] = agentCustomEnv['GLM_API_KEY_Y'];
       }
 
       // URL: ZAI_BASE_URL_3 (coding plan) en priorite, puis auto-detect, puis default
@@ -700,6 +721,60 @@ export class NousHermesRunner {
       delete agentCustomEnv.NVAPI_KEY;
       delete agentCustomEnv.OPENAI_API_KEY;
       delete agentCustomEnv.MINIMAXI_API_KEY;
+      // IMPORTANT: delete ANTHROPIC_BASE_URL_Z — c'est l'endpoint Claude Z.AI (anthropic/v1),
+      // pas le coding plan Z.AI (coding/paas/v4). Hermes lit .env et utilise cette var
+      // comme override, ce qui fait échouer les appels GLM avec 404.
+      delete agentCustomEnv.ANTHROPIC_BASE_URL_Z;
+      delete agentCustomEnv.ANTHROPIC_BASE_URL_E;
+      delete agentCustomEnv.ANTHROPIC_BASE_URL_3;
+      delete agentCustomEnv.ANTHROPIC_BASE_URL_4;
+      delete agentCustomEnv.BASE_URL_Z;
+      // Update auth.json credential pool for z-ai (same pattern as minimax-cn)
+      // Hermes reads auth.json from HERMES_HOME (overmindHermesSubPath), NOT from the global
+      // %LOCALAPPDATA%\hermes\auth.json. So we must write it to overmindHermesSubPath.
+      const glmApiKey = agentCustomEnv['GLM_API_KEY'];
+      if (glmApiKey && overmindHermesSubPath) {
+        try {
+          const hermesAuthPath = path.join(overmindHermesSubPath, 'auth.json');
+          let auth: Record<string, unknown> = { version: 1, providers: {}, credential_pool: {} };
+          if (fs.existsSync(hermesAuthPath)) {
+            auth = JSON.parse(fs.readFileSync(hermesAuthPath, 'utf8'));
+            if (!auth.credential_pool) auth.credential_pool = {};
+          }
+          if (!auth.credential_pool) auth.credential_pool = {};
+          if (!Array.isArray((auth.credential_pool as Record<string, unknown>)['zai'])) {
+            (auth.credential_pool as Record<string, unknown>)['zai'] = [];
+          }
+          const zaiPool = ((auth.credential_pool as Record<string, unknown>)['zai'] as Record<string, unknown>[]);
+          // Update existing or add new
+          const existing = zaiPool.find((c) => c.label === 'GLM_API_KEY');
+          if (existing) {
+            existing.access_token = glmApiKey;
+            existing.base_url = agentCustomEnv['GLM_BASE_URL'] || ZAI_CODING_ENDPOINT;
+            existing.last_status = null;
+            existing.last_error_code = null;
+          } else {
+            zaiPool.push({
+              id: 'zai-default',
+              label: 'GLM_API_KEY',
+              auth_type: 'api_key',
+              priority: 0,
+              source: 'env:GLM_API_KEY',
+              access_token: glmApiKey,
+              last_status: null,
+              last_status_at: null,
+              last_error_code: null,
+              last_error_reason: null,
+              last_error_message: null,
+              last_error_reset_at: null,
+              base_url: agentCustomEnv['GLM_BASE_URL'] || ZAI_CODING_ENDPOINT,
+              request_count: 0,
+            });
+          }
+          fs.writeFileSync(hermesAuthPath, JSON.stringify(auth, null, 2), 'utf8');
+          if (!silent) console.error(`[NousHermesRunner] Updated zai credential in ${hermesAuthPath}`);
+        } catch (_e) { /* non-critical */ }
+      }
     } else if (isMistralModel && hasMistralKey) {
       logger.info({ model, provider: 'mistral' }, 'Using Mistral provider');
       cleanArgs.push('--provider', 'mistral');
@@ -758,13 +833,27 @@ export class NousHermesRunner {
         }
       };
 
-      // shell: false if absolute path (direct binary), true if just "hermes" (needs PATH resolution)
+      // shell: false if absolute path (direct binary), true if just "hermes" (needs PATH resolution).
+      // On Windows, hermes.exe is a Python venv wrapper. VIRTUAL_ENV + venv root in PATH
+      // ensures the correct Python is used, so shell=true is not needed.
       const useShell = !path.isAbsolute(spawnCommand);
       const child: ChildProcess = spawn(spawnCommand, cleanArgs, {
         cwd: options.cwd || process.cwd(),
         shell: useShell,
         windowsHide: true,
-        env: { ...agentCustomEnv, HERMES_HOME: overmindHermesSubPath } as NodeJS.ProcessEnv,
+        env: {
+          ...agentCustomEnv,
+          HERMES_HOME: overmindHermesSubPath,
+          // On Windows, hermes.exe is a Python venv wrapper. The wrapper uses
+          // `sys.executable` as the Python interpreter. Without VIRTUAL_ENV, the wrapper
+          // finds the wrong Python (system Python311) and crashes with
+          // "NameError: name 'base_events' is not defined".
+          // Solution: set VIRTUAL_ENV + prepend venv ROOT to PATH (not Scripts\).
+          // Use FORWARD SLASHES (/ instead of \) — Node.js spawn on Windows needs this
+          // when paths appear in env vars with backslash-containing values.
+          VIRTUAL_ENV: 'C:/Users/Deamon/AppData/Local/hermes/hermes-agent/venv',
+          PATH: `C:/Users/Deamon/AppData/Local/hermes/hermes-agent/venv;${process.env.PATH || ''}`,
+        } as NodeJS.ProcessEnv,
       });
 
       if (child.pid) {
