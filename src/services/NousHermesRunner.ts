@@ -404,14 +404,27 @@ export class NousHermesRunner {
       try {
         const mc = JSON.parse(fs.readFileSync(tmpMcpPath, 'utf8'));
         const yamlPath = path.join(overmindHermesSubPath, 'config.yaml');
-        let yaml = 'mcp_servers:\n';
+        // Preserve existing config.yaml (tts, llm, etc.) — merge mcp_servers only
+        let existingYaml = '';
+        if (fs.existsSync(yamlPath)) {
+          existingYaml = fs.readFileSync(yamlPath, 'utf8');
+        }
+        // Build new mcp_servers section
+        let newMcpSection = 'mcp_servers:\n';
         for (const [name, srv] of Object.entries(mc.mcpServers || {})) {
           const s = srv as Record<string, unknown>;
-          yaml += `  ${name}:\n`;
-          if (s.url) yaml += `    url: "${s.url}"\n`;
-          if (s.command) yaml += `    command: "${s.command}"\n`;
+          newMcpSection += `  ${name}:\n`;
+          if (s.url) newMcpSection += `    url: "${s.url}"\n`;
+          if (s.command) newMcpSection += `    command: "${s.command}"\n`;
         }
-        fs.writeFileSync(yamlPath, yaml, 'utf8');
+        // Merge: replace mcp_servers block in existing yaml or append
+        let finalYaml: string;
+        if (existingYaml.includes('mcp_servers:')) {
+          finalYaml = existingYaml.replace(/mcp_servers:\n([\s\S]*?)(?=\n\w|\n$|$)/, newMcpSection.trimEnd() + '\n');
+        } else {
+          finalYaml = existingYaml.trimEnd() + '\n' + newMcpSection;
+        }
+        fs.writeFileSync(yamlPath, finalYaml, 'utf8');
         if (!silent) console.error(`[NousHermesRunner] MCP config.yaml written to ${yamlPath}`);
       } catch (e) { console.error(`[NousHermesRunner] config.yaml error: ${e}`); }
     }
