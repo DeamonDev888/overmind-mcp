@@ -468,6 +468,7 @@ export class NousHermesRunner {
           cwd, shell: false, windowsHide: true,
           env: {
             ...spawnEnv,
+            HERMES_HOME: overmindHermesSubPath,
             VIRTUAL_ENV: 'C:/Users/Deamon/AppData/Local/hermes/hermes-agent/venv',
             PATH: `C:/Users/Deamon/AppData/Local/hermes/hermes-agent/venv;${process.env.PATH || ''}`,
           },
