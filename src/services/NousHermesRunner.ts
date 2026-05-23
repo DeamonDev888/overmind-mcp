@@ -469,8 +469,10 @@ export class NousHermesRunner {
           env: {
             ...spawnEnv,
             HERMES_HOME: overmindHermesSubPath,
-            VIRTUAL_ENV: 'C:/Users/Deamon/AppData/Local/hermes/hermes-agent/venv',
-            PATH: `C:/Users/Deamon/AppData/Local/hermes/hermes-agent/venv;${process.env.PATH || ''}`,
+            VIRTUAL_ENV: process.env.HERMES_AGENT_ROOT
+              ? path.join(process.env.HERMES_AGENT_ROOT, 'venv')
+              : path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent', 'venv'),
+            PATH: `${process.env.HERMES_AGENT_ROOT || path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent', 'venv')};${process.env.PATH || ''}`,
           },
         });
         currentChildRef = child;
