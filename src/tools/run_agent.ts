@@ -130,6 +130,7 @@ const hermesParamsSchema = z.object({
 
 // Validation manuelle des modes (déplacée ici pour compatibilité FastMCP)
 const RUNNER_MODES: Record<string, readonly string[] | undefined> = {
+  gemini: ['GENERAL', 'CONTEXT_CHECK', 'PLAN', 'COMMAND', 'CASCADE', 'EVAL', 'ANTIGRAVITY_REVIEW', 'MQUERY', 'COMMIT_MESSAGE', 'CHECKPOINT', 'FAST_APPLY'],
   kilo: ['code', 'architect', 'ask', 'debug', 'orchestrator'],
   cline: ['plan', 'act'],
 } as const;
