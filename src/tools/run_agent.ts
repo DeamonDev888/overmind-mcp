@@ -14,7 +14,7 @@ import { withSpan } from '../lib/telemetry.js';
 export const runAgentSchema = z
   .object({
     runner: z
-      .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
+      .enum(['claude', 'gemini', 'antigravity', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
       .describe('Type de runner a utiliser'),
     prompt: z.string().min(1, 'prompt vide interdit').describe("Le prompt a envoyer a l'agent"),
     sessionId: z.string().optional().describe('Session ID'),
@@ -99,6 +99,20 @@ const genericParamsSchema = z.object({
   path: z.string().optional(),
   config: z.string().optional(),
   silent: z.boolean().default(false),
+  mode: z.string().optional(),
+  signal: z.custom<AbortSignal>().optional(),
+});
+
+const antigravityParamsSchema = z.object({
+  prompt: z.string(),
+  sessionId: z.string().optional(),
+  agentName: z.string().optional(),
+  autoResume: z.boolean().default(false),
+  model: z.string().optional(),
+  path: z.string().optional(),
+  config: z.string().optional(),
+  silent: z.boolean().default(false),
+  mode: z.enum(['GENERAL', 'CONTEXT_CHECK', 'PLAN', 'COMMAND', 'CASCADE', 'EVAL', 'ANTIGRAVITY_REVIEW', 'MQUERY', 'COMMIT_MESSAGE', 'CHECKPOINT', 'FAST_APPLY']).default('GENERAL'),
   signal: z.custom<AbortSignal>().optional(),
 });
 
@@ -154,8 +168,8 @@ export async function runAgent(args: RunAgentInternalArgs) {
     switch (runner) {
       case 'claude':
         return runClaudeAgent(validateAndExtractParams(params, claudeParamsSchema));
-      case 'gemini':
-        return runGeminiAgent(validateAndExtractParams(params, genericParamsSchema));
+case 'gemini':
+        return runGeminiAgent(validateAndExtractParams(params, antigravityParamsSchema));
       case 'kilo':
         return runKiloAgent(validateAndExtractParams(params, kiloParamsSchema));
       case 'qwencli':
