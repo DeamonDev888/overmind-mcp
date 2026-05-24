@@ -5,13 +5,15 @@ import { getWorkspaceDir } from '../lib/config.js';
 import { deleteSessionId } from '../lib/sessions.js';
 
 export const runGeminiSchema = z.object({
-  prompt: z.string().describe("Le prompt à envoyer à l'agent Gemini"),
+  prompt: z.string().describe("Le prompt à envoyer à l'agent Gemini (Antigravity)"),
   sessionId: z.string().optional(),
   agentName: z.string().optional(),
   autoResume: z.boolean().optional().default(false),
   path: z.string().optional(),
   config: z.string().optional(),
   silent: z.boolean().optional().default(false),
+  /** Mode Antigravity (défaut: GENERAL) */
+  mode: z.enum(['GENERAL', 'CONTEXT_CHECK', 'PLAN', 'COMMAND', 'CASCADE', 'EVAL', 'ANTIGRAVITY_REVIEW', 'MQUERY', 'COMMIT_MESSAGE', 'CHECKPOINT', 'FAST_APPLY']).optional().default('GENERAL'),
 });
 
 export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
@@ -24,6 +26,7 @@ export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
     path: argPath,
     config: argConfig,
     silent,
+    mode,
   } = args;
   const finalPath = argPath || getWorkspaceDir();
   const finalConfig = argConfig || getWorkspaceDir();
@@ -37,6 +40,7 @@ export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
     cwd: finalPath,
     configPath: finalConfig,
     silent,
+    mode,
   });
 
   // Retry if session invalid
@@ -50,6 +54,7 @@ export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
       cwd: finalPath,
       configPath: finalConfig,
       silent,
+      mode,
     });
   }
 
