@@ -262,10 +262,17 @@ export class NousHermesRunner {
       PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1', PYTHONUNBUFFERED: '1',
       PYTHONLEGACYWINDOWSSTDIO: '1', TERM: 'emacs',
       PROMPT_TOOLKIT_NO_INTERACTIVE: '1', ANSICON: '1',
-      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || process.env.OVERMIND_EMBEDDING_KEY,
+      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
       NVIDIA_API_KEY: process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY,
       NVIDIA_API_BASE: process.env.NVIDIA_API_BASE || 'https://integrate.api.nvidia.com/v1',
       ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
+      // OVERMIND_AGENT_HOME tells Hermes (v0.13.0+) to read agent-specific .env FIRST
+      // get_env_value() in Hermes checks OVERMIND_AGENT_HOME/.hermes/.env before HERMES_HOME/.env
+      // This allows $VAR expansion done by Overmind to take precedence over gateway .env
+      ...(agentName ? { OVERMIND_AGENT_HOME: path.resolve(cwd, '.overmind', 'hermes', `agent_${agentName}`) } : {}),
+      // GLM_API_KEY in spawn env — zai provider resolves credentials via os.environ.get("GLM_API_KEY")
+      // before checking .env files. This is the most reliable path for Z.AI tokens.
+      ...(agentName && false ? { GLM_API_KEY: '' } : {}),
     };
 
     let tmpSettingsPath: string | null = null;
@@ -388,15 +395,20 @@ export class NousHermesRunner {
     else agentCustomEnv.HOME = overmindHermesPath;
 
     // Write .env to HERMES_HOME (credential auto-discovery)
+    // EXCLUDE all OpenRouter keys — OpenRouter is managed internally by Overmind, Hermes must never see it
     const credRegex = /(?:api_key|auth_token|base_url|endpoint|url)$/i;
+    const openRouterPrefixes = ['OPENROUTER', 'OVERMIND_EMBEDDING'];
     const dotEntries: string[] = [];
     for (const [k, v] of Object.entries(agentCustomEnv)) {
-      if (typeof v === 'string' && v.length > 0 && credRegex.test(k)) dotEntries.push(`${k}=${v}`);
+      if (typeof v === 'string' && v.length > 0 && credRegex.test(k)) {
+        // Skip ALL openrouter/overmind-embedding keys — handled internally by Overmind
+        if (openRouterPrefixes.some(p => k.toUpperCase().startsWith(p))) continue;
+        dotEntries.push(`${k}=${v}`);
+      }
     }
     if (dotEntries.length > 0) {
       const dotPath = path.join(overmindHermesSubPath, '.env');
-      const existing = fs.existsSync(dotPath) ? fs.readFileSync(dotPath, 'utf8') : '';
-      fs.writeFileSync(dotPath, dotEntries.join('\n') + '\n' + existing, 'utf8');
+      fs.writeFileSync(dotPath, dotEntries.join('\n') + '\n', 'utf8');
     }
 
     // Generate config.yaml in HERMES_HOME (MCP servers)
@@ -455,7 +467,10 @@ export class NousHermesRunner {
           if (fs.existsSync(authPath)) Object.assign(auth, JSON.parse(fs.readFileSync(authPath, 'utf8')));
           if (!auth.credential_pool) auth.credential_pool = {};
           const cp = auth.credential_pool as Record<string, unknown[]>;
-          cp['zai'] = [{
+          // Reset credential_pool to ONLY zai — openrouter is for embeddings only, never for LLM inference
+          auth.credential_pool = {};
+          const cleanCp = auth.credential_pool as Record<string, unknown[]>;
+          cleanCp['zai'] = [{
             id: 'zai-default', label: tokenInfo.tokenEnvKey, auth_type: 'api_key',
             priority: 0, source: `env:${tokenInfo.tokenEnvKey}`, access_token: tokenInfo.tokenValue,
             last_status: null, last_error_code: null,
@@ -474,7 +489,12 @@ export class NousHermesRunner {
           if (resolvedToken.startsWith('$')) resolvedToken = process.env[resolvedToken.slice(1)] || resolvedToken;
           spawnEnv[tokenInfo.tokenEnvKey] = resolvedToken;
         }
-        writeAuthJson(tokenInfo);
+         writeAuthJson(tokenInfo);
+
+        // BLOCK: OpenRouter is for embeddings only — never pass to Hermes for LLM inference
+        delete spawnEnv['OPENROUTER_API_KEY'];
+        delete spawnEnv['OPENROUTER_BASE_URL'];
+        delete spawnEnv['OVERMIND_EMBEDDING_KEY'];
 
         const hermesBin = await findHermesBinary();
         const child: ChildProcess = spawn(hermesBin, cleanArgs, {

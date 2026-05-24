@@ -11,7 +11,7 @@ settings_[agent].json  →  env  (apres interpolation $VAR par process.env)
       ↓
 Workflow/.env  (C:\Users\Deamon\Desktop\Backup\Serveur MCP\Workflow\.env)
       ↓
-process.env  (env du parent, heredite par le spawn)
+process.env  (env du parent, herite par le spawn)
 ```
 
 **MAIS** pour `OPENROUTER_API_KEY` uniquement:
@@ -25,15 +25,35 @@ process.env  (env du parent, heredite par le spawn)
 
 ---
 
-## Les 4 fichiers cles
+## Les 5 fichiers cles
 
 | Fichier | Role |
 |---|---|
-| `HERMES_HOME/.env` | API keys globales Hermes |
+| `HERMES_HOME/.env` | API keys globales Hermes (fallback) |
 | `Workflow/.env` | Variables du workflow (DB, tokens, etc.) |
 | `settings_[agent].json` | Config par agent (model, provider, tokens, MCP) |
 | `HERMES_HOME/.hermes/config.yaml` | Config systeme Hermes (model.default, provider, etc.) |
-| `HERMES_HOME/auth.json` | Credential pool — status des tokens (ok/exhausted) |
+| `HERMES_HOME/auth.json` | Credential pool — status des tokens (ok/exhausted), URLs par provider |
+
+---
+
+## Les 2 endpoints Z.AI (DECOUVERTE CRITIQUE)
+
+Z.AI a **deux endpoints distincts** — confusion entre les deux causait des erreurs 402:
+
+| Endpoint | URL | Usage |
+|---|---|---|
+| **Coding** (celui qu'il faut) | `https://api.z.ai/api/coding/paas/v4` | Inference LLM (Hermes, Overmind) |
+| **Non-coding** (ancien, different billing) | `https://api.z.ai/api/paas/v4` | Autre chose (pas le meme systeme de facturation) |
+
+**Comment le credential pool est seed:**
+
+| Source dans .env | Cle dans auth.json | base_url assignee |
+|---|---|---|
+| `ZAI_ANTHROPIC_FALLBACK_KEY` | `zai[0].access_token` | `https://api.z.ai/api/coding/paas/v4` ✅ |
+| `Z_AI_API_KEY` | `zai[1].access_token` | `https://api.z.ai/api/paas/v4` ❌ (ancien) |
+
+Le premier entry (priority 0) est utilise en premier. C'est celui qui est seed par `writeAuthJson()` dans `NousHermesRunner.ts` → `ZAI_ANTHROPIC_FALLBACK_KEY`.
 
 ---
 
@@ -44,16 +64,16 @@ process.env  (env du parent, heredite par le spawn)
 | Param | Valeur attendue | Source dans Hermes |
 |---|---|---|
 | Provider ID | `zai` | config.yaml ou settings |
-| API Key | Une de: `GLM_API_KEY`, `ZAI_API_KEY`, `Z_AI_API_KEY` | `HERMES_HOME/.env` → `os.environ` |
-| Base URL | `https://api.z.ai/api/paas/v4` | hardcoded dans ProviderConfig |
+| API Key | `ZAI_ANTHROPIC_FALLBACK_KEY` (cle primaire) ou `Z_AI_API_KEY` (fallback ancien) | `HERMES_HOME/.env` → `os.environ` |
+| Base URL | `https://api.z.ai/api/coding/paas/v4` | credential pool (seed par writeAuthJson) |
 | Model | `glm-5.1` | settings `env.ANTHROPIC_MODEL` |
 
 ```json
 // settings_[agent].json — Z.AI correct
 {
   "env": {
-    "ANTHROPIC_AUTH_TOKEN": "$GLM_API_KEY",
-    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/paas/v4",
+    "ANTHROPIC_AUTH_TOKEN": "$ZAI_ANTHROPIC_FALLBACK_KEY",
+    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/coding/paas/v4",
     "ANTHROPIC_MODEL": "glm-5.1"
   }
 }
@@ -61,10 +81,23 @@ process.env  (env du parent, heredite par le spawn)
 
 ```bash
 # .env minimal pour Z.AI
-GLM_API_KEY=ton_token_zai_ici
+ZAI_ANTHROPIC_FALLBACK_KEY=5f650035e5a845549e4765184d8179b1.GdehlMpHT0dKq3m3
 ```
 
-**auth.json** stocke aussi la cle sous `Z_AI_API_KEY` (label: `GLM_API_KEY`, status: `ok`).
+Le credential pool `auth.json` est ecrit par `writeAuthJson()` dans `NousHermesRunner.ts`. La cle `ZAI_ANTHROPIC_FALLBACK_KEY` est envoyee par `agentCustomEnv` → Hermes seed le credential pool avec le bon endpoint.
+
+---
+
+### Z.AI Multi-Token (E/Y)
+
+Deamon a 2 tokens Z.AI (E=primary, Y=secondary). Le credential pool peut contenir les deux:
+
+| Token | Label dans auth.json | Cle dans .env |
+|---|---|---|
+| Primary | `ANTHROPIC_AUTH_TOKEN_E` | `ANTHROPIC_AUTH_TOKEN_E` = `5f65...q3m3` |
+| Secondary | `ANTHROPIC_AUTH_TOKEN_Y` | `ANTHROPIC_AUTH_TOKEN_Y` = `c78a...1ISt` |
+
+Pour qu'un agent utilise le token Y (secondary) au lieu de E (primary), le settings doit utiliser `$ANTHROPIC_AUTH_TOKEN_Y` au lieu de `$ANTHROPIC_AUTH_TOKEN_E`.
 
 ---
 
@@ -101,26 +134,26 @@ MINIMAX_CN_API_KEY=ton_token_minimax_ici
 
 | Param | Valeur attendue | Source |
 |---|---|---|
-| Provider ID | — | Ne PAS utiliser |
+| Provider ID | — | **Ne PAS utiliser** |
 | API Key | `OPENROUTER_API_KEY` | `HERMES_HOME/.env` → `os.environ` |
 | Base URL | `https://openrouter.ai/api/v1` | hardcoded |
 | Guardrail | — | Force 404 si active |
 
 **PROBLEME:** Si `OPENROUTER_API_KEY` est present (meme dans `OVERMIND_EMBEDDING_KEY` route via NousHermesRunner), Hermes le detecte et tente OpenRouter pour l'inference.
 
-**auth.json** a une entree OpenRouter — si le status est `exhausted`, Hermes ne retries plus mais peut quand meme picker le provider "openrouter" dans le credential pool.
+**auth.json** a une entree OpenRouter — si le status est `exhausted`, Hermes ne retry plus mais peut quand meme picker le provider "openrouter" dans le credential pool.
 
 ---
 
 ## Comment Hermes decide quel provider utiliser
 
 ```
-1.  Si `provider` explicite dans settings.json → utilise ce provider
+1.  Si `provider` explicite dans config.yaml → utilise ce provider
 2.  Sinon si `ANTHROPIC_BASE_URL` contient openrouter → "openrouter"
 3.  Sinon lit model name → compare avec model_defaults par provider
     - "glm-*"  → "zai"
     - "MiniMax-*" → "minimax-cn"
-4.  Sinon fallback: "minimax-cn" (model.default dans config.yaml)
+4.  Sinon fallback: model.default dans config.yaml
 ```
 
 Le model resolve le provider. Donc `ANTHROPIC_MODEL=glm-5.1` sans provider explicite → `zai`. `ANTHROPIC_MODEL=MiniMax-M2.7` → `minimax-cn`.
@@ -132,15 +165,15 @@ Le model resolve le provider. Donc `ANTHROPIC_MODEL=glm-5.1` sans provider expli
 Le runner lit `settings_[agent].json` → applique `interpolateEnvVars()` qui remplace `$VAR` par `process.env[VAR]` → envoie le tout dans `agentCustomEnv` au processus Hermes.
 
 ```typescript
-// Ce que NousHermesRunner.ts passe a Hermes (ligne 261-269)
+// Ce que NousHermesRunner.ts passe a Hermes (agentCustomEnv)
 const agentCustomEnv = {
   ...process.env,           // HERMES_HOME/.env + Workflow/.env fusionnes
-  PYTHONIOENCODING: 'utf-8', // ...
-  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',  // VIDE maintenant (fixe)
+  PYTHONIOENCODING: 'utf-8',
+  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',  // VIDE (fixe)
   NVIDIA_API_KEY: process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY,
-  ANTHROPIC_AUTH_TOKEN: s.env.ANTHROPIC_AUTH_TOKEN,  // deja interpolate
-  ANTHROPIC_BASE_URL: s.env.ANTHROPIC_BASE_URL,      // deja interpolate
-  ANTHROPIC_MODEL: s.env.ANTHROPIC_MODEL,             // deja interpolate
+  ANTHROPIC_AUTH_TOKEN: s.env.ANTHROPIC_AUTH_TOKEN,  // interpolate
+  ANTHROPIC_BASE_URL: s.env.ANTHROPIC_BASE_URL,      // interpolate
+  ANTHROPIC_MODEL: s.env.ANTHROPIC_MODEL,             // interpolate
 };
 ```
 
@@ -154,7 +187,7 @@ Puis lance Hermes avec `--env-file` pour discord_llm + Workflow `.env` (via star
 ```typescript
 OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || process.env.OVERMIND_EMBEDDING_KEY,
 ```
-→ Si `OPENROUTER_API_KEY` vide mais `OVERMIND_EMBEDDING_KEY` present → passe quand meme une cle OpenRouter a Hermes → Hermes detecte `OPENROUTER_API_KEY` dans credential pool → tente OpenRouter → 404 guardrail.
+→ Si `OPENROUTER_API_KEY` vide mais `OVERMIND_EMBEDDING_KEY` present → passe quand meme une cle OpenRouter a Hermes → Hermes detecte `OPENROUTER_API_KEY` → tente OpenRouter → 404 guardrail.
 
 **APRES le fix:**
 ```typescript
@@ -171,56 +204,52 @@ Le `ANTHROPIC_AUTH_TOKEN` dans `settings.json` **ne passe pas directement** dans
 ```
 settings_[agent].json
   "env": {
-    "ANTHROPIC_AUTH_TOKEN": "$GLM_API_KEY",  ← Runner remplace $GLM_API_KEY → "token_reel"
-    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/paas/v4",
+    "ANTHROPIC_AUTH_TOKEN": "$ZAI_ANTHROPIC_FALLBACK_KEY",  ← Runner remplace $VAR → "token_reel"
+    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/coding/paas/v4",
     "ANTHROPIC_MODEL": "glm-5.1"
   }
   ↓ (interpolateEnvVars par NousHermesRunner)
 agentCustomEnv envoye a Hermes:
   ANTHROPIC_AUTH_TOKEN=token_reel
-  ANTHROPIC_BASE_URL=https://api.z.ai/api/paas/v4
+  ANTHROPIC_BASE_URL=https://api.z.ai/api/coding/paas/v4
   ANTHROPIC_MODEL=glm-5.1
 
 MAIS Hermes ne lit PAS ANTHROPIC_AUTH_TOKEN directement.
 Hermes lit le CREDENTIAL POOL (auth.json) + les .env vars listees dans api_key_env_vars.
 
 Credential pool est seed par:
-  GLM_API_KEY, ZAI_API_KEY, Z_AI_API_KEY  →  "zai"
-  MINIMAX_CN_API_KEY                       →  "minimax-cn"
-
-Le ANTHROPIC_AUTH_TOKEN dans settings.json sert a RIEN pour le credential pool.
-Il est juste envoye dans agentCustomEnv mais Hermes l'ignore.
+  ZAI_ANTHROPIC_FALLBACK_KEY  →  "zai" avec base_url coding ✅
+  Z_AI_API_KEY               →  "zai" avec base_url non-coding (ancien)
+  MINIMAX_CN_API_KEY         →  "minimax-cn"
 ```
 
-Le `$GLM_API_KEY` dans `ANTHROPIC_AUTH_TOKEN` est juste une convenience pour que le token traverse le runner et arrive dans `process.env` du subprocess Hermes. C'est `process.env.GLM_API_KEY` qui seed le credential pool.
+Le `$VAR` dans `ANTHROPIC_AUTH_TOKEN` est juste une convenience pour que le token traverse le runner et arrive dans `process.env` du subprocess Hermes. C'est `process.env.ZAI_ANTHROPIC_FALLBACK_KEY` qui seed le credential pool.
 
 ---
 
 ## Le flow complet (Z.AI par exemple)
 
-1. `Workflow/.env` contient `GLM_API_KEY=<VOTRE_TOKEN_ZAI>`
-2. `startpipeline.js` charge `.env` → `process.env.GLM_API_KEY`
+1. `Workflow/.env` contient `ZAI_ANTHROPIC_FALLBACK_KEY=<TOKEN>`
+2. `startpipeline.js` charge `.env` → `process.env.ZAI_ANTHROPIC_FALLBACK_KEY`
 3. ` NousHermesRunner` lit `settings_zai.json` → `interpolateEnvVars()`
-   - `$GLM_API_KEY` → `process.env["GLM_API_KEY"]` → `"<TOKEN>"`
+   - `$ZAI_ANTHROPIC_FALLBACK_KEY` → `process.env["ZAI_ANTHROPIC_FALLBACK_KEY"]` → `"<TOKEN>"`
    - `ANTHROPIC_AUTH_TOKEN="<TOKEN>"` (valeur concrete maintenant)
 4. `agentCustomEnv` envoye a Hermes:
    - `ANTHROPIC_AUTH_TOKEN=<TOKEN>`
-   - `ANTHROPIC_BASE_URL=https://api.z.ai/api/paas/v4`
+   - `ANTHROPIC_BASE_URL=https://api.z.ai/api/coding/paas/v4`
    - `ANTHROPIC_MODEL=glm-5.1`
 5. Hermes fait son propre lookup:
    - `load_pool("zai")` → `_resolve_api_key_provider_secret("zai")`
-   - Cherche `GLM_API_KEY` via `_get_env_prefer_dotenv()` dans `HERMES_HOME/.env` puis `os.environ`
-   - Trouve `GLM_API_KEY=<TOKEN>` dans `os.environ` (herite du parent)
-   - Stocke dans `auth.json` avec status `ok`
-6. API call → utilise le credential pool entry pour `zai`
-
-**Meme valeur, deux lectures differentes** — les deux convergent parce que le token est identique dans `HERMES_HOME/.env` et dans `process.env` (qui herite du `.env` charge). Si `GLM_API_KEY` est absent du `.env` mais present dans `HERMES_HOME/.env` → ca marche aussi (HERMES_HOME/.env est lu en priorite par `_get_env_prefer_dotenv`).
+   - Cherche `ZAI_ANTHROPIC_FALLBACK_KEY` via `_get_env_prefer_dotenv()` dans `HERMES_HOME/.env` puis `os.environ`
+   - Trouve dans `os.environ` (herite du parent)
+   - `writeAuthJson()` ecrit dans `auth.json` avec base_url `https://api.z.ai/api/coding/paas/v4`
+6. API call → utilise le credential pool entry pour `zai` avec le bon endpoint
 
 ---
 
 ## OPENROUTER et Les Embeddings
 
-**`OVERMIND_EMBEDDING_KEY`** = clef OpenRouter pour les **embeddings uniquement** (PostgresMemoryProvider du Workflow). Elle est dans le `.env` Overmind par defaut. Hermes n'a pas besoin de la voir pour l'LLM inference.
+**`OVERMIND_EMBEDDING_KEY`** = clef OpenRouter pour les **embeddings uniquement** (PostgresMemoryProvider du Workflow). Elle est dans le `.env` Overmind. Hermes n'a pas besoin de la voir pour l'LLM inference.
 
 **NousHermesRunner ne doit jamais forwarder de clef OpenRouter a Hermes.** OpenRouter n'est pas un provider LLM dans ce setup. Si `OPENROUTER_API_KEY` arrive jusqu'a Hermes, il detecte la clef et tente OpenRouter pour l'inference → 404 guardrail.
 
@@ -228,7 +257,34 @@ Le `$GLM_API_KEY` dans `ANTHROPIC_AUTH_TOKEN` est juste une convenience pour que
 ```typescript
 OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
 ```
-On envoit un string vide si absent, pour etre explicite: "OpenRouter nest pas configure pour LLM ici."
+
+---
+
+## Le config.yaml ecrit par NousHermesRunner (exemple sniperbot_analyst)
+
+```yaml
+mcp_servers:
+  memory-server:
+    url: "http://localhost:3099/mcp"
+  discord-server:
+    url: "http://localhost:3141/mcp"
+  x-mcp-server:
+    url: "http://localhost:3142/mcp"
+  postgresql-server:
+    url: "http://localhost:5433/mcp"
+
+model:
+  default: glm-5.1
+  provider: z-ai
+
+tts:
+  provider: elevenlabs
+  voice: charlie
+  voice_id: IKne3meq5aSn9XLyUdCD
+  model: eleven_multilingual_v2
+```
+
+Ce config est ecrit dans `.overmind/hermes/agent_<name>/.hermes/config.yaml` a chaque run. Les valeurs viennent de `settings_<agent>.json` + defaults.
 
 ---
 
@@ -267,60 +323,82 @@ On envoit un string vide si absent, pour etre explicite: "OpenRouter nest pas co
 
 ## Resume
 
-|| Tu veux... | Utilise ces vars |
+| Tu veux... | Utilise ces vars |
 |---|---|
-| Z.AI (glm-5.1) | `GLM_API_KEY` dans `.env` + settings `$GLM_API_KEY` |
+| Z.AI (glm-5.1) | `ZAI_ANTHROPIC_FALLBACK_KEY` dans `.env` + settings `$ZAI_ANTHROPIC_FALLBACK_KEY` |
+| Z.AI secondary (token Y) | `ANTHROPIC_AUTH_TOKEN_Y` dans `.env` + settings `$ANTHROPIC_AUTH_TOKEN_Y` |
 | MiniMax CN | `MINIMAX_CN_API_KEY` dans `.env` + settings `$MINIMAX_CN_API_KEY` |
 | Embeddings OpenRouter | `OVERMIND_EMBEDDING_KEY` (pour embeddings, PAS LLM) |
 | Eviter OpenRouter LLM | Pas de `OPENROUTER_API_KEY` dans `HERMES_HOME/.env` |
 
 ---
 
-## Gemini / Antigravity (id: `gemini`)
+## Gemini / @google/gemini-cli (id: `gemini`)
 
-**Ancien `gemini-cli` (npm `@google/gemini-cli`) est remplacé.**
-
-Le runner `gemini` dans Overmind utilise maintenant **Antigravity CLI**, bundlé dans **Antigravity IDE**. Le fichier `GeminiRunner.ts` a été refactorisé pour utiliser le CLI d'Antigravity au lieu du package npm `gemini-cli`.
-
-### Ce qui a changé
-
-| Avant | Après |
-|---|---|
-| `GeminiRunner` → spawn `node .../@google/gemini-cli/bundle/gemini.js` | `GeminiRunner` → spawn `Antigravity IDE.exe` avec `--mode`, `--prompt-file`, etc. |
-| Auth via sync `.gemini/` OAuth | Auth via OAuth interne Antigravity (pas de sync) |
-| Config `.overmind/gemini/` | Config `.antigravity/<agent>/` local |
-| Modes limitées | Modes: GENERAL, CONTEXT_CHECK, PLAN, COMMAND, CASCADE, EVAL, ANTIGRAVITY_REVIEW, MQUERY, COMMIT_MESSAGE, CHECKPOINT, FAST_APPLY |
+Le runner `gemini` utilise **`@google/gemini-cli`** (npm, v0.43.0) en headless mode.
+Le CLI est installé via `npm install -g @google/gemini-cli` et disponible dans le PATH.
 
 ### Installation
 
-Antigravity IDE est déjà installé sur cette machine:
-
 ```bash
-C:\Users\Deamon\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe
+npm install -g @google/gemini-cli
+gemini --version  # → 0.43.0
 ```
 
-Le runner vérifie sa présence et retourne `ANTIGRAVITY_NOT_INSTALLED` si absent.
+### Flags CLI utilisés
 
-### Chemins clés
+| Flag | Valeur | Rôle |
+|---|---|---|
+| `-p` / `--prompt` | prompt text | Mode headless (non-interactif) |
+| `--approval-mode` | `yolo` | Auto-approve tous les outils |
+| `--session-id` | UUID | Session persistante entre appels |
+| `--acp` | (flag) | Active le protocol agent (ACP) |
+| `--model` | `antigravity/<MODE>` | Passe le mode Antigravity comme contexte |
+| `--output-format` | `json` | Output structuré pour parser session_id |
 
-| Ressource | Path |
+### Commandes equivalents (CLI direct)
+
+```bash
+# Test quick
+gemini -p "Dis-moi bonjour" --approval-mode yolo
+
+# Avec session
+gemini -p "Analyse ce code" --approval-mode yolo --session-id <uuid> --acp
+
+# Mode PLAN
+gemini -p "Planifie cette tache" --model antigravity/PLAN --approval-mode yolo --acp
+
+# List sessions
+gemini --list-sessions
+```
+
+### Modes Antigravity (parametre `mode`)
+
+Le mode est passe via `--model antigravity/<MODE>` pour donner du contexte au modele.
+
+|| Mode | Usage |
 |---|---|
-| CLI Executable | `C:\Users\Deamon\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe` |
-| Resources App | `C:\Users\Deamon\AppData\Local\Programs\Antigravity IDE\resources\app` |
-| Language Server | `C:\Users\Deamon\AppData\Local\Programs\Antigravity IDE\resources\app\bin\language_server_windows_x64.exe` |
-| CLI Node | `C:\Users\Deamon\AppData\Local\Programs\Antigravity IDE\resources\app\out\cli.js` |
+| `GENERAL` | Mode par defaut, taches polyvalentes |
+| `CONTEXT_CHECK` | Verification de contexte code |
+| `PLAN` | Planification de taches complexes |
+| `COMMAND` | Execution de commandes shell |
+| `CASCADE` | Execution en cascade multi-agents |
+| `EVAL` | Evaluation et revue de code |
+| `ANTIGRAVITY_REVIEW` | Revue automatique Antigravity |
+| `MQUERY` | Recherche multi-source |
+| `COMMIT_MESSAGE` | Generation de messages de commit |
+| `CHECKPOINT` | Sauvegarde de checkpoint |
+| `FAST_APPLY` | Application rapide de patches |
 
 ### Utilisation Overmind (run_agent)
-
-Le runner `gemini` est utilisé via `run_agent.ts` — même nom, nouvelle implémentation:
 
 ```typescript
 // run_agent avec runner: 'gemini'
 const result = await runAgent({
-  runner: 'gemini',  // ← GeminiRunner qui utilise Antigravity CLI en interne
+  runner: 'gemini',  // GeminiRunner → gemini CLI npm
   prompt: 'Analyse ce code',
   agentName: 'expert_python',
-  mode: 'GENERAL',   // GENERAL, PLAN, COMMAND, CASCADE, EVAL, etc.
+  mode: 'GENERAL',  // GENERAL, PLAN, COMMAND, CASCADE, EVAL, etc.
   autoResume: false,
   configPath: './Workflow',
 });
@@ -332,48 +410,35 @@ const result = await runGeminiAgent({
 });
 ```
 
-### Modes Antigravity (paramètre `mode`)
-
-| Mode | Usage |
-|---|---|
-| `GENERAL` | Mode par défaut, tâches polyvalentes |
-| `CONTEXT_CHECK` | Vérification de contexte code |
-| `PLAN` | Planification de tâches complexes |
-| `COMMAND` | Exécution de commandes shell |
-| `CASCADE` | Exécution en cascade multi-agents |
-| `EVAL` | Évaluation et revue de code |
-| `ANTIGRAVITY_REVIEW` | Revue automatique Antigravity |
-| `MQUERY` | Recherche multi-source |
-| `COMMIT_MESSAGE` | Génération de messages de commit |
-| `CHECKPOINT` | Sauvegarde de checkpoint |
-| `FAST_APPLY` | Application rapide de patches |
-
 ### Configuration agent
 
-Chaque agent peut avoir sa config dans `.antigravity/agent_<nom>/`:
-- `mcp.json` — serveurs MCP actifs
-- Session store — sessions Gemini persistées
+Chaque agent stocke sa config dans `.antigravity/agent_<nom>/`:
+- `mcp.json` — serveurs MCP actifs (copies depuis settings_<agent>.json)
+- Session store — sessions persistees
 
-### Différences avec l'ancien gemini-cli (npm)
+### Verification installation
 
-```json
-// settings_<agent>.json — Antigravity
-{
-  "env": {
-    "ANTIGRAVITY_MODE": "GENERAL",
-    "ANTIGRAVITY_DIR": ".antigravity/agent_<name>"
-  }
-}
+```bash
+gemini --version
+# → 0.43.0
+
+gemini mcp list
+# → liste les MCP servers configures
 ```
 
-### Vérification installation
+### Erreurs connues
 
-```typescript
-import { isAntigravityInstalled } from './services/AntigravityRunner.js';
+| Erreur | Cause | Fix |
+|---|---|---|
+| `GEMINI_CLI_NOT_INSTALLED` | `@google/gemini-cli` pas dans le PATH | `npm install -g @google/gemini-cli` |
+| `EXIT_CODE_1` | Session invalide ou prompt rejete | Retry sans sessionId |
+| `TIMEOUT` | Reponse > 15min | Augmente `CONFIG.TIMEOUT_MS` |
 
-if (isAntigravityInstalled()) {
-  console.log('Antigravity IDE est installé');
-} else {
-  console.log('Antigravity IDE non trouvé');
-}
-```
+### Ce qui a change (historique)
+
+|| Avant (session 2025) | Maintenant |
+|---|---|---|
+| Spawn `language_server_windows_x64.exe` avec flags inexistants | Spawn `gemini` (npm bin) avec flags reels |
+| `--mode --prompt-file --session --output-format` (flags Go inexistants) | `-p --approval-mode yolo --session-id --acp --model --output-format json` |
+| Auth via OAuth interne Antigravity IDE | Auth via Google account du CLI npm |
+| Config `.antigravity/<agent>/` | Config `.antigravity/<agent>/` (MCP + sessions) |

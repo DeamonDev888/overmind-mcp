@@ -1,9 +1,0 @@
-mcp_servers:
-  filesystem_tmp:
-    command: npx
-    args:
-      - "--yes"
-      - "@modelcontextprotocol/server-filesystem"
-      - "/tmp"
-      - "--stdio"
-    enabled: true
