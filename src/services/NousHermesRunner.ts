@@ -272,7 +272,7 @@ export class NousHermesRunner {
       ...(agentName ? { OVERMIND_AGENT_HOME: path.resolve(cwd, '.overmind', 'hermes', `agent_${agentName}`) } : {}),
       // GLM_API_KEY in spawn env — zai provider resolves credentials via os.environ.get("GLM_API_KEY")
       // before checking .env files. This is the most reliable path for Z.AI tokens.
-      ...(agentName && false ? { GLM_API_KEY: '' } : {}),
+      ...(agentName ? { GLM_API_KEY: '' } : {}),
     };
 
     let tmpSettingsPath: string | null = null;
@@ -352,7 +352,7 @@ export class NousHermesRunner {
 
     // Token fallback setup (same as ClaudeRunner)
     const FALLBACK_KEYS = ['AUTH_FALLBACK_1', 'AUTH_FALLBACK_2', 'AUTH_FALLBACK_3'];
-    const TOKEN_KEYS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E', 'GLM_API_KEY', 'Z_AI_API_KEY'];
+    const TOKEN_KEYS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E', 'GLM_API_KEY', 'Z_AI_API_KEY', 'MINIMAX_CN_API_KEY'];
 
     const getAvailableFallbacks = (): Array<{ key: string; value: string }> => {
       const fb: Array<{ key: string; value: string }> = [];
@@ -466,18 +466,35 @@ export class NousHermesRunner {
           const auth: Record<string, unknown> = { version: 1, providers: {}, credential_pool: {} };
           if (fs.existsSync(authPath)) Object.assign(auth, JSON.parse(fs.readFileSync(authPath, 'utf8')));
           if (!auth.credential_pool) auth.credential_pool = {};
-          const cp = auth.credential_pool as Record<string, unknown[]>;
-          // Reset credential_pool to ONLY zai — openrouter is for embeddings only, never for LLM inference
-          auth.credential_pool = {};
           const cleanCp = auth.credential_pool as Record<string, unknown[]>;
-          cleanCp['zai'] = [{
-            id: 'zai-default', label: tokenInfo.tokenEnvKey, auth_type: 'api_key',
+          // Déterminer le provider effectif (CLI > settings)
+          const effectiveProvider = resolvedProvider || 'zai';
+          cleanCp[effectiveProvider] = [{
+            id: `${effectiveProvider}-default`, label: tokenInfo.tokenEnvKey, auth_type: 'api_key',
             priority: 0, source: `env:${tokenInfo.tokenEnvKey}`, access_token: tokenInfo.tokenValue,
             last_status: null, last_error_code: null,
-            base_url: agentCustomEnv['GLM_BASE_URL'] || 'https://api.z.ai/api/coding/paas/v4',
+            base_url: agentCustomEnv['GLM_BASE_URL'] || agentCustomEnv['ANTHROPIC_BASE_URL'] || 'https://api.z.ai/api/coding/paas/v4',
             request_count: 0,
           }];
           fs.writeFileSync(authPath, JSON.stringify(auth, null, 2), 'utf8');
+          // Écrire .env pour OVERMIND_AGENT_HOME — le provider effective détermine la clé d'env à écrire
+          // minimax-cn attend MINIMAX_CN_API_KEY, zai attend GLM_API_KEY (ou ANTHROPIC_AUTH_TOKEN)
+          const dotEnvPath = path.join(overmindHermesSubPath, '.env');
+          const baseUrl = agentCustomEnv['GLM_BASE_URL'] || agentCustomEnv['ANTHROPIC_BASE_URL'] || 'https://api.z.ai/api/coding/paas/v4';
+          const dotLines = [
+            `ANTHROPIC_PROVIDER=${effectiveProvider}`,
+            `ANTHROPIC_BASE_URL=${baseUrl}`,
+          ];
+          // Le provider determine quelle variable d'env écrire dans .env pour seed credentials
+          if (effectiveProvider === 'minimax-cn') {
+            dotLines.unshift(`MINIMAX_CN_API_KEY=${tokenInfo.tokenValue}`);
+          } else if (effectiveProvider === 'zai' || effectiveProvider === 'z-ai') {
+            dotLines.unshift(`GLM_API_KEY=${tokenInfo.tokenValue}`);
+          } else {
+            // Default: ANTHROPIC_AUTH_TOKEN
+            dotLines.unshift(`ANTHROPIC_AUTH_TOKEN=${tokenInfo.tokenValue}`);
+          }
+          fs.writeFileSync(dotEnvPath, dotLines.join('\n') + '\n', 'utf8');
         } catch (_e) { /* non-critical */ }
       };
 

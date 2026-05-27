@@ -58,34 +58,48 @@ async function readStore(workspaceDir?: string): Promise<{ store: RegistryStore;
   }
 }
 
-let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let writePending = false;
 const pendingWrites = new Map<string, RegistryStore>();
 
+// Mutex per file path — prevents concurrent writes to the same file
+// which was causing earlier writes to be silently dropped.
+const fileLocks = new Map<string, Promise<void>>();
+
 async function writeStore(store: RegistryStore, filePath: string): Promise<void> {
+  // Wait for any in-flight write to the same file before proceeding
+  const existingLock = fileLocks.get(filePath);
+  if (existingLock) await existingLock;
+
   pendingWrites.set(filePath, store);
   if (writePending) return;
   writePending = true;
 
-  await new Promise<void>((resolve) => {
-    writeTimer = setTimeout(async () => {
-      writePending = false;
-      writeTimer = null;
-      const entries = new Map(pendingWrites);
-      pendingWrites.clear();
-      for (const [fPath, s] of entries) {
-        try {
-          await fs.mkdir(path.dirname(fPath), { recursive: true });
-          const tmp = fPath + '.tmp.' + Math.random().toString(36).slice(2);
-          await fs.writeFile(tmp, JSON.stringify(s, null, 2), 'utf-8');
-          await fs.rename(tmp, fPath);
-        } catch (e) {
-          console.error(`[ProcessRegistry] Write failed for ${fPath}:`, e);
-        }
-      }
-      resolve();
-    }, 250);
-  });
+  const lock = (async () => {
+    try {
+      await new Promise<void>((resolve) => {
+        setTimeout(async () => {
+          writePending = false;
+          const entries = new Map(pendingWrites);
+          pendingWrites.clear();
+          for (const [fPath, s] of entries) {
+            try {
+              await fs.mkdir(path.dirname(fPath), { recursive: true });
+              const tmp = fPath + '.tmp.' + Math.random().toString(36).slice(2);
+              await fs.writeFile(tmp, JSON.stringify(s, null, 2), 'utf-8');
+              await fs.rename(tmp, fPath);
+            } catch (e) {
+              console.error(`[ProcessRegistry] Write failed for ${fPath}:`, e);
+            }
+          }
+          resolve();
+        }, 250);
+      });
+    } finally {
+      fileLocks.delete(filePath);
+    }
+  })();
+
+  fileLocks.set(filePath, lock.then(() => {}).catch(() => {}));
 }
 
 // ─── OS-level process utilities ───────────────────────────────────────────────

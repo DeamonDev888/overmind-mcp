@@ -42,6 +42,7 @@
 
 import { FastMCP } from 'fastmcp';
 import { withSpan } from './lib/telemetry.js';
+import { PKG_VERSION } from './lib/config.js';
 import { runAgent, runAgentSchema } from './tools/run_agent.js';
 import { runAgentsParallel, runAgentsParallelSchema } from './tools/run_agents_parallel.js';
 import { memorySearchTool, memorySearchSchema } from './tools/memory_search.js';
@@ -75,7 +76,7 @@ function wrapExecute(toolName: string, fn: ToolExecute) {
 export function createServer(name: string = 'OverMind-MCP', memoryOnly = false, memoryToolsOnly = false) {
   const server = new FastMCP({
     name: memoryOnly ? `${name}-Memory` : (memoryToolsOnly ? `${name}-MemoryTools` : name),
-    version: '2.7.0',
+    version: PKG_VERSION as `${number}.${number}.${number}`,
 });
 
   if (!memoryOnly && !memoryToolsOnly) {
