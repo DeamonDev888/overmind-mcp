@@ -262,10 +262,17 @@ export class NousHermesRunner {
       PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1', PYTHONUNBUFFERED: '1',
       PYTHONLEGACYWINDOWSSTDIO: '1', TERM: 'emacs',
       PROMPT_TOOLKIT_NO_INTERACTIVE: '1', ANSICON: '1',
-      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || process.env.OVERMIND_EMBEDDING_KEY,
+      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
       NVIDIA_API_KEY: process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY,
       NVIDIA_API_BASE: process.env.NVIDIA_API_BASE || 'https://integrate.api.nvidia.com/v1',
       ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
+      // OVERMIND_AGENT_HOME tells Hermes (v0.13.0+) to read agent-specific .env FIRST
+      // get_env_value() in Hermes checks OVERMIND_AGENT_HOME/.hermes/.env before HERMES_HOME/.env
+      // This allows $VAR expansion done by Overmind to take precedence over gateway .env
+      ...(agentName ? { OVERMIND_AGENT_HOME: path.resolve(cwd, '.overmind', 'hermes', `agent_${agentName}`) } : {}),
+      // GLM_API_KEY in spawn env — zai provider resolves credentials via os.environ.get("GLM_API_KEY")
+      // before checking .env files. This is the most reliable path for Z.AI tokens.
+      ...(agentName ? { GLM_API_KEY: '' } : {}),
     };
 
     let tmpSettingsPath: string | null = null;
@@ -345,7 +352,7 @@ export class NousHermesRunner {
 
     // Token fallback setup (same as ClaudeRunner)
     const FALLBACK_KEYS = ['AUTH_FALLBACK_1', 'AUTH_FALLBACK_2', 'AUTH_FALLBACK_3'];
-    const TOKEN_KEYS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E', 'GLM_API_KEY', 'Z_AI_API_KEY'];
+    const TOKEN_KEYS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E', 'GLM_API_KEY', 'Z_AI_API_KEY', 'MINIMAX_CN_API_KEY'];
 
     const getAvailableFallbacks = (): Array<{ key: string; value: string }> => {
       const fb: Array<{ key: string; value: string }> = [];
@@ -388,15 +395,20 @@ export class NousHermesRunner {
     else agentCustomEnv.HOME = overmindHermesPath;
 
     // Write .env to HERMES_HOME (credential auto-discovery)
+    // EXCLUDE all OpenRouter keys — OpenRouter is managed internally by Overmind, Hermes must never see it
     const credRegex = /(?:api_key|auth_token|base_url|endpoint|url)$/i;
+    const openRouterPrefixes = ['OPENROUTER', 'OVERMIND_EMBEDDING'];
     const dotEntries: string[] = [];
     for (const [k, v] of Object.entries(agentCustomEnv)) {
-      if (typeof v === 'string' && v.length > 0 && credRegex.test(k)) dotEntries.push(`${k}=${v}`);
+      if (typeof v === 'string' && v.length > 0 && credRegex.test(k)) {
+        // Skip ALL openrouter/overmind-embedding keys — handled internally by Overmind
+        if (openRouterPrefixes.some(p => k.toUpperCase().startsWith(p))) continue;
+        dotEntries.push(`${k}=${v}`);
+      }
     }
     if (dotEntries.length > 0) {
       const dotPath = path.join(overmindHermesSubPath, '.env');
-      const existing = fs.existsSync(dotPath) ? fs.readFileSync(dotPath, 'utf8') : '';
-      fs.writeFileSync(dotPath, dotEntries.join('\n') + '\n' + existing, 'utf8');
+      fs.writeFileSync(dotPath, dotEntries.join('\n') + '\n', 'utf8');
     }
 
     // Generate config.yaml in HERMES_HOME (MCP servers)
@@ -454,15 +466,35 @@ export class NousHermesRunner {
           const auth: Record<string, unknown> = { version: 1, providers: {}, credential_pool: {} };
           if (fs.existsSync(authPath)) Object.assign(auth, JSON.parse(fs.readFileSync(authPath, 'utf8')));
           if (!auth.credential_pool) auth.credential_pool = {};
-          const cp = auth.credential_pool as Record<string, unknown[]>;
-          cp['zai'] = [{
-            id: 'zai-default', label: tokenInfo.tokenEnvKey, auth_type: 'api_key',
+          const cleanCp = auth.credential_pool as Record<string, unknown[]>;
+          // Déterminer le provider effectif (CLI > settings)
+          const effectiveProvider = resolvedProvider || 'zai';
+          cleanCp[effectiveProvider] = [{
+            id: `${effectiveProvider}-default`, label: tokenInfo.tokenEnvKey, auth_type: 'api_key',
             priority: 0, source: `env:${tokenInfo.tokenEnvKey}`, access_token: tokenInfo.tokenValue,
             last_status: null, last_error_code: null,
-            base_url: agentCustomEnv['GLM_BASE_URL'] || 'https://api.z.ai/api/coding/paas/v4',
+            base_url: agentCustomEnv['GLM_BASE_URL'] || agentCustomEnv['ANTHROPIC_BASE_URL'] || 'https://api.z.ai/api/coding/paas/v4',
             request_count: 0,
           }];
           fs.writeFileSync(authPath, JSON.stringify(auth, null, 2), 'utf8');
+          // Écrire .env pour OVERMIND_AGENT_HOME — le provider effective détermine la clé d'env à écrire
+          // minimax-cn attend MINIMAX_CN_API_KEY, zai attend GLM_API_KEY (ou ANTHROPIC_AUTH_TOKEN)
+          const dotEnvPath = path.join(overmindHermesSubPath, '.env');
+          const baseUrl = agentCustomEnv['GLM_BASE_URL'] || agentCustomEnv['ANTHROPIC_BASE_URL'] || 'https://api.z.ai/api/coding/paas/v4';
+          const dotLines = [
+            `ANTHROPIC_PROVIDER=${effectiveProvider}`,
+            `ANTHROPIC_BASE_URL=${baseUrl}`,
+          ];
+          // Le provider determine quelle variable d'env écrire dans .env pour seed credentials
+          if (effectiveProvider === 'minimax-cn') {
+            dotLines.unshift(`MINIMAX_CN_API_KEY=${tokenInfo.tokenValue}`);
+          } else if (effectiveProvider === 'zai' || effectiveProvider === 'z-ai') {
+            dotLines.unshift(`GLM_API_KEY=${tokenInfo.tokenValue}`);
+          } else {
+            // Default: ANTHROPIC_AUTH_TOKEN
+            dotLines.unshift(`ANTHROPIC_AUTH_TOKEN=${tokenInfo.tokenValue}`);
+          }
+          fs.writeFileSync(dotEnvPath, dotLines.join('\n') + '\n', 'utf8');
         } catch (_e) { /* non-critical */ }
       };
 
@@ -474,7 +506,12 @@ export class NousHermesRunner {
           if (resolvedToken.startsWith('$')) resolvedToken = process.env[resolvedToken.slice(1)] || resolvedToken;
           spawnEnv[tokenInfo.tokenEnvKey] = resolvedToken;
         }
-        writeAuthJson(tokenInfo);
+         writeAuthJson(tokenInfo);
+
+        // BLOCK: OpenRouter is for embeddings only — never pass to Hermes for LLM inference
+        delete spawnEnv['OPENROUTER_API_KEY'];
+        delete spawnEnv['OPENROUTER_BASE_URL'];
+        delete spawnEnv['OVERMIND_EMBEDDING_KEY'];
 
         const hermesBin = await findHermesBinary();
         const child: ChildProcess = spawn(hermesBin, cleanArgs, {

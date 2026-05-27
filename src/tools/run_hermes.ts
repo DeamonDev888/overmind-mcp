@@ -20,6 +20,8 @@ export const runHermesSchema = z
         'Le modèle à utiliser. Priorité OpenAI (ex: gpt-4o), NVIDIA NIM (ex: deepseek-ai/deepseek-v4-pro) ou OpenRouter (ex: tencent/hy3-preview)',
       ),
     signal: z.custom<AbortSignal>().optional().describe("AbortSignal pour annuler l'agent"),
+    /** Quand true, skip storeRun() — utilisé par Overmind MCP (le stockage est fait cote MCP Server) */
+    overmindMode: z.boolean().optional().default(false),
   })
   .passthrough();
 
@@ -46,6 +48,7 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
     silent,
     model,
     signal,
+    overmindMode,
   } = args;
   const finalPath = argPath || getWorkspaceDir();
   const finalConfig = argConfig || getWorkspaceDir();
@@ -80,19 +83,24 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
   }
 
   const durationMs = Date.now() - start;
-  try {
-    await storeRun({
-      runner: 'hermes',
-      agentName,
-      prompt,
-      result: result.result,
-      error: result.error,
-      durationMs,
-      success: !result.error,
-      sessionId: result.sessionId,
-    });
-  } catch (e) {
-    console.error(`[run_hermes] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
+  // En mode Overmind (appel MCP), le run est déjà stocké par le MCP Server via memory_runs
+  // Skip storeRun pour éviter le double-stockage ET les erreurs de connexion postgres
+  if (!overmindMode) {
+    try {
+      await storeRun({
+        runner: 'hermes',
+        agentName,
+        prompt,
+        result: result.result,
+        error: result.error,
+        durationMs,
+        success: !result.error,
+        sessionId: result.sessionId,
+      });
+    } catch (e) {
+      // En mode Overmind on skip, mais en mode normal on log seulement (ne fail pas l'agent)
+      console.error(`[run_hermes] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   if (result.error)
