@@ -4,10 +4,8 @@ import { ProcessEntry } from '../lib/processRegistry.js';
 import {
   getLiveAgent,
   getLiveAgentByPid,
-  getRunningAgents,
   LiveAgent,
   LifecycleStatus,
-  setLiveAbortController,
 } from '../lib/agent_lifecycle.js';
 
 // ─── Schema + Types ──────────────────────────────────────────────────────────
@@ -75,7 +73,9 @@ async function resolveAgent(
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
 
-function formatAgent(view: AgentView, action: string): string {
+const OUTPUT_TAIL_CHARS = 2000;
+
+function formatAgent(view: AgentView, action: string, outputTail = OUTPUT_TAIL_CHARS): string {
   const lines: string[] = [];
   const runningFor = view.startedAt ? `${Date.now() - view.startedAt}ms` : '?';
 
@@ -93,9 +93,9 @@ function formatAgent(view: AgentView, action: string): string {
 
   const bufLen = view.outputBuffer.length;
   if (bufLen > 0) {
-    lines.push(`\n**Output (${bufLen} chars):**`);
+    lines.push(`\n**Output (${bufLen} chars, last ${outputTail}):**`);
     lines.push('```');
-    lines.push(view.outputBuffer.slice(-2000));
+    lines.push(view.outputBuffer.slice(-outputTail));
     lines.push('```');
   } else {
     lines.push('\n_(output vide)_');

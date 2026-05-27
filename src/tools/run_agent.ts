@@ -126,6 +126,7 @@ const hermesParamsSchema = z.object({
   config: z.string().optional(),
   silent: z.boolean().default(false),
   signal: z.custom<AbortSignal>().optional(),
+  overmindMode: z.boolean().optional().default(true), // Overmind calls hermes via MCP — skip storeRun
 });
 
 // Validation manuelle des modes (déplacée ici pour compatibilité FastMCP)

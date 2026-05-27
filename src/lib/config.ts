@@ -52,7 +52,7 @@ export const DEFAULT_CONFIG: ConfigType = {
   HARD_TIMEOUT_MS: 60000, // 1 minute extra after keepalive
   CLAUDE: {
     CORE: '--output-format json',
-    PERMISSIONS: '--dangerously-skip-permissions', // Feature: autonomous mode by default
+    PERMISSIONS: process.env.OVERMIND_CLAUDE_PERMISSIONS || '--dangerously-skip-permissions',
     PATHS: {
       SETTINGS: './.claude/settings.json',
       MCP: '.mcp.json',
@@ -143,14 +143,21 @@ export function getWorkspaceDir(): string {
 
   // Load environment from workspace and related projects
   loadEnvQuietly(path.join(workspaceDir, '.env'));
-  loadEnvQuietly(path.resolve(workspaceDir, '../serveur_PostGreSQL/.env'));
+  // Allow an optional external .env to be loaded via env var (prevents hardcoded path assumptions)
+  const externalEnvPath = process.env.OVERMIND_EXTERNAL_ENV_PATH;
+  if (externalEnvPath) {
+    loadEnvQuietly(path.resolve(externalEnvPath));
+  }
 
   cachedWorkspaceDir = workspaceDir;
   return workspaceDir;
 }
 
-// Trigger initial environment loading on module import
-getWorkspaceDir();
+// NOTE: getWorkspaceDir() is NOT called automatically at import time.
+// It is called lazily on first access (see getWorkspaceDir() body above).
+// This prevents the cache from being polluted by premature cwd resolution
+// when the module is imported by an MCP server before OVERMIND_WORKSPACE is set.
+// Callers MUST call resetWorkspaceCache() if OVERMIND_WORKSPACE changes.
 
 export function resolveConfigPath(configPath: string, workspaceDirOverride?: string): string {
   if (path.isAbsolute(configPath)) return configPath;
