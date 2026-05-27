@@ -160,8 +160,12 @@ export class PostgresMemoryProvider implements MemoryProvider {
         const cleanup = () => {
           void newPool.end().catch(() => {});
         };
-        process.on('uncaughtException', cleanup);
-        process.on('exit', cleanup);
+        // Use prependOnceListener to avoid accumulating identical handlers
+        // when getPoolFor() is called multiple times for the same dbName.
+        // Each cleanup handler is a new function reference, so we guard
+        // by dbName key (set above) to register at most once per database.
+        process.prependOnceListener('uncaughtException', cleanup);
+        process.prependOnceListener('exit', cleanup);
         this.poolCleanupHandlers.set(dbName, cleanup);
       }
 
@@ -440,7 +444,16 @@ export class PostgresMemoryProvider implements MemoryProvider {
     }
 
     const { embedding, model } = await embedText(params.text);
-    const embStr = embedding.length > 0 ? `[${embedding.join(',')}]` : null;
+    if (!embedding || embedding.length === 0) {
+      const err = new Error(
+        `[PostgresMemory] CRITICAL: embedText() returned empty embedding for text chunk "${params.text.slice(0, 50)}...". ` +
+        `Cannot store knowledge with NULL embedding — search would return corrupt results. ` +
+        `Check OVERMIND_EMBEDDING_KEY / OVERMIND_EMBEDDING_URL / OVERMIND_EMBEDDING_MODEL.`,
+      );
+      triggerMemoryAlert(`❌ EMBEDDING FAILED: Cannot store knowledge chunk`, err);
+      throw err;
+    }
+    const embStr = `[${embedding.join(',')}]`;
 
     await pool.query(
       `INSERT INTO knowledge_chunks (id, source, text, embedding, model) 

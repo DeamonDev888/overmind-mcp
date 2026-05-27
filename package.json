@@ -45,7 +45,7 @@
     "version": "changeset version && node scripts/auto-changelog.mjs",
     "release": "pnpm run build && changeset publish",
     "prepublishOnly": "pnpm run rebuild",
-    "postinstall": "node scripts/postinstall.mjs || exit 0",
+    "postinstall": "node scripts/postinstall.mjs",
     "setup": "overmind-setup",
     "setup:deps": "node scripts/install-dependencies.mjs",
     "postgres:up": "overmind-postgres-mcp up",
@@ -76,8 +76,8 @@
     "url": "https://discord.gg/4AR82phtBz"
   },
   "homepage": "https://deamondev888.github.io/overmind-mcp/",
-  "engines": {
-    "node": ">=20.0.0 <=25"
+"engines": {
+    "node": ">=20.0.0"
   },
   "packageManager": "pnpm@10.18.0",
   "devDependencies": {

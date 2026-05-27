@@ -1,19 +1,23 @@
 /**
- * GeminiRunner — Exécute des agents IA via Antigravity CLI
- * 
- * NOTE: "gemini" dans run_agent = Antigravity runner.
- * L'ancien gemini-cli (@google/gemini-cli npm) est remplacé.
- * 
- * Antigravity CLI est le runner natif de Google, bundlé dans Antigravity IDE.
- * Différences avec l'ancien gemini-cli:
- * - CLI bundlé dans Antigravity IDE (pas npm)
- * - Auth via OAuth interne (pas de sync .gemini/)
- * - Config locale .antigravity/<agent>/ (pas .overmind/gemini/)
- * - Modes: GENERAL, CONTEXT_CHECK, PLAN, COMMAND, CASCADE, EVAL, etc.
+ * GeminiRunner — Exécute des agents IA via @google/gemini-cli npm
+ *
+ * NOTE: "gemini" dans run_agent = runner utilisant @google/gemini-cli npm.
+ *
+ * Le CLI @google/gemini-cli est installé via `npm install -g @google/gemini-cli`.
+ * Flags utilisés (headless):
+ *   gemini -p "prompt" --approval-mode yolo --session-id <uuid> --acp [--model <mode>]
+ *
+ * Les 11 modes Antigravity sont passés via --model pour donner du contexte.
+ * Le flag --acp active le mode agent (ACP protocol).
+ *
+ * Sorties:
+ *   --output-format text  → texte lisible
+ *   --output-format json  → JSON structuré (utilisé pour extraire session_id)
  */
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { spawn, ChildProcess } from 'child_process';
 import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
@@ -32,56 +36,28 @@ import {
 const logger = pino({ name: 'GeminiRunner' });
 
 // ============================================================================
-// CHEMINS ANTIGRAVITY (remplace gemini-cli npm)
+// CHEMINS — @google/gemini-cli npm
 // ============================================================================
 
-/** Dossier d'installation d'Antigravity IDE */
-const ANTIGRAVITY_IDE_PATH = path.join(
-  process.env.LOCALAPPDATA || '',
-  'Programs',
-  'Antigravity IDE'
-);
-
-/** CLI Antigravity (Electron wrapper) */
-const ANTIGRAVITY_CLI_EXE = path.join(
-  ANTIGRAVITY_IDE_PATH,
-  'Antigravity IDE.exe'
-);
-
-/** Resources/app pour les outils internes */
-const ANTIGRAVITY_RESOURCES_APP = path.join(
-  ANTIGRAVITY_IDE_PATH,
-  'resources',
-  'app'
-);
-
-/** Language server pour les opérations de code */
-const ANTIGRAVITY_LANGUAGE_SERVER = path.join(
-  ANTIGRAVITY_RESOURCES_APP,
-  'bin',
-  'language_server_windows_x64.exe'
-);
-
-/** Dossier .antigravity local par agent */
-function getAgentAntigravityDir(agentName?: string, configPath?: string): string {
-  const baseDir = configPath || process.cwd();
-  return path.resolve(
-    baseDir,
-    '.antigravity',
-    agentName ? `agent_${agentName}` : 'default'
-  );
-}
-
-/**
- * Vérifie si Antigravity IDE est installé
- */
-export function isAntigravityInstalled(): boolean {
-  return fs.existsSync(ANTIGRAVITY_CLI_EXE);
-}
+/** CLI gemini (npm bin — @google/gemini-cli v0.43.0) */
+const GEMINI_CLI = 'gemini';
 
 // ============================================================================
-// TYPES (identiques à l'ancien GeminiRunner)
+// TYPES
 // ============================================================================
+
+export type GeminiMode =
+  | 'GENERAL'
+  | 'CONTEXT_CHECK'
+  | 'PLAN'
+  | 'COMMAND'
+  | 'CASCADE'
+  | 'EVAL'
+  | 'ANTIGRAVITY_REVIEW'
+  | 'MQUERY'
+  | 'COMMIT_MESSAGE'
+  | 'CHECKPOINT'
+  | 'FAST_APPLY';
 
 export interface RunAgentOptions {
   prompt: string;
@@ -93,7 +69,7 @@ export interface RunAgentOptions {
   silent?: boolean;
   model?: string;
   /** Mode Antigravity (défaut: GENERAL) */
-  mode?: 'GENERAL' | 'CONTEXT_CHECK' | 'PLAN' | 'COMMAND' | 'CASCADE' | 'EVAL' | 'ANTIGRAVITY_REVIEW' | 'MQUERY' | 'COMMIT_MESSAGE' | 'CHECKPOINT' | 'FAST_APPLY';
+  mode?: GeminiMode;
 }
 
 export interface RunAgentResult {
@@ -107,35 +83,32 @@ export interface RunAgentResult {
 }
 
 // ============================================================================
-// GEMINIRUNNER (MAIS EN FAIT ANTIGRAVITY)
+// GEMINIRUNNER
 // ============================================================================
 
 export class GeminiRunner {
   private config: typeof CONFIG.CLAUDE;
   private timeoutMs: number;
-  private tempFiles: string[] = [];
 
   constructor() {
     this.config = CONFIG.CLAUDE;
     this.timeoutMs = CONFIG.TIMEOUT_MS || 900000; // 15 min default
   }
 
-  private cleanupTempFiles(): void {
-    for (const tempFile of this.tempFiles) {
-      try {
-        if (fs.existsSync(tempFile)) {
-          fs.unlinkSync(tempFile);
-          logger.debug({ tempFile }, 'Cleaned up temp file');
-        }
-      } catch (err) {
-        logger.warn({ tempFile, error: err }, 'Failed to cleanup temp file');
-      }
-    }
-    this.tempFiles = [];
+  /**
+   * Vérifie si @google/gemini-cli est installé
+   */
+  async isInstalled(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const child = spawn(GEMINI_CLI, ['--version'], { shell: true, windowsHide: true });
+      let output = '';
+      child.stdout?.on('data', (d) => (output += d.toString()));
+      child.on('close', (code) => resolve(code === 0 && output.includes('0.43')));
+      child.on('error', () => resolve(false));
+    });
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
-    // Load .env files first (before anything else) — same as before
     const cwd = options.cwd || process.cwd();
     loadEnvQuietly(path.join(cwd, '.env'));
     loadEnvQuietly(path.join(cwd, '../Workflow/.env'));
@@ -145,13 +118,17 @@ export class GeminiRunner {
     const { PATHS } = this.config;
 
     // ========================================================================
-    // VÉRIFICATION ANTIGRAVITY (remplace gemini-cli check)
+    // VÉRIFICATION gemini CLI
     // ========================================================================
 
-    if (!isAntigravityInstalled()) {
+    const installed = await this.isInstalled();
+    if (!installed) {
       return {
         result: '',
-        error: 'ANTIGRAVITY_NOT_INSTALLED: Antigravity IDE non trouvé.\nInstallez depuis: C:\\Users\\Deamon\\AppData\\Local\\Programs\\Antigravity IDE\\Antigravity IDE.exe',
+        error:
+          'GEMINI_CLI_NOT_INSTALLED: @google/gemini-cli non trouvé.\n' +
+          'Installez avec: npm install -g @google/gemini-cli\n' +
+          'Vérifiez avec: gemini --version',
       };
     }
 
@@ -164,12 +141,14 @@ export class GeminiRunner {
       ...(agentName ? { OVERMIND_AGENT_NAME: agentName } : {}),
     };
 
-    // Auto Resume
     if (autoResume && agentName && !sessionId) {
       const lastId = await getLastSessionId(agentName, options.configPath, 'gemini');
-      if (lastId) {
-        sessionId = lastId;
-      }
+      if (lastId) sessionId = lastId;
+    }
+
+    // Session ID: génère si non fourni
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
     }
 
     // ========================================================================
@@ -201,24 +180,20 @@ export class GeminiRunner {
     }
 
     // ========================================================================
-    // ANTIGRAVITY CONFIG (remplace la sync .gemini/ du vieux gemini-cli)
+    // MCP CONFIG
     // ========================================================================
 
-    const agentAntigravityDir = getAgentAntigravityDir(agentName, options.configPath);
+    const agentConfigDir = path.join(
+      options.configPath || cwd,
+      '.antigravity',
+      agentName ? `agent_${agentName}` : 'default',
+    );
 
-    // Créer le dossier .antigravity/<agent> si nécessaire
-    if (!fs.existsSync(agentAntigravityDir)) {
-      fs.mkdirSync(agentAntigravityDir, { recursive: true });
+    if (!fs.existsSync(agentConfigDir)) {
+      fs.mkdirSync(agentConfigDir, { recursive: true });
     }
 
-    // NOTE: Antigravity utilise son propre OAuth interne (pas de sync creds nécessaire)
-    // Contrairement à l'ancien gemini-cli qui syncait .gemini/ depuis HOME
-
-    // ========================================================================
-    // MCP CONFIG (identique à avant)
-    // ========================================================================
-
-    const mcpPath = path.join(agentAntigravityDir, 'mcp.json');
+    const mcpPath = path.join(agentConfigDir, 'mcp.json');
 
     if (agentName) {
       const settingsDir = path.dirname(PATHS.SETTINGS);
@@ -229,15 +204,12 @@ export class GeminiRunner {
 
       if (fs.existsSync(agentSettingsPath)) {
         let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
-
-        // --- Interpolation des variables d'environnement ---
         settings = interpolateEnvVars(settings);
 
         if (settings.env) {
           Object.assign(agentCustomEnv, settings.env);
         }
 
-        // Copier le MCP config si existant
         const originalMcpPath = resolveConfigPath(PATHS.MCP, options.configPath);
         if (fs.existsSync(originalMcpPath)) {
           const fullMcp = JSON.parse(fs.readFileSync(originalMcpPath, 'utf8'));
@@ -257,8 +229,7 @@ export class GeminiRunner {
           }
 
           fs.writeFileSync(mcpPath, JSON.stringify(mcpToUse, null, 2));
-          this.tempFiles.push(mcpPath); // Track for cleanup
-          logger.info({ mcpPath }, 'MCP configuration synchronized for Antigravity');
+          logger.info({ mcpPath }, 'MCP configuration synchronized for Gemini');
           if (!options.silent) {
             process.stderr.write(`[GeminiRunner] MCP synchronisé: ${mcpPath}\n`);
           }
@@ -267,40 +238,42 @@ export class GeminiRunner {
     }
 
     // ========================================================================
-    // SPAWN ANTIGRAVITY CLI (remplace spawn gemini.js)
+    // CONSTRUCTION DES ARGS gemini CLI
+    // ========================================================================
+    //
+    // Mode Antigravity → --model <mode> (pour donner du contexte au prompt)
+    // ACP mode active le protocol agent (--acp)
+    // --approval-mode yolo = auto-approve tous les outils
+    // --output-format json = output structuré pour parser session_id
     // ========================================================================
 
-    const command = ANTIGRAVITY_LANGUAGE_SERVER;
     const argsSpawn: string[] = [];
 
-    // Mode Antigravity (nouveau paramètre non disponible dans l'ancien gemini-cli)
-    argsSpawn.push('--mode', mode);
+    // Headless prompt (obligatoire pour non-interactive)
+    argsSpawn.push('-p', finalPrompt);
 
-    // Prompt via fichier pour éviter les problèmes de quotes Windows
-    const promptFile = path.join(agentAntigravityDir, '.prompt_temp.md');
-    fs.writeFileSync(promptFile, finalPrompt, 'utf8');
-    this.tempFiles.push(promptFile);
-    argsSpawn.push('--prompt-file', promptFile);
+    // Mode Antigravity → passe au model pour context
+    argsSpawn.push('--model', `antigravity/${mode}`);
 
-    // Session si resume
-    if (sessionId) {
-      argsSpawn.push('--session', sessionId);
-    } else if (autoResume) {
-      argsSpawn.push('--session', 'latest');
-    }
+    // ACP mode (agent protocol)
+    argsSpawn.push('--acp');
 
-    // Config Antigravity
-    argsSpawn.push('--antigravity-dir', agentAntigravityDir);
-    argsSpawn.push('--output-format', 'json');
+    // Auto-approve tous les outils
     argsSpawn.push('--approval-mode', 'yolo');
 
-    if (agentName) {
-      argsSpawn.push('--agent-name', agentName);
-    }
+    // Session ID persistante
+    argsSpawn.push('--session-id', sessionId);
+
+    // Output JSON pour parser proprement
+    argsSpawn.push('--output-format', 'json');
+
+    // ========================================================================
+    // SPAWN gemini CLI
+    // ========================================================================
 
     const runImpl = async (span: Span): Promise<RunAgentResult> => {
       span.setAttribute('agentName', agentName || '');
-      span.setAttribute('runner', 'gemini'); // still "gemini" in telemetry for backwards compat
+      span.setAttribute('runner', 'gemini');
       span.setAttribute('mode', mode);
 
       return new Promise((resolve) => {
@@ -312,14 +285,13 @@ export class GeminiRunner {
           }
         };
 
-        const child: ChildProcess = spawn(command, argsSpawn, {
-          cwd: options.cwd || process.cwd(),
-          shell: false,
+        const child: ChildProcess = spawn(GEMINI_CLI, argsSpawn, {
+          cwd,
+          shell: true,
           windowsHide: true,
           env: agentCustomEnv as NodeJS.ProcessEnv,
         });
 
-        // Register process
         if (child.pid) {
           void registerProcess(child.pid, {
             agentName: agentName || '',
@@ -331,28 +303,19 @@ export class GeminiRunner {
         let stdout = '';
         let stderr = '';
         const MAX_BUF = 10 * 1024 * 1024;
-        const cleanup = () => {
-          child.stdout?.removeAllListeners();
-          child.stderr?.removeAllListeners();
-          child.removeAllListeners();
-        };
 
         child.stdout?.on('data', (data) => {
           const d = data.toString();
-          if (child.pid && d) {
-            void appendOutput(child.pid, d, options.configPath);
-          }
-          if (stdout.length + d.length > MAX_BUF) stdout = stdout.slice(-MAX_BUF);
-          else stdout += d;
+          if (child.pid && d) void appendOutput(child.pid, d, options.configPath);
+          stdout += d;
+          if (stdout.length > MAX_BUF) stdout = stdout.slice(-MAX_BUF);
         });
 
         child.stderr?.on('data', (data) => {
           const d = data.toString();
-          if (child.pid && d) {
-            void appendOutput(child.pid, d, options.configPath);
-          }
-          if (stderr.length + d.length > MAX_BUF) stderr = stderr.slice(-MAX_BUF);
-          else stderr += d;
+          if (child.pid && d) void appendOutput(child.pid, d, options.configPath);
+          stderr += d;
+          if (stderr.length > MAX_BUF) stderr = stderr.slice(-MAX_BUF);
         });
 
         const timeout = setTimeout(async () => {
@@ -366,7 +329,6 @@ export class GeminiRunner {
           if (child.pid) {
             void updateProcessStatus(child.pid, 'failed', null, options.configPath);
           }
-          cleanup();
           safeResolve({ result: '', error: 'TIMEOUT', rawOutput: stdout + stderr });
         }, this.timeoutMs);
 
@@ -377,32 +339,44 @@ export class GeminiRunner {
 
         child.on('close', async (code: number | null) => {
           clearTimeout(timeout);
-          cleanup();
 
-          if (code !== 0 && !stdout) {
+          if (code !== 0 && !stdout.trim()) {
             return safeResolve({
               result: '',
-              error: code === 41 ? '🔑 Erreur Auth/API Key (OAuth/GCloud)' : `EXIT_CODE_${code}`,
+              error: `EXIT_CODE_${code}`,
               rawOutput: stderr,
             });
           }
 
           try {
-            // Try to parse JSON output (identique à avant)
-            const trimmedStdout = stdout.trim();
+            const trimmed = stdout.trim();
             let jsonOutput: Record<string, unknown> | null = null;
 
+            // Parse JSON: d'abord ligne simple, puis extraire du milieu
             try {
-              jsonOutput = JSON.parse(trimmedStdout);
+              jsonOutput = JSON.parse(trimmed);
             } catch {
-              // Parser failure - try to extract JSON from output
-              const lastBrace = trimmedStdout.lastIndexOf('}');
-              const firstBrace = trimmedStdout.lastIndexOf('{', lastBrace);
-              if (firstBrace !== -1 && lastBrace !== -1) {
+              // Strip les warnings ANSI avant de parser (ex: "Warning: True color...")
+              const lines = trimmed.split('\n');
+              const jsonLines: string[] = [];
+              let inJson = false;
+              for (const line of lines) {
+                const trimmed2 = line.trim();
+                // Détecte début JSON
+                if (trimmed2 === '{' || trimmed2.startsWith('{')) {
+                  inJson = true;
+                }
+                if (inJson || trimmed2 === '}' || trimmed2.endsWith('}')) {
+                  inJson = true;
+                  jsonLines.push(trimmed2);
+                }
+              }
+              const cleaned = jsonLines.join('');
+              if (cleaned.startsWith('{')) {
                 try {
-                  jsonOutput = JSON.parse(trimmedStdout.substring(firstBrace, lastBrace + 1));
+                  jsonOutput = JSON.parse(cleaned);
                 } catch {
-                  // Ignore parsing errors
+                  // pas de JSON → output brut
                 }
               }
             }
@@ -412,7 +386,7 @@ export class GeminiRunner {
                 (jsonOutput.reply as string) ||
                 (jsonOutput.result as string) ||
                 (jsonOutput.output as string) ||
-                stdout.trim();
+                trimmed;
               const newSessionId = (jsonOutput.session_id as string) || sessionId;
 
               if (newSessionId && agentName) {
@@ -429,9 +403,9 @@ export class GeminiRunner {
               });
             }
 
-            // No JSON - return raw output
+            // Fallback: texte brut (le mode --output-format text est utilisé si json échoue)
             return safeResolve({
-              result: stdout.trim(),
+              result: trimmed,
               sessionId: sessionId,
               rawOutput: stdout,
             });
@@ -455,8 +429,14 @@ export class GeminiRunner {
       runner: 'gemini',
     });
 
-    // Cleanup
-    this.cleanupTempFiles();
+    // Cleanup fichier MCP temporaire
+    if (fs.existsSync(mcpPath)) {
+      try {
+        fs.unlinkSync(mcpPath);
+      } catch {
+        // ignore cleanup errors
+      }
+    }
 
     return result;
   }
