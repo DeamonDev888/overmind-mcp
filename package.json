@@ -1,6 +1,6 @@
 {
   "name": "overmind-mcp",
-  "version": "2.8.5",
+  "version": "2.8.6",
   "preferGlobal": true,
   "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut le protocole 'Custom-Nickname' pour identifier vos agents avec des surnoms originaux (The Chaos Prophet, Shadow Sniper, etc.), l'isolation mémoire (Private Memory Context) et le support pour QwenCli et Nous Hermes. Installation automatique des dépendances Docker (PostgreSQL, pgvector) inclus.",
   "type": "module",
@@ -45,7 +45,7 @@
     "version": "changeset version && node scripts/auto-changelog.mjs",
     "release": "pnpm run build && changeset publish",
     "prepublishOnly": "pnpm run rebuild",
-    "postinstall": "node scripts/postinstall.mjs || exit 0",
+    "postinstall": "node scripts/postinstall.mjs",
     "setup": "overmind-setup",
     "setup:deps": "node scripts/install-dependencies.mjs",
     "postgres:up": "overmind-postgres-mcp up",
@@ -76,8 +76,8 @@
     "url": "https://discord.gg/4AR82phtBz"
   },
   "homepage": "https://deamondev888.github.io/overmind-mcp/",
-  "engines": {
-    "node": ">=20.0.0 <=25"
+"engines": {
+    "node": ">=20.0.0"
   },
   "packageManager": "pnpm@10.18.0",
   "devDependencies": {
