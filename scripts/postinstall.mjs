@@ -262,17 +262,12 @@ function createEnvConfig() {
 
   // Copier .env.example → .env si existe
   if (existsSync(envExampleFile) && !existsSync(envFile)) {
-    let envContent;
-
-    if (process.platform === 'win32') {
-      envContent = runCommand(`type "${envExampleFile}"`, { stdio: 'pipe' });
-    } else {
-      envContent = runCommand(`cat "${envExampleFile}"`, { stdio: 'pipe' });
-    }
-
-    if (envContent) {
-      writeFileSync(envFile, envContent);
+    try {
+      const content = readFileSync(envExampleFile, 'utf8');
+      writeFileSync(envFile, content);
       log(COLORS.green, '✅ .env créé (à partir de .env.example)');
+    } catch (e) {
+      log(COLORS.yellow, '⚠️ Impossible de copier .env.example: ' + e.message);
     }
   }
 
@@ -335,17 +330,12 @@ EMBEDDING_CACHE_SIZE=1000
 
   // Copier .mcp.json.example → .mcp.json si existe
   if (existsSync(mcpExampleFile) && !existsSync(mcpFile)) {
-    let mcpContent;
-
-    if (process.platform === 'win32') {
-      mcpContent = runCommand(`type "${mcpExampleFile}"`, { stdio: 'pipe' });
-    } else {
-      mcpContent = runCommand(`cat "${mcpExampleFile}"`, { stdio: 'pipe' });
-    }
-
-    if (mcpContent) {
-      writeFileSync(mcpFile, mcpContent);
+    try {
+      const content = readFileSync(mcpExampleFile, 'utf8');
+      writeFileSync(mcpFile, content);
       log(COLORS.green, '✅ .mcp.json créé (à partir de .mcp.json.example)');
+    } catch (e) {
+      log(COLORS.yellow, '⚠️ Impossible de copier .mcp.json.example: ' + e.message);
     }
   }
 }
