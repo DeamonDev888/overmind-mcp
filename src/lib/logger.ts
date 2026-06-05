@@ -4,7 +4,7 @@ import fs from 'fs';
 
 /**
  * ============================================================================
- * 🚀 SUPER-PINO LOGGER - Workflow Edition (Overmind) v2.7.0
+ * 🚀 SUPER-PINO LOGGER - Workflow Edition (Overmind)
  * ============================================================================
  */
 

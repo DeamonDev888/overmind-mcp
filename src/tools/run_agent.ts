@@ -170,7 +170,8 @@ export async function runAgent(args: RunAgentInternalArgs) {
     switch (runner) {
       case 'claude':
         return runClaudeAgent(validateAndExtractParams(params, claudeParamsSchema));
-case 'gemini':
+      case 'gemini':
+      case 'antigravity':
         return runGeminiAgent(validateAndExtractParams(params, antigravityParamsSchema));
       case 'kilo':
         return runKiloAgent(validateAndExtractParams(params, kiloParamsSchema));
