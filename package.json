@@ -1,7 +1,6 @@
 {
   "name": "overmind-mcp",
   "version": "2.8.6",
-  "preferGlobal": true,
   "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut le protocole 'Custom-Nickname' pour identifier vos agents avec des surnoms originaux (The Chaos Prophet, Shadow Sniper, etc.), l'isolation mémoire (Private Memory Context) et le support pour QwenCli et Nous Hermes. Installation automatique des dépendances Docker (PostgreSQL, pgvector) inclus.",
   "type": "module",
   "main": "dist/index.js",
@@ -52,7 +51,8 @@
     "postgres:down": "overmind-postgres-mcp down",
     "postgres:status": "overmind-postgres-mcp status",
     "postgres:logs": "overmind-postgres-mcp logs",
-    "postgres:reset": "overmind-postgres-mcp reset"
+    "postgres:reset": "overmind-postgres-mcp reset",
+    "prebuild": "node -e \"try{require('fs').copyFileSync('bin/launch.js','dist/bin/launch.js');console.log('Copied launch.js')}catch{console.log('dist/bin not ready yet')}\""
   },
   "keywords": [
     "mcp",
@@ -85,10 +85,10 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.6.2",
     "@types/pg": "^8.20.0",
-    "@types/pino": "^7.0.5",
     "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.6.0",
+    "pino-pretty": "^13.1.3",
     "prettier": "^3.8.3",
     "rimraf": "^6.1.3",
     "typescript": "^6.0.3",
@@ -102,10 +102,8 @@
     "overmind-postgres-mcp": "^1.3.0",
     "pg": "^8.20.0",
     "pino": "^10.3.1",
-    "pino-pretty": "^13.1.3",
     "pino-roll": "^4.0.0",
     "tinyglobby": "^0.2.16",
-    "tslib": "^2.8.1",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

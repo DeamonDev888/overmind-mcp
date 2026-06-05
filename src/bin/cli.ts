@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
 import { fileURLToPath } from 'url';
 import { PassThrough } from 'stream';
 
@@ -651,6 +652,20 @@ if (transportType === 'httpStream') {
   if (sslKey) httpStreamConfig.sslKey = sslKey;
   if (sslCa) httpStreamConfig.sslCa = sslCa;
   const protocol = sslCert && sslKey ? 'https' : 'http';
+
+  // PATCH: Monkey-patch http.createServer to disable Node.js default 5min requestTimeout
+  // Without this, SSE streams from long-running agent calls get killed after 300s
+  const origCreateServer = http.createServer.bind(http);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (http as any).createServer = function (requestListener?: any) {
+    const hServer = origCreateServer(requestListener);
+    hServer.requestTimeout = 0;
+    hServer.headersTimeout = 0;
+    hServer.keepAliveTimeout = 0;
+    // Keep patch active to ensure all HTTP/S servers in this process have no timeouts
+    return hServer;
+  };
+
   server.start({ transportType: 'httpStream', httpStream: httpStreamConfig });
   rootLogger.info(`[Overmind] [READY] Serveur HTTP${sslCert ? 'S' : ''} sur ${protocol}://${httpHost}:${httpPort}${httpEndpoint}`);
 } else {

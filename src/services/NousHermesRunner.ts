@@ -253,6 +253,14 @@ export class NousHermesRunner {
     const timeoutMs = this.timeoutMs;
     const HARD_TIMEOUT_MS = 60000;
 
+    // HERMES_HOME setup
+    const overmindHermesPath = path.resolve(cwd, '.overmind', 'hermes', agentName ? `agent_${agentName}` : 'central');
+    const overmindHermesSubPath = path.join(overmindHermesPath, '.hermes');
+
+    if (agentName && !fs.existsSync(overmindHermesPath)) {
+      return { result: '', error: `INVALID_AGENT: Agent Hermes "${agentName}" non trouvé.` };
+    }
+
     // Load agent settings + MCP config (same pattern as ClaudeRunner)
     let systemPrompt = '';
     let resolvedModel: string | undefined;
@@ -279,61 +287,114 @@ export class NousHermesRunner {
     let tmpMcpPath: string | null = null;
 
     if (agentName) {
-      const settingsDir = path.dirname(CONFIG.HERMES.PATHS.SETTINGS);
-      const agentSettingsPath = resolveConfigPath(
-        path.join(settingsDir, `settings_${agentName}.json`), configPath,
-      );
-
-      if (!fs.existsSync(agentSettingsPath)) {
-        return { result: '', error: `INVALID_AGENT: Agent Hermes "${agentName}" non trouvé.` };
-      }
-
-      const settings = interpolateEnvVars(JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8')));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const s = settings as Record<string, any>;
-
-      tmpSettingsPath = path.join(path.dirname(agentSettingsPath), `settings_${agentName}_tmp.json`);
-      fs.writeFileSync(tmpSettingsPath, JSON.stringify(s, null, 2), 'utf8');
-
-      if (!options.model && typeof s.model === 'string') resolvedModel = s.model;
-      if (!options.model && s.env?.ANTHROPIC_MODEL && !String(s.env.ANTHROPIC_MODEL).startsWith('$')) {
-        resolvedModel = s.env.ANTHROPIC_MODEL;
-      }
-      if (!options.provider && s.env?.ANTHROPIC_PROVIDER && !String(s.env.ANTHROPIC_PROVIDER).startsWith('$')) {
-        resolvedProvider = s.env.ANTHROPIC_PROVIDER;
-      }
-      if (s.env) {
-        for (const [k, v] of Object.entries(s.env)) {
-          if (typeof v === 'string') agentCustomEnv[k] = v;
-        }
-      }
-
-      const agentPromptPath = resolveConfigPath(
-        path.join(settingsDir, 'agents', `${agentName}.md`), configPath,
-      );
+      const agentPromptPath = path.join(overmindHermesSubPath, 'SOUL.md');
       if (fs.existsSync(agentPromptPath)) {
         systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
       }
 
-      // MCP config filtered by enabledMcpjsonServers
-      const agentMcpPath = resolveConfigPath(
-        path.join(settingsDir, `.mcp.${agentName}.json`), configPath,
-      );
-      if (fs.existsSync(agentMcpPath)) {
-        try {
-          const mcpConfig = interpolateEnvVars(JSON.parse(fs.readFileSync(agentMcpPath, 'utf8')));
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const mc = mcpConfig as Record<string, any>;
-          const filteredMcp: Record<string, unknown> = { mcpServers: {} };
-          const enabled = s.enabledMcpjsonServers || [];
-          for (const sn of enabled) {
-            if (mc.mcpServers?.[sn]) {
-              (filteredMcp.mcpServers as Record<string, unknown>)[sn] = mc.mcpServers[sn];
+      // Load environment variables from .claude/settings_<agentName>.json
+      try {
+        const agentSettingsPath = resolveConfigPath(
+          path.join(path.dirname(CONFIG.CLAUDE.PATHS.SETTINGS), `settings_${agentName}.json`),
+          configPath,
+        );
+        if (fs.existsSync(agentSettingsPath)) {
+          let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+          settings = interpolateEnvVars(settings);
+
+          // Create temporary settings file
+          const tempSettings = path.join(
+            path.dirname(agentSettingsPath),
+            `settings_${agentName}_tmp.json`,
+          );
+          fs.writeFileSync(tempSettings, JSON.stringify(settings, null, 2));
+          tmpSettingsPath = tempSettings;
+          this.tempFiles.push(tempSettings);
+
+          if (settings.env) {
+            Object.assign(agentCustomEnv, settings.env);
+            if (!options.model && settings.env.MODEL) {
+              agentCustomEnv.ANTHROPIC_MODEL = settings.env.MODEL;
             }
           }
-          tmpMcpPath = path.join(path.dirname(agentMcpPath), `mcp_${agentName}_tmp.json`);
-          fs.writeFileSync(tmpMcpPath, JSON.stringify(filteredMcp, null, 2), 'utf8');
-        } catch (e) { console.error(`[NousHermesRunner] MCP config error: ${e}`); }
+
+          // MCP configurations
+          const agentMcpPath = resolveConfigPath(
+            path.join(path.dirname(CONFIG.CLAUDE.PATHS.SETTINGS), `.mcp.${agentName}.json`),
+            configPath,
+          );
+
+          if (fs.existsSync(agentMcpPath)) {
+            // Write temporary mcp path
+            const tempMcp = path.join(
+              path.dirname(agentSettingsPath),
+              `mcp_${agentName}_tmp.json`,
+            );
+            fs.writeFileSync(tempMcp, fs.readFileSync(agentMcpPath, 'utf8'));
+            tmpMcpPath = tempMcp;
+            this.tempFiles.push(tempMcp);
+          } else if (
+            settings.enableAllProjectMcpServers === false &&
+            Array.isArray(settings.enabledMcpjsonServers)
+          ) {
+            const projectMcpPath = resolveConfigPath(CONFIG.CLAUDE.PATHS.MCP, configPath);
+            if (fs.existsSync(projectMcpPath)) {
+              const fullMcp = JSON.parse(fs.readFileSync(projectMcpPath, 'utf8'));
+              const filteredMcp: { mcpServers: Record<string, unknown> } = { mcpServers: {} };
+
+              for (const serverName of settings.enabledMcpjsonServers) {
+                if (fullMcp.mcpServers && fullMcp.mcpServers[serverName]) {
+                  filteredMcp.mcpServers[serverName] = fullMcp.mcpServers[serverName];
+                }
+              }
+
+              const tempMcp = path.join(
+                path.dirname(agentSettingsPath),
+                `mcp_${agentName}_tmp.json`,
+              );
+              fs.writeFileSync(tempMcp, JSON.stringify(filteredMcp, null, 2));
+              tmpMcpPath = tempMcp;
+              this.tempFiles.push(tempMcp);
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn({ error: e }, `Failed to process settings/mcp configurations for Hermes agent ${agentName}`);
+      }
+
+      // Load environment from isolated .env file (to allow overrides)
+      const envPath = path.join(overmindHermesSubPath, '.env');
+      if (fs.existsSync(envPath)) {
+        try {
+          const content = fs.readFileSync(envPath, 'utf8');
+          content.split('\n').forEach((line) => {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) return;
+            const eqIdx = trimmed.indexOf('=');
+            if (eqIdx === -1) return;
+            const key = trimmed.slice(0, eqIdx).trim();
+            let value = trimmed.slice(eqIdx + 1).trim();
+            if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+            else if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+            if (key) {
+              agentCustomEnv[key] = value;
+            }
+          });
+        } catch (e) {
+          logger.warn({ envPath, error: e }, 'Failed to read agent env file');
+        }
+      }
+
+      resolvedModel = agentCustomEnv.MODEL || agentCustomEnv.ANTHROPIC_MODEL;
+      resolvedProvider = agentCustomEnv.PROVIDER || agentCustomEnv.ANTHROPIC_PROVIDER;
+      if (resolvedProvider && (resolvedProvider.startsWith('http://') || resolvedProvider.startsWith('https://'))) {
+        if (resolvedProvider.includes('minimax')) {
+          resolvedProvider = 'minimax-cn';
+        } else if (resolvedProvider.includes('z.ai') || resolvedProvider.includes('bigmodel')) {
+          resolvedProvider = 'zai';
+        } else {
+          resolvedProvider = undefined;
+        }
       }
     }
 
@@ -387,29 +448,49 @@ export class NousHermesRunner {
     };
 
     // HERMES_HOME setup
-    const overmindHermesPath = path.resolve(cwd, '.overmind', 'hermes', agentName ? `agent_${agentName}` : 'central');
-    const overmindHermesSubPath = path.join(overmindHermesPath, '.hermes');
     if (!fs.existsSync(overmindHermesSubPath)) fs.mkdirSync(overmindHermesSubPath, { recursive: true });
     agentCustomEnv.HERMES_HOME = overmindHermesSubPath;
     if (process.platform === 'win32') agentCustomEnv.USERPROFILE = overmindHermesPath;
     else agentCustomEnv.HOME = overmindHermesPath;
 
-    // Write .env to HERMES_HOME (credential auto-discovery)
+    // Write .env to HERMES_HOME (credential auto-discovery) - Cleaned to prevent duplicates
     // EXCLUDE all OpenRouter keys — OpenRouter is managed internally by Overmind, Hermes must never see it
     const credRegex = /(?:api_key|auth_token|base_url|endpoint|url)$/i;
     const openRouterPrefixes = ['OPENROUTER', 'OVERMIND_EMBEDDING'];
-    const dotEntries: string[] = [];
-    for (const [k, v] of Object.entries(agentCustomEnv)) {
-      if (typeof v === 'string' && v.length > 0 && credRegex.test(k)) {
-        // Skip ALL openrouter/overmind-embedding keys — handled internally by Overmind
-        if (openRouterPrefixes.some(p => k.toUpperCase().startsWith(p))) continue;
-        dotEntries.push(`${k}=${v}`);
+    const envMap = new Map<string, string>();
+    const dotPath = path.join(overmindHermesSubPath, '.env');
+    if (fs.existsSync(dotPath)) {
+      try {
+        const existing = fs.readFileSync(dotPath, 'utf8');
+        existing.split('\n').forEach((line) => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) return;
+          const eqIdx = trimmed.indexOf('=');
+          if (eqIdx === -1) return;
+          const k = trimmed.slice(0, eqIdx).trim();
+          let v = trimmed.slice(eqIdx + 1).trim();
+          if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
+          else if (v.startsWith("'") && v.endsWith("'")) v = v.slice(1, -1);
+          if (k) {
+            if (openRouterPrefixes.some(p => k.toUpperCase().startsWith(p))) return;
+            envMap.set(k, v);
+          }
+        });
+      } catch (e) {
+        logger.warn({ envPath: dotPath, error: e }, 'Failed to read existing agent env file for deduplication');
       }
     }
-    if (dotEntries.length > 0) {
-      const dotPath = path.join(overmindHermesSubPath, '.env');
-      fs.writeFileSync(dotPath, dotEntries.join('\n') + '\n', 'utf8');
+    for (const [k, v] of Object.entries(agentCustomEnv)) {
+      if (typeof v === 'string' && v.length > 0 && credRegex.test(k)) {
+        if (openRouterPrefixes.some(p => k.toUpperCase().startsWith(p))) continue;
+        envMap.set(k, v);
+      }
     }
+    const finalDotEntries: string[] = [];
+    for (const [k, v] of envMap.entries()) {
+      finalDotEntries.push(`${k}=${v}`);
+    }
+    fs.writeFileSync(dotPath, finalDotEntries.join('\n') + '\n', 'utf8');
 
     // Generate config.yaml in HERMES_HOME (MCP servers)
     if (tmpMcpPath && fs.existsSync(tmpMcpPath)) {
@@ -567,8 +648,12 @@ export class NousHermesRunner {
           clearTimeout(timer);
           if (child.pid) void updateProcessStatus(child.pid, code === 0 ? 'done' : 'failed', code, configPath);
 
-          const sessionMatch = stdout.match(/Session:\s+(\S+)/);
+          const sessionMatch = stdout.match(/session_id:\s*(\S+)/i) || 
+                               stderr.match(/session_id:\s*(\S+)/i) || 
+                               stdout.match(/Session:\s*(\S+)/) || 
+                               stderr.match(/Session:\s*(\S+)/);
           if (sessionMatch) currentSessionId = sessionMatch[1];
+
 
           const retryable = isRetryableError(stderr) || isRetryableError(stdout);
           if (code !== 0 && retryable && retryCount < maxRetries) {
