@@ -75,7 +75,7 @@ async function resolveAgent(
 
 const OUTPUT_TAIL_CHARS = 2000;
 
-function formatAgent(view: AgentView, action: string, outputTail = OUTPUT_TAIL_CHARS): string {
+function formatAgent(view: AgentView, _action: string, outputTail = OUTPUT_TAIL_CHARS): string {
   const lines: string[] = [];
   const runningFor = view.startedAt ? `${Date.now() - view.startedAt}ms` : '?';
 
