@@ -300,6 +300,25 @@ export class NousHermesRunner {
           path.join(path.dirname(CONFIG.CLAUDE.PATHS.SETTINGS), `settings_${agentName}.json`),
           configPath,
         );
+        // Diagnostic: if settings_<agent>.json is missing at the expected path, log it
+        // explicitly along with the alternative paths that DO exist. Without this log,
+        // a user putting the file under .claude/agents/ (or just `agents/`) will see a
+        // cryptic 401 ten minutes later with no breadcrumb back to the misplacement.
+        if (!fs.existsSync(agentSettingsPath)) {
+          const altPaths = [
+            path.join(configPath, '.claude', 'agents', `settings_${agentName}.json`),
+            path.join(configPath, `settings_${agentName}.json`),
+            path.join(configPath, 'agents', `settings_${agentName}.json`),
+          ];
+          logger.warn(
+            {
+              agentName,
+              searched: agentSettingsPath,
+              alsoChecked: altPaths.filter((p) => fs.existsSync(p)),
+            },
+            'settings_<agent>.json not found at expected path. The agent will run with no LLM credentials unless ~/.hermes/.env or process.env provides them.',
+          );
+        }
         if (fs.existsSync(agentSettingsPath)) {
           let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
           settings = interpolateEnvVars(settings);
@@ -415,7 +434,30 @@ export class NousHermesRunner {
 
     // Token fallback setup (same as ClaudeRunner)
     const FALLBACK_KEYS = ['AUTH_FALLBACK_1', 'AUTH_FALLBACK_2', 'AUTH_FALLBACK_3'];
-    const TOKEN_KEYS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E', 'GLM_API_KEY', 'Z_AI_API_KEY', 'MINIMAX_CN_API_KEY'];
+    // IMPORTANT — provider/credentials mapping (Hermes v0.16.0):
+    //   minimax-cn  → MINIMAX_CN_API_KEY  (NOT ANTHROPIC_AUTH_TOKEN)
+    //   minimax     → MINIMAX_API_KEY
+    //   zai         → GLM_API_KEY or ZAI_ANTHROPIC_FALLBACK_KEY
+    //   z-ai (alt)  → Z_AI_API_KEY
+    //   anthropic   → ANTHROPIC_AUTH_TOKEN (any of _1.._5, _E, _F, _Y)
+    //
+    // The agent's settings_<name>.json MUST use the env var name that matches
+    // its ANTHROPIC_PROVIDER value, otherwise Hermes upstream will silently
+    // 401 even though Overmind has the key. The minimax plugin in Hermes
+    // (plugins/model-providers/minimax/init.py) decides the env var name — not Overmind.
+    const TOKEN_KEYS = [
+      // Generic Anthropic-compatible (Hermes v0.16.0)
+      'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E', 'ANTHROPIC_AUTH_TOKEN_F', 'ANTHROPIC_AUTH_TOKEN_Y',
+      // Suffixes numériques 1..5 (convention observée dans les .env prod)
+      'ANTHROPIC_AUTH_TOKEN_1', 'ANTHROPIC_AUTH_TOKEN_2', 'ANTHROPIC_AUTH_TOKEN_3', 'ANTHROPIC_AUTH_TOKEN_4', 'ANTHROPIC_AUTH_TOKEN_5',
+      // Z.AI / GLM
+      'GLM_API_KEY', 'GLM_API_KEY_E', 'GLM_API_KEY_Y',
+      'Z_AI_API_KEY', 'ZAI_ANTHROPIC_FALLBACK_KEY',
+      // MiniMax
+      'MINIMAX_API_KEY', 'MINIMAX_CN_API_KEY',
+      // OpenAI fallback
+      'OPENAI_API_KEY', 'OPENAI_AUTH_TOKEN',
+    ];
 
     const getAvailableFallbacks = (): Array<{ key: string; value: string }> => {
       const fb: Array<{ key: string; value: string }> = [];

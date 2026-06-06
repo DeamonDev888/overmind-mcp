@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.8.15] - 2026-06-06
+
+### Fixed
+- **[Services] `NousHermesRunner.ts`** — Token resolution & diagnostics for `minimax-cn` / `zai` providers
+  - Drop the `GLM_API_KEY: ''` pre-seed that was clobbering `settings_<agent>.json` values whenever `interpolateEnvVars()` returned an empty string (root cause of the cryptic `EXIT_CODE_1` / 401 on hermes runs). The empty string used to win against `Object.assign()` when the shell parent didn't export `GLM_API_KEY`.
+  - Expand `TOKEN_KEYS` to 16 variants: `ANTHROPIC_AUTH_TOKEN` plus `_E` / `_F` / `_Y` / `_1`..`_5` suffixes, `GLM_API_KEY` plus `_E` / `_Y`, `Z_AI_API_KEY`, `ZAI_ANTHROPIC_FALLBACK_KEY`, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`, `OPENAI_API_KEY`, `OPENAI_AUTH_TOKEN`. Covers the convention observed in real `.env` files.
+  - Add `warn()` diagnostic when `settings_<agent>.json` is missing at the expected path — lists the alternative paths that DO exist (e.g. `.claude/agents/settings_<name>.json`).
+  - Add `error()` diagnostic inside `getTokenForIndex(0)` showing which TOKEN_KEYS were empty / present (length only, no values), plus paths of the temp settings file and `.hermes/.env`.
+  - Add early-return `NO_LLM_TOKEN` error instead of silently spawning hermes with an empty API key (the misleading `EXIT_CODE_1` is gone).
+  - Fix Linux path handling: detect venv install before overriding `VIRTUAL_ENV` / `PATH`; use `:` separator on POSIX; do not override PATH for system installs (e.g. `/usr/local/bin/hermes`). Fixes `ENOENT` on Ubuntu servers where the old code wrote a Windows-only PATH with `;` separator.
+  - Add inline comment block documenting the provider → env-var mapping (the minimax plugin in Hermes v0.16.0 decides the env var name, not Overmind).
+
+### Changed
+- **[Tools] `config_example.ts`** — Provider `minimax` example now uses `MINIMAX_CN_API_KEY` (not `ANTHROPIC_AUTH_TOKEN`) and documents the full provider → env-var mapping table to prevent silent 401s.
+
 ## [0.9.0] - 2025-05-24
 
 ### Refactored
