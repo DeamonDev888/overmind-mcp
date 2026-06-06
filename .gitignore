@@ -59,9 +59,9 @@ logs/
 
 # Local scripts & test files
 # (some scripts are tracked — see git ls-files scripts/)
+scripts/*
 !scripts/auto-changelog.mjs
 !scripts/postinstall.mjs
-scripts/
 backup/
 create_test_agent.js
 run_mission.js
