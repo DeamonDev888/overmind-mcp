@@ -287,6 +287,42 @@ export class NousHermesRunner {
 
     let tmpSettingsPath: string | null = null;
     let tmpMcpPath: string | null = null;
+    // Capture the RAW (pre-interpolation) settings tokens so getTokenForIndex can
+    // fail-loud on unresolved $VAR references and report which one is missing.
+    // (Once interpolateEnvVars() runs, $VAR has been replaced with its value, and
+    //  we lose the information that the user explicitly asked for THAT var.)
+    const rawExplicitSettingsTokens: Array<{ key: string; value: string }> = [];
+
+    // ============================================================
+    // TOKEN_KEYS — declared at top of scope so it's available for the RAW
+    // pre-interpolation capture in the settings-load block above. This is
+    // 100% exhaustive — every env-var name the runner knows about.
+    // ============================================================
+    const TOKEN_KEYS = [
+      // Generic Anthropic-compatible (Hermes v0.16.0)
+      'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E', 'ANTHROPIC_AUTH_TOKEN_F', 'ANTHROPIC_AUTH_TOKEN_Y',
+      // Suffixes numériques 1..9 (convention observée dans les .env prod)
+      'ANTHROPIC_AUTH_TOKEN_1', 'ANTHROPIC_AUTH_TOKEN_2', 'ANTHROPIC_AUTH_TOKEN_3', 'ANTHROPIC_AUTH_TOKEN_4', 'ANTHROPIC_AUTH_TOKEN_5',
+      'ANTHROPIC_AUTH_TOKEN_6', 'ANTHROPIC_AUTH_TOKEN_7', 'ANTHROPIC_AUTH_TOKEN_8', 'ANTHROPIC_AUTH_TOKEN_9',
+      'ANTHROPIC_AUTH_TOKEN_0',
+      // Z.AI / GLM
+      'GLM_API_KEY', 'GLM_API_KEY_E', 'GLM_API_KEY_Y',
+      'Z_AI_API_KEY', 'ZAI_ANTHROPIC_FALLBACK_KEY',
+      'ZAI_API_KEY_E', 'ZAI_API_KEY_Y',
+      'ZAI_API_KEY_1', 'ZAI_API_KEY_2', 'ZAI_API_KEY_3', 'ZAI_API_KEY_4', 'ZAI_API_KEY_5',
+      'ZAI_API_KEY_6', 'ZAI_API_KEY_7', 'ZAI_API_KEY_8', 'ZAI_API_KEY_9', 'ZAI_API_KEY_0',
+      // MiniMax
+      'MINIMAX_API_KEY', 'MINIMAX_CN_API_KEY',
+      'MINIMAX_API_KEY_E', 'MINIMAX_API_KEY_Y',
+      'MINIMAX_API_KEY_1', 'MINIMAX_API_KEY_2', 'MINIMAX_API_KEY_3', 'MINIMAX_API_KEY_4', 'MINIMAX_API_KEY_5',
+      'MINIMAX_CN_API_KEY_E', 'MINIMAX_CN_API_KEY_Y',
+      'MINIMAX_CN_API_KEY_1', 'MINIMAX_CN_API_KEY_2', 'MINIMAX_CN_API_KEY_3', 'MINIMAX_CN_API_KEY_4', 'MINIMAX_CN_API_KEY_5',
+      // OpenAI fallback
+      'OPENAI_API_KEY', 'OPENAI_AUTH_TOKEN',
+      // Mistral
+      'MISTRAL_API_KEY', 'MISTRAL_API_KEY_1', 'MISTRAL_API_KEY_2', 'MISTRAL_API_KEY_3', 'MISTRAL_API_KEY_4', 'MISTRAL_API_KEY_5',
+      'MISTRAL_API_KEY_6', 'MISTRAL_API_KEY_7', 'MISTRAL_API_KEY_E', 'MISTRAL_API_KEY_Y',
+    ];
 
     if (agentName) {
       const agentPromptPath = path.join(overmindHermesSubPath, 'SOUL.md');
@@ -320,7 +356,20 @@ export class NousHermesRunner {
           );
         }
         if (fs.existsSync(agentSettingsPath)) {
-          let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+          // Read the RAW settings (pre-interpolation) to capture $VAR references
+          // before they get resolved. We iterate the FULL TOKEN_KEYS list (100%
+          // exhaustive) so any env-var name the runner knows about gets captured
+          // for fail-loud validation later.
+          const rawSettings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
+          if (rawSettings.env) {
+            for (const tk of TOKEN_KEYS) {
+              const v = rawSettings.env[tk];
+              if (v && typeof v === 'string' && v.length > 0) {
+                rawExplicitSettingsTokens.push({ key: tk, value: v });
+              }
+            }
+          }
+          let settings = rawSettings;
           settings = interpolateEnvVars(settings);
 
           // Create temporary settings file
@@ -434,6 +483,55 @@ export class NousHermesRunner {
 
     // Token fallback setup (same as ClaudeRunner)
     const FALLBACK_KEYS = ['AUTH_FALLBACK_1', 'AUTH_FALLBACK_2', 'AUTH_FALLBACK_3'];
+
+    // ============================================================
+    // TOKEN PREFIX → PROVIDER MAPPING (Hermes v0.16.0)
+    // ============================================================
+    // The token PREFIX is the most reliable signal for the provider.
+    // We detect it from the literal value, NOT from a hardcoded env-var name,
+    // because the same env-var name (e.g. ANTHROPIC_AUTH_TOKEN) can be reused
+    // across providers when the user copy-pastes keys from one service to another.
+    //
+    // Convention (observed in real .env files and provider dashboards):
+    //   MiniMax     → "sk-cp-..."  → env MINIMAX_API_KEY  (or MINIMAX_CN_API_KEY)
+    //   Z.AI / GLM  → "32hex.32hex"  → env ZAI_ANTHROPIC_FALLBACK_KEY  (or GLM_API_KEY)
+    //                 e.g. "c78a134949fc4c369911c24e9fa4b84c.OZhHX5Obs6qF1ISt"
+    //   Z.AI alt    → 32-char hex (single block, no dot)  → env ZAI_ANTHROPIC_FALLBACK_KEY
+    //                 e.g. "5f650035e5a845549e4765184d8179b1"
+    //   Anthropic   → "sk-ant-..." → env ANTHROPIC_AUTH_TOKEN
+    //   OpenAI      → "sk-..."     → env OPENAI_API_KEY  (no -ant, no -cp)
+    //   OpenRouter  → "sk-or-..."  → env OPENROUTER_API_KEY (BLOCKED for LLM)
+    //   Mistral     → (variable)   → env MISTRAL_API_KEY_*
+    //   Other       → unknown      → env ANTHROPIC_AUTH_TOKEN (default Anthropic)
+    const TOKEN_PREFIX_PROVIDERS: Array<{ test: (t: string) => boolean; provider: string; envKey: string }> = [
+      // Z.AI: c78a134949fc4c369911c24e9fa4b84c.OZhHX5Obs6qF1ISt (32hex.32hex — 2 blocks)
+      { test: (t) => /^[0-9a-f]{32}\.[0-9a-zA-Z]+$/i.test(t), provider: 'zai', envKey: 'ZAI_ANTHROPIC_FALLBACK_KEY' },
+      // Z.AI: 5f6500...q3m3 (32-char hex single block, no dot, no dashes)
+      { test: (t) => /^[0-9a-f]{32}$/i.test(t), provider: 'zai', envKey: 'ZAI_ANTHROPIC_FALLBACK_KEY' },
+      // MiniMax: sk-cp-...qNmo (with cp prefix)
+      { test: (t) => t.startsWith('sk-cp-'), provider: 'minimax', envKey: 'MINIMAX_API_KEY' },
+      // MiniMax: sk-mm-... (alternative prefix)
+      { test: (t) => t.startsWith('sk-mm-'), provider: 'minimax', envKey: 'MINIMAX_API_KEY' },
+      // Anthropic
+      { test: (t) => t.startsWith('sk-ant-'), provider: 'anthropic', envKey: 'ANTHROPIC_AUTH_TOKEN' },
+      // OpenRouter (BLOCKED for LLM, but we still detect it for diagnostic)
+      { test: (t) => t.startsWith('sk-or-'), provider: 'openrouter', envKey: 'OPENROUTER_API_KEY' },
+      // OpenAI (no -ant, no -cp, no -or)
+      { test: (t) => t.startsWith('sk-'), provider: 'openai', envKey: 'OPENAI_API_KEY' },
+      // Generic 16+ hex without dot — probably a Z.AI token variant
+      { test: (t) => /^[0-9a-f]{16,}$/i.test(t), provider: 'zai', envKey: 'ZAI_ANTHROPIC_FALLBACK_KEY' },
+    ];
+
+    function detectTokenProvider(token: string): { provider: string; envKey: string } {
+      for (const rule of TOKEN_PREFIX_PROVIDERS) {
+        if (rule.test(token)) return { provider: rule.provider, envKey: rule.envKey };
+      }
+      return { provider: 'unknown', envKey: 'ANTHROPIC_AUTH_TOKEN' };
+    }
+
+    // ============================================================
+    // TOKEN RESOLUTION ORDER (settings.env first, then process.env, then detection)
+    // ============================================================
     // IMPORTANT — provider/credentials mapping (Hermes v0.16.0):
     //   minimax-cn  → MINIMAX_CN_API_KEY  (NOT ANTHROPIC_AUTH_TOKEN)
     //   minimax     → MINIMAX_API_KEY
@@ -445,19 +543,97 @@ export class NousHermesRunner {
     // its ANTHROPIC_PROVIDER value, otherwise Hermes upstream will silently
     // 401 even though Overmind has the key. The minimax plugin in Hermes
     // (plugins/model-providers/minimax/init.py) decides the env var name — not Overmind.
-    const TOKEN_KEYS = [
-      // Generic Anthropic-compatible (Hermes v0.16.0)
-      'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E', 'ANTHROPIC_AUTH_TOKEN_F', 'ANTHROPIC_AUTH_TOKEN_Y',
-      // Suffixes numériques 1..5 (convention observée dans les .env prod)
-      'ANTHROPIC_AUTH_TOKEN_1', 'ANTHROPIC_AUTH_TOKEN_2', 'ANTHROPIC_AUTH_TOKEN_3', 'ANTHROPIC_AUTH_TOKEN_4', 'ANTHROPIC_AUTH_TOKEN_5',
-      // Z.AI / GLM
-      'GLM_API_KEY', 'GLM_API_KEY_E', 'GLM_API_KEY_Y',
-      'Z_AI_API_KEY', 'ZAI_ANTHROPIC_FALLBACK_KEY',
-      // MiniMax
-      'MINIMAX_API_KEY', 'MINIMAX_CN_API_KEY',
-      // OpenAI fallback
-      'OPENAI_API_KEY', 'OPENAI_AUTH_TOKEN',
-    ];
+    //
+    // Resolution order (NEW in 2.8.16+):
+    //   1. settings_<agent>.json env block (explicit, agent-specific — WINS)
+    //   2. agent's .hermes/.env (isolated override)
+    //   3. process.env (global .env via systemd EnvironmentFile)
+    //   4. Detection by token prefix (subtilisation — last resort, maps to right provider)
+    //
+    // (Full list moved to top of scope for use in RAW pre-interpolation capture.)
+    // See const TOKEN_KEYS at top of runHermesAgent() function.
+
+    /**
+     * Resolve a token with explicit settings priority + provider detection.
+     *
+     * Strategy:
+     *   1. Read settings_<agent>.json env block.
+     *      - If user set a LITERAL token (e.g. "sk-cp-..."), use it directly.
+     *      - If user set a $VAR REFERENCE (e.g. "$GLM_API_KEY_Y"), RESOLVE IT.
+     *        - If $VAR is found in process.env → use the resolved value.
+     *        - If $VAR is NOT found in process.env → FAIL LOUD. Do NOT silently
+     *          fall back to TOKEN_KEYS (the user explicitly said "use THIS var").
+     *      - If user set something else (e.g. template, expression), try to resolve.
+     *   2. If no settings token (or settings has no env block at all), fall back
+     *      to TOKEN_KEYS iteration in priority order from process.env.
+     *   3. For each candidate, sniff the token prefix to know which provider it
+     *      belongs to, and re-map to the right env var name for that provider.
+     */
+    function resolveTokenWithDetection(
+      explicitSettingsTokens: Array<{ key: string; value: string }>,
+    ): { tokenEnvKey: string; tokenValue: string; detectedProvider: string; source: 'settings-explicit' | 'env-fallback' | 'detected' } | null {
+      // Step 1: settings_<agent>.json env block takes ABSOLUTE priority
+      // (whatever the user explicitly set in their agent config wins)
+      if (explicitSettingsTokens.length > 0) {
+        const t = explicitSettingsTokens[0];
+        // If the value is a $VAR reference, RESOLVE it against process.env
+        let resolvedValue = t.value;
+        if (typeof t.value === 'string' && t.value.startsWith('$')) {
+          const varName = t.value.slice(1);
+          const fromEnv = process.env[varName];
+          if (!fromEnv || fromEnv.length === 0) {
+            // FAIL LOUD — do not silently fall back. The user explicitly asked
+            // for THIS var, and it doesn't exist. Surface the misconfiguration.
+            logger.error(
+              {
+                agentName,
+                requestedVar: varName,
+                requestedKey: t.key,
+                settingsPath: tmpSettingsPath,
+              },
+              '[FAIL-LOUD] settings_<agent>.json references $' + varName + ' but it is not set in process.env. ' +
+              'Either export it in the parent .env, or fix the reference in settings_<agent>.json. ' +
+              'Refusing to fall back to a different credential.',
+            );
+            throw new Error(
+              `MISSING_ENV_VAR: settings_<agent>.json env.${t.key}="$` + varName + '" ' +
+              `but process.env.${varName} is empty. Add it to /home/demon/.overmind/.env or fix the settings reference.`,
+            );
+          }
+          resolvedValue = fromEnv;
+          logger.info(
+            { agentName, sourceKey: t.key, referencedVar: varName, resolvedLen: resolvedValue.length },
+            '[SUBTILISATION] Resolved $VAR reference from settings_<agent>.json against process.env.',
+          );
+        }
+        const detected = detectTokenProvider(resolvedValue);
+        logger.info(
+          { agentName, tokenKey: t.key, detectedProvider: detected.provider, mappedTo: detected.envKey },
+          '[SUBTILISATION] Using explicit settings_<agent>.json token, re-mapping to detected provider env var.',
+        );
+        return { tokenEnvKey: t.key, tokenValue: resolvedValue, detectedProvider: detected.provider, source: 'settings-explicit' };
+      }
+
+      // Step 2: iterate TOKEN_KEYS in priority order, picking the first non-empty
+      for (const tk of TOKEN_KEYS) {
+        const v = agentCustomEnv[tk];
+        if (v && typeof v === 'string' && v.length > 0) {
+          const detected = detectTokenProvider(v);
+          // If the env-var name doesn't match the detected provider, re-map.
+          // (e.g. ANTHROPIC_AUTH_TOKEN=sk-cp-... → real env should be MINIMAX_API_KEY)
+          if (detected.envKey !== tk && detected.provider !== 'unknown') {
+            logger.info(
+              { agentName, sourceKey: tk, detectedProvider: detected.provider, remappedTo: detected.envKey },
+              '[SUBTILISATION] Token prefix detected provider mismatch — re-mapping env var.',
+            );
+            return { tokenEnvKey: detected.envKey, tokenValue: v, detectedProvider: detected.provider, source: 'detected' };
+          }
+          return { tokenEnvKey: tk, tokenValue: v, detectedProvider: detected.provider, source: 'env-fallback' };
+        }
+      }
+
+      return null;
+    }
 
     const getAvailableFallbacks = (): Array<{ key: string; value: string }> => {
       const fb: Array<{ key: string; value: string }> = [];
@@ -470,10 +646,18 @@ export class NousHermesRunner {
 
     const getTokenForIndex = (idx: number): { tokenEnvKey: string; tokenValue: string } | null => {
       if (idx === 0) {
-        for (const tk of TOKEN_KEYS) {
-          const v = agentCustomEnv[tk];
-          if (v && typeof v === 'string' && v.length > 0) return { tokenEnvKey: tk, tokenValue: v };
-        }
+        // Use the RAW (pre-interpolation) settings tokens captured at load time.
+        // This way, if the user set "$GLM_API_KEY_Y" in settings, we can detect
+        // that it was a $VAR reference and fail-loud if it's not in process.env.
+        // Reading tmpSettingsPath here would be too late (it's deleted by
+        // cleanupTmpFiles() before this runs in some code paths).
+        const explicitSettingsTokens = rawExplicitSettingsTokens;
+
+        // The resolver may throw MISSING_ENV_VAR if a $VAR in settings is unresolved.
+        // We catch and surface it as a clear NO_LLM_TOKEN error (the caller wraps it).
+        const resolved = resolveTokenWithDetection(explicitSettingsTokens);
+        if (resolved) return { tokenEnvKey: resolved.tokenEnvKey, tokenValue: resolved.tokenValue };
+
         // Diagnostic: dump which keys were checked and their (masked) state so a future
         // EXIT_CODE_1 + 401 has a clear breadcrumb back to the empty/missing credential.
         const probe = TOKEN_KEYS.map((tk) => {
@@ -603,35 +787,110 @@ export class NousHermesRunner {
           if (fs.existsSync(authPath)) Object.assign(auth, JSON.parse(fs.readFileSync(authPath, 'utf8')));
           if (!auth.credential_pool) auth.credential_pool = {};
           const cleanCp = auth.credential_pool as Record<string, unknown[]>;
-          // Déterminer le provider effectif (CLI > settings)
-          const effectiveProvider = resolvedProvider || 'zai';
+          // Determine effective provider from MULTIPLE signals
+          // Priority: TOKEN PREFIX (most reliable) > BASE_URL (very reliable) > settings.ANTHROPIC_PROVIDER (hint only)
+          // The user can put anything in settings.ANTHROPIC_PROVIDER — we don't blindly trust it.
+          const baseUrlHint = agentCustomEnv['ANTHROPIC_BASE_URL'] || agentCustomEnv['GLM_BASE_URL'] || '';
+          // First, detect from token prefix
+          const detectedFromToken = detectTokenProvider(tokenInfo.tokenValue);
+          // Then, detect from base URL
+          let detectedFromUrl: string | null = null;
+          if (baseUrlHint) {
+            const url = baseUrlHint.toLowerCase();
+            if (url.includes('minimax')) {
+              if (url.includes('.cn') || url.includes('minimaxi')) detectedFromUrl = 'minimax-cn';
+              else detectedFromUrl = 'minimax';
+            } else if (url.includes('z.ai') || url.includes('bigmodel') || url.includes('zhipu')) {
+              detectedFromUrl = 'zai';
+            } else if (url.includes('anthropic.com')) {
+              detectedFromUrl = 'anthropic';
+            } else if (url.includes('openai.com')) {
+              detectedFromUrl = 'openai';
+            }
+          }
+          // Then, the hint from settings
+          const settingsHint = resolvedProvider || '';
+
+          // Voting: token > URL > settings
+          let effectiveProvider: string;
+          if (detectedFromToken.provider !== 'unknown') {
+            effectiveProvider = detectedFromToken.provider;
+            if (settingsHint && settingsHint !== effectiveProvider) {
+              logger.warn(
+                { agentName, settingsHint, tokenSays: effectiveProvider, urlSays: detectedFromUrl },
+                '[SUBTILISATION] settings.ANTHROPIC_PROVIDER contradicts token prefix — using token.',
+              );
+            }
+          } else if (detectedFromUrl) {
+            effectiveProvider = detectedFromUrl;
+            if (settingsHint && settingsHint !== effectiveProvider) {
+              logger.warn(
+                { agentName, settingsHint, urlSays: effectiveProvider, tokenSays: detectedFromToken.provider },
+                '[SUBTILISATION] settings.ANTHROPIC_PROVIDER contradicts BASE_URL — using URL.',
+              );
+            }
+          } else if (settingsHint) {
+            effectiveProvider = settingsHint;
+          } else {
+            effectiveProvider = 'zai';
+          }
           cleanCp[effectiveProvider] = [{
             id: `${effectiveProvider}-default`, label: tokenInfo.tokenEnvKey, auth_type: 'api_key',
             priority: 0, source: `env:${tokenInfo.tokenEnvKey}`, access_token: tokenInfo.tokenValue,
             last_status: null, last_error_code: null,
-            base_url: agentCustomEnv['GLM_BASE_URL'] || agentCustomEnv['ANTHROPIC_BASE_URL'] || 'https://api.z.ai/api/coding/paas/v4',
+            base_url: baseUrlHint || 'https://api.z.ai/api/coding/paas/v4',
             request_count: 0,
           }];
           fs.writeFileSync(authPath, JSON.stringify(auth, null, 2), 'utf8');
-          // Écrire .env pour OVERMIND_AGENT_HOME — le provider effective détermine la clé d'env à écrire
-          // minimax-cn attend MINIMAX_CN_API_KEY, zai attend GLM_API_KEY (ou ANTHROPIC_AUTH_TOKEN)
+
+          // ============================================================
+          // Write .env for HERMES_HOME — emit the 4 canonical fields
+          // Hermes needs: ANTHROPIC_MODEL, ANTHROPIC_AUTH_TOKEN,
+          //               ANTHROPIC_PROVIDER, ANTHROPIC_BASE_URL
+          // ============================================================
           const dotEnvPath = path.join(overmindHermesSubPath, '.env');
-          const baseUrl = agentCustomEnv['GLM_BASE_URL'] || agentCustomEnv['ANTHROPIC_BASE_URL'] || 'https://api.z.ai/api/coding/paas/v4';
-          const dotLines = [
-            `ANTHROPIC_PROVIDER=${effectiveProvider}`,
-            `ANTHROPIC_BASE_URL=${baseUrl}`,
-          ];
-          // Le provider determine quelle variable d'env écrire dans .env pour seed credentials
-          if (effectiveProvider === 'minimax-cn') {
-            dotLines.unshift(`MINIMAX_CN_API_KEY=${tokenInfo.tokenValue}`);
-          } else if (effectiveProvider === 'zai' || effectiveProvider === 'z-ai') {
-            dotLines.unshift(`GLM_API_KEY=${tokenInfo.tokenValue}`);
-          } else {
-            // Default: ANTHROPIC_AUTH_TOKEN
-            dotLines.unshift(`ANTHROPIC_AUTH_TOKEN=${tokenInfo.tokenValue}`);
+          const dotLines: string[] = [];
+
+          // 1. ANTHROPIC_MODEL (always — Hermes needs it)
+          if (finalModel) {
+            dotLines.push(`ANTHROPIC_MODEL=${finalModel}`);
           }
+
+          // 2. ANTHROPIC_PROVIDER (the kebab-case provider name)
+          dotLines.push(`ANTHROPIC_PROVIDER=${effectiveProvider}`);
+
+          // 3. ANTHROPIC_BASE_URL (from settings, or fallback)
+          const resolvedBaseUrl = baseUrlHint || 'https://api.z.ai/api/coding/paas/v4';
+          dotLines.push(`ANTHROPIC_BASE_URL=${resolvedBaseUrl}`);
+
+          // 4. ANTHROPIC_AUTH_TOKEN = literal token value
+          // (Hermes reads this env var directly — no more provider-specific mapping)
+          dotLines.push(`ANTHROPIC_AUTH_TOKEN=${tokenInfo.tokenValue}`);
+
+          // 5. ALSO seed the provider-specific env var for plugins that need it
+          //    (e.g. minimax plugin reads MINIMAX_API_KEY directly)
+          if (effectiveProvider === 'minimax' || effectiveProvider === 'minimax-cn') {
+            dotLines.push(`MINIMAX_API_KEY=${tokenInfo.tokenValue}`);
+            if (effectiveProvider === 'minimax-cn') {
+              dotLines.push(`MINIMAX_CN_API_KEY=${tokenInfo.tokenValue}`);
+            }
+          } else if (effectiveProvider === 'zai' || effectiveProvider === 'z-ai') {
+            dotLines.push(`GLM_API_KEY=${tokenInfo.tokenValue}`);
+            dotLines.push(`ZAI_ANTHROPIC_FALLBACK_KEY=${tokenInfo.tokenValue}`);
+          } else if (effectiveProvider === 'openai') {
+            dotLines.push(`OPENAI_API_KEY=${tokenInfo.tokenValue}`);
+          } else if (effectiveProvider === 'anthropic') {
+            // ANTHROPIC_AUTH_TOKEN already set above
+          }
+
           fs.writeFileSync(dotEnvPath, dotLines.join('\n') + '\n', 'utf8');
-        } catch (_e) { /* non-critical */ }
+          logger.info(
+            { agentName, effectiveProvider, baseUrl: resolvedBaseUrl, model: finalModel, sourceKey: tokenInfo.tokenEnvKey, detectedProvider: detectedFromToken.provider },
+            '[AUTH] Wrote agent .env with 4 canonical Hermes fields + provider-specific seeds.',
+          );
+        } catch (e) {
+          logger.warn({ error: e, agentName }, '[AUTH] Failed to write auth.json or agent .env');
+        }
       };
 
       const spawnHermes = async (tokenInfo: { tokenEnvKey: string; tokenValue: string } | null) => {
@@ -764,7 +1023,21 @@ export class NousHermesRunner {
         });
       });
 
-      const firstToken = getTokenForIndex(0);
+      let firstToken: { tokenEnvKey: string; tokenValue: string } | null;
+      try {
+        firstToken = getTokenForIndex(0);
+      } catch (e) {
+        // getTokenForIndex throws MISSING_ENV_VAR when settings_<agent>.json references
+        // a $VAR that doesn't exist in process.env. Surface it as a clear error.
+        const msg = e instanceof Error ? e.message : String(e);
+        logger.error({ agentName, error: msg }, '[NO_LLM_TOKEN] Token resolution failed.');
+        safeResolve({
+          result: '',
+          error: `NO_LLM_TOKEN: ${msg}`,
+          rawOutput: '',
+        });
+        return;
+      }
       if (!firstToken && agentName) {
         // No credential was resolved at all — refuse to spawn hermes with an empty
         // API key (which would silently 401 and report the misleading EXIT_CODE_1).
