@@ -83,7 +83,41 @@ async function runCommandAsync(cmd, description) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // INSTALLATION STEPS
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Détecte si on doit proposer le mode natif (sans Docker).
+ * Critères : --native explicite, OU pas de Docker + Linux.
+ */
+function shouldOfferNative() {
+  if (process.argv.includes('--native')) return { native: true, reason: 'flag --native' };
+
+  const isLinux = process.platform === 'linux';
+  const hasDocker = runCommand('docker --version');
+  if (isLinux && !hasDocker) {
+    return { native: true, reason: 'Linux détecté, Docker absent' };
+  }
+  return { native: false };
+}
+
+async function offerNativeInstall(reason) {
+  logSection('🐧 MODE NATIF SANS DOCKER DISPONIBLE');
+  log(COLORS.yellow, `Raison : ${reason}`);
+  log(COLORS.cyan, '');
+  log(COLORS.cyan, 'Ce package supporte aussi une installation 100% native (sans Docker) :');
+  log(COLORS.cyan, '  • PostgreSQL 18 + pgvector via apt');
+  log(COLORS.cyan, '  • Services systemd (overmind-mcp, overmind-postgres-mcp)');
+  log(COLORS.cyan, '  • Bind 127.0.0.1 (plus sûr)');
+  log(COLORS.cyan, '');
+  log(COLORS.green, 'Pour lancer l\'install native :');
+  log(COLORS.white,   '  sudo overmind-install-native');
+  log(COLORS.cyan, '');
+  log(COLORS.cyan, 'Le script natif est embarqué dans le package à :');
+  log(COLORS.white,   '  /usr/lib/node_modules/overmind-mcp/bin/install-overmind-native.sh');
+  log(COLORS.cyan, '');
+  log(COLORS.cyan, 'Si Docker est intentionnel, poursuivez ci-dessous.');
+  log(COLORS.cyan, '');
+}
 
 async function checkDocker() {
   logSection('VÉRIFICATION DOCKER');
@@ -262,17 +296,12 @@ function createEnvConfig() {
 
   // Copier .env.example → .env si existe
   if (existsSync(envExampleFile) && !existsSync(envFile)) {
-    let envContent;
-
-    if (process.platform === 'win32') {
-      envContent = runCommand(`type "${envExampleFile}"`, { stdio: 'pipe' });
-    } else {
-      envContent = runCommand(`cat "${envExampleFile}"`, { stdio: 'pipe' });
-    }
-
-    if (envContent) {
-      writeFileSync(envFile, envContent);
+    try {
+      const content = readFileSync(envExampleFile, 'utf8');
+      writeFileSync(envFile, content);
       log(COLORS.green, '✅ .env créé (à partir de .env.example)');
+    } catch (e) {
+      log(COLORS.yellow, '⚠️ Impossible de copier .env.example: ' + e.message);
     }
   }
 
@@ -335,17 +364,12 @@ EMBEDDING_CACHE_SIZE=1000
 
   // Copier .mcp.json.example → .mcp.json si existe
   if (existsSync(mcpExampleFile) && !existsSync(mcpFile)) {
-    let mcpContent;
-
-    if (process.platform === 'win32') {
-      mcpContent = runCommand(`type "${mcpExampleFile}"`, { stdio: 'pipe' });
-    } else {
-      mcpContent = runCommand(`cat "${mcpExampleFile}"`, { stdio: 'pipe' });
-    }
-
-    if (mcpContent) {
-      writeFileSync(mcpFile, mcpContent);
+    try {
+      const content = readFileSync(mcpExampleFile, 'utf8');
+      writeFileSync(mcpFile, content);
       log(COLORS.green, '✅ .mcp.json créé (à partir de .mcp.json.example)');
+    } catch (e) {
+      log(COLORS.yellow, '⚠️ Impossible de copier .mcp.json.example: ' + e.message);
     }
   }
 }
@@ -487,6 +511,16 @@ async function main() {
   console.log('  ✓ Copier .mcp.json.example → .mcp.json');
   console.log('  ✓ Valider PostgreSQL');
   console.log('');
+
+  // Step 0: Offre install native (non bloquant)
+  const nativeOffer = shouldOfferNative();
+  if (nativeOffer.native) {
+    await offerNativeInstall(nativeOffer.reason);
+    if (process.argv.includes('--native-only')) {
+      log(COLORS.green, '→ --native-only : on s\'arrête là. Lance sudo overmind-install-native quand prêt.');
+      return;
+    }
+  }
 
   // Step 1: Check Docker
   const dockerOk = await checkDocker();
