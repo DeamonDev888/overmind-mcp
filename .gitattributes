@@ -1,0 +1,16 @@
+# Force LF line endings for shell scripts (avoids CRLF bug after npm publish)
+*.sh        text eol=lf
+*.bash      text eol=lf
+scripts/*   text eol=lf
+bin/*.sh    text eol=lf
+
+# Source code defaults
+*.ts        text eol=lf
+*.js        text eol=lf
+*.mjs       text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+
+# Windows-only files (keep CRLF for native execution)
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
