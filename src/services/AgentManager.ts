@@ -600,13 +600,29 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
 
     const finalPrompt = prompt + memoryInstructions;
 
-    // Default mandatory environment variables according to user request
-    const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
+    // Resolve auth token: prefer ANTHROPIC_AUTH_TOKEN, fallback to any ANTHROPIC_AUTH_TOKEN_<N>
+    let authToken = process.env.ANTHROPIC_AUTH_TOKEN;
     if (!authToken) {
+      const suffixedKeys = Object.keys(process.env)
+        .filter((k) => /^ANTHROPIC_AUTH_TOKEN_\d+$/.test(k))
+        .sort();
+      if (suffixedKeys.length > 0) {
+        authToken = process.env[suffixedKeys[0]];
+        console.warn(
+          `[AgentManager] ⚠️  ANTHROPIC_AUTH_TOKEN absent — fallback sur ${suffixedKeys[0]}. ` +
+            `Pour un comportement stable, définissez ANTHROPIC_AUTH_TOKEN dans le .env du service.`,
+        );
+      }
+    }
+    if (!authToken) {
+      const err =
+        'MISSING_AUTH_TOKEN: ANTHROPIC_AUTH_TOKEN (ou ANTHROPIC_AUTH_TOKEN_<N>) absent de l\'environnement. ' +
+        'Impossible de créer l\'agent de manière sécurisée.';
+      console.error(`[AgentManager] ❌ ${err}`);
       return {
         promptPath: '',
         settingsPath: '',
-        error: 'MISSING_AUTH_TOKEN: ANTHROPIC_AUTH_TOKEN is not set in environment. Cannot create agent securely.',
+        error: err,
       };
     }
 
