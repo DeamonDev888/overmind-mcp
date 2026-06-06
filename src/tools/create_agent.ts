@@ -87,6 +87,18 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>) {
     };
   }
 
+  if (result.error?.startsWith('MISSING_AUTH_TOKEN')) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `❌ **Authentification impossible**\n\n${result.error}\n\n**Fix :** ajoutez dans le .env du service OverMind (ex. \`/home/demon/.overmind/.env\`) :\n\n\`\`\`\nANTHROPIC_AUTH_TOKEN=sk-...\n\`\`\`\n\nPuis \`sudo systemctl restart overmind-mcp.service\`.`,
+        },
+      ],
+      isError: true,
+    };
+  }
+
   // Message de succès adapté selon le runner
   const runnerInfo = {
     claude: 'Claude Code',
