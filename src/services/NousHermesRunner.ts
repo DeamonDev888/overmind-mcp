@@ -797,9 +797,12 @@ export class NousHermesRunner {
           let detectedFromUrl: string | null = null;
           if (baseUrlHint) {
             const url = baseUrlHint.toLowerCase();
-            if (url.includes('minimax')) {
-              if (url.includes('.cn') || url.includes('minimaxi')) detectedFromUrl = 'minimax-cn';
-              else detectedFromUrl = 'minimax';
+            if (url.includes('minimaxi')) {
+              // The "i" suffix in api.minimaxi.com is the CN-specific endpoint
+              detectedFromUrl = 'minimax-cn';
+            } else if (url.includes('minimax')) {
+              // api.minimax.com (no i) is the GLOBAL endpoint
+              detectedFromUrl = 'minimax';
             } else if (url.includes('z.ai') || url.includes('bigmodel') || url.includes('zhipu')) {
               detectedFromUrl = 'zai';
             } else if (url.includes('anthropic.com')) {
@@ -812,8 +815,24 @@ export class NousHermesRunner {
           const settingsHint = resolvedProvider || '';
 
           // Voting: token > URL > settings
+          // SPECIAL CASE: if token says "minimax" and URL says "minimax-cn" (or vice versa),
+          // the URL wins because the token prefix sk-cp- is shared between both endpoints.
+          // The URL is the only signal that can disambiguate CN vs GLOBAL.
           let effectiveProvider: string;
-          if (detectedFromToken.provider !== 'unknown') {
+          if (detectedFromToken.provider === 'minimax' && detectedFromUrl === 'minimax-cn') {
+            // URL has more specific info than the token prefix
+            effectiveProvider = 'minimax-cn';
+            logger.info(
+              { agentName, tokenSays: 'minimax', urlSays: 'minimax-cn', settingsHint },
+              '[SUBTILISATION] URL is more specific than token prefix (minimax vs minimax-cn) — using URL.',
+            );
+          } else if (detectedFromToken.provider === 'minimax-cn' && detectedFromUrl === 'minimax') {
+            effectiveProvider = 'minimax';
+            logger.info(
+              { agentName, tokenSays: 'minimax-cn', urlSays: 'minimax', settingsHint },
+              '[SUBTILISATION] URL is more specific than token prefix (minimax vs minimax-cn) — using URL.',
+            );
+          } else if (detectedFromToken.provider !== 'unknown') {
             effectiveProvider = detectedFromToken.provider;
             if (settingsHint && settingsHint !== effectiveProvider) {
               logger.warn(
@@ -863,16 +882,21 @@ export class NousHermesRunner {
           const resolvedBaseUrl = baseUrlHint || 'https://api.z.ai/api/coding/paas/v4';
           dotLines.push(`ANTHROPIC_BASE_URL=${resolvedBaseUrl}`);
 
-          // 4. ANTHROPIC_AUTH_TOKEN = literal token value
+          // 4. ANTHROPIC_AUTH_TOKEN = literal token value (for backward compat with older Hermes versions)
           // (Hermes reads this env var directly — no more provider-specific mapping)
           dotLines.push(`ANTHROPIC_AUTH_TOKEN=${tokenInfo.tokenValue}`);
 
           // 5. ALSO seed the provider-specific env var for plugins that need it
-          //    (e.g. minimax plugin reads MINIMAX_API_KEY directly)
+          //    For MiniMax/Z.AI plugins, the provider-specific var is the PRIMARY key
+          //    the plugin reads. The .bat launchers in C:\Users\Deamon\Desktop\launcher\
+          //    set MINIMAX_CN_API_KEY directly (not ANTHROPIC_AUTH_TOKEN), confirming
+          //    that this is what the upstream plugin actually consumes.
           if (effectiveProvider === 'minimax' || effectiveProvider === 'minimax-cn') {
-            dotLines.push(`MINIMAX_API_KEY=${tokenInfo.tokenValue}`);
+            // Both: the plugin reads whichever is set
             if (effectiveProvider === 'minimax-cn') {
               dotLines.push(`MINIMAX_CN_API_KEY=${tokenInfo.tokenValue}`);
+            } else {
+              dotLines.push(`MINIMAX_API_KEY=${tokenInfo.tokenValue}`);
             }
           } else if (effectiveProvider === 'zai' || effectiveProvider === 'z-ai') {
             dotLines.push(`GLM_API_KEY=${tokenInfo.tokenValue}`);
