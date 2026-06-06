@@ -91,7 +91,7 @@ ${interpolationNotice}`;
 {
   "env": {
     "ANTHROPIC_BASE_URL": "https://api.minimax.io/anthropic",
-    "ANTHROPIC_AUTH_TOKEN": "$MINIMAX_API_KEY", // Utilisez une variable .env
+    "MINIMAX_CN_API_KEY": "$MINIMAX_CN_API_KEY", // ⚠️ Provider minimax-cn: utilisez MINIMAX_CN_API_KEY (PAS ANTHROPIC_AUTH_TOKEN) — c'est le plugin minimax du binaire hermes v0.16.0 qui décide du nom de la variable.
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
     "ANTHROPIC_MODEL": "The_Chaos_Prophet",
@@ -104,6 +104,13 @@ ${interpolationNotice}`;
   "runner": "claude"
 }
 \`\`\`
+
+> **Note (Hermes runner + provider minimax-cn)** : le binaire Hermes lit le credential via la variable d'environnement attendue par le plugin provider minimax, soit \`MINIMAX_CN_API_KEY\`. Si vous utilisez \`ANTHROPIC_AUTH_TOKEN\` avec un provider minimax, Hermes upstream va silencieusement renvoyer 401 même si Overmind a la clé. Mapping complet des credentials par provider :
+> - \`minimax-cn\` → \`MINIMAX_CN_API_KEY\`
+> - \`minimax\` (alias) → \`MINIMAX_API_KEY\`
+> - \`zai\` → \`GLM_API_KEY\` ou \`ZAI_ANTHROPIC_FALLBACK_KEY\`
+> - \`z-ai\` → \`Z_AI_API_KEY\`
+> - \`anthropic\` → \`ANTHROPIC_AUTH_TOKEN\` (accepte les suffixes \`_1.._5\`, \`_E\`, \`_F\`, \`_Y\`)
 ${interpolationNotice}`;
       break;
     case 'openrouter':
