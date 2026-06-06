@@ -278,9 +278,11 @@ export class NousHermesRunner {
       // get_env_value() in Hermes checks OVERMIND_AGENT_HOME/.hermes/.env before HERMES_HOME/.env
       // This allows $VAR expansion done by Overmind to take precedence over gateway .env
       ...(agentName ? { OVERMIND_AGENT_HOME: path.resolve(cwd, '.overmind', 'hermes', `agent_${agentName}`) } : {}),
-      // GLM_API_KEY in spawn env — zai provider resolves credentials via os.environ.get("GLM_API_KEY")
-      // before checking .env files. This is the most reliable path for Z.AI tokens.
-      ...(agentName ? { GLM_API_KEY: '' } : {}),
+      // NOTE: do NOT pre-seed GLM_API_KEY with '' here. The real value comes from
+      // settings_<agent>.json (merged below) or from the agent's .hermes/.env file.
+      // Seeding '' here used to win against Object.assign() whenever interpolateEnvVars()
+      // returned an empty value for $GLM_API_KEY (e.g. shell parent didn't export it),
+      // which silently nulled out getTokenForIndex() and caused EXIT_CODE_1 / 401 errors.
     };
 
     let tmpSettingsPath: string | null = null;
@@ -430,6 +432,17 @@ export class NousHermesRunner {
           const v = agentCustomEnv[tk];
           if (v && typeof v === 'string' && v.length > 0) return { tokenEnvKey: tk, tokenValue: v };
         }
+        // Diagnostic: dump which keys were checked and their (masked) state so a future
+        // EXIT_CODE_1 + 401 has a clear breadcrumb back to the empty/missing credential.
+        const probe = TOKEN_KEYS.map((tk) => {
+          const v = agentCustomEnv[tk];
+          if (typeof v !== 'string' || v.length === 0) return `${tk}=<empty>`;
+          return `${tk}=<set len=${v.length}>`;
+        });
+        logger.error(
+          { agentName, checked: probe, settingsPath: tmpSettingsPath, envFile: path.join(overmindHermesSubPath, '.env') },
+          'No usable LLM token found. Check settings_<agent>.json env block and the agent .hermes/.env file.',
+        );
         return null;
       }
       const fb = getAvailableFallbacks();
@@ -595,15 +608,28 @@ export class NousHermesRunner {
         delete spawnEnv['OVERMIND_EMBEDDING_KEY'];
 
         const hermesBin = await findHermesBinary();
+        const isWin = process.platform === 'win32';
+        const venvRoot = process.env.HERMES_AGENT_ROOT
+          || (isWin
+            ? path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent', 'venv')
+            : path.join(process.env.HOME || '', '.local', 'share', 'hermes-agent', 'venv'));
+        // Only override VIRTUAL_ENV/PATH when hermes actually lives inside a venv
+        // (i.e. <venv>/bin/hermes or <venv>/Scripts/hermes.exe). If the binary is a
+        // system install (e.g. /usr/local/bin/hermes), leave the parent PATH alone.
+        const venvBin = isWin ? path.join(venvRoot, 'Scripts') : path.join(venvRoot, 'bin');
+        const isVenvInstall = hermesBin.startsWith(venvBin + path.sep) || hermesBin === venvBin;
+        const pathSep = isWin ? ';' : ':';
         const child: ChildProcess = spawn(hermesBin, cleanArgs, {
           cwd, shell: false, windowsHide: true,
           env: {
             ...spawnEnv,
             HERMES_HOME: overmindHermesSubPath,
-            VIRTUAL_ENV: process.env.HERMES_AGENT_ROOT
-              ? path.join(process.env.HERMES_AGENT_ROOT, 'venv')
-              : path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent', 'venv'),
-            PATH: `${process.env.HERMES_AGENT_ROOT || path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent', 'venv')};${process.env.PATH || ''}`,
+            ...(isVenvInstall
+              ? {
+                  VIRTUAL_ENV: venvRoot,
+                  PATH: `${venvRoot}${isWin ? ';' : ':'}${venvBin}${pathSep}${process.env.PATH || ''}`,
+                }
+              : {}),
           },
         });
         currentChildRef = child;
@@ -696,7 +722,22 @@ export class NousHermesRunner {
         });
       });
 
-      spawnHermes(getTokenForIndex(0));
+      const firstToken = getTokenForIndex(0);
+      if (!firstToken && agentName) {
+        // No credential was resolved at all — refuse to spawn hermes with an empty
+        // API key (which would silently 401 and report the misleading EXIT_CODE_1).
+        // The diagnostic log inside getTokenForIndex(0) already lists the checked keys.
+        const settingsHint = tmpSettingsPath
+          ? `Look at ${tmpSettingsPath} (env block) and ${path.join(overmindHermesSubPath, '.env')}.`
+          : `No settings_${agentName}.json was loaded. Check the .claude/ folder.`;
+        safeResolve({
+          result: '',
+          error: `NO_LLM_TOKEN: settings_<agent>.json env block is empty or missing required keys (${TOKEN_KEYS.join(', ')}). ${settingsHint}`,
+          rawOutput: '',
+        });
+        return;
+      }
+      spawnHermes(firstToken);
     });
   }
 }
