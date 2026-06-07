@@ -27,7 +27,8 @@ dist/
 # ─── Agent configs & session data ──────────────────────────────────────────────
 # Contains API keys, tokens, absolute paths, session history
 # Each agent gets its own .mcp.<name>.json with credentials
-
+__archive__/
+.antigravity/
 .claude/
 .gemini/
 .kilo/

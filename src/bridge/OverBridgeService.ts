@@ -167,6 +167,10 @@ export class OverBridgeService {
       // Timeout = agent travaille toujours, pas une erreur fatale
       if (error?.code === 'ETIMEDOUT' || error?.code === 'EBODYREAD') {
         this.proxy.log.warn(`⏱️ Agent timeout (${error.code}) — ${options.agentName}`);
+        // Met à jour lastActivityAt + messageCount pour ne pas perdre
+        // la trace de session (l'agent a peut-être déjà créé un
+        // sessionId côté MCP, on garde l'ancien).
+        this.updateSession();
         return {
           content: [{
             type: 'text',

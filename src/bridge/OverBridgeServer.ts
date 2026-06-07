@@ -162,6 +162,7 @@ export class OverBridgeServer {
   private readonly config: OverBridgeServerConfig;
   private server: http.Server | undefined;
   private startTime = 0;
+  private pruneTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     service: OverBridgeService,
@@ -227,6 +228,16 @@ export class OverBridgeServer {
       this.server!.listen(this.config.port, this.config.host, () => resolve());
     });
 
+    // 5) Planifie le prune périodique des agents offline (toutes les 6h)
+    // Évite que la map d'états grossisse indéfiniment.
+    this.pruneTimer = setInterval(() => {
+      try {
+        this.registry.prune(24 * 60 * 60 * 1000);
+      } catch (err) {
+        this.log.warn(`⚠️  Prune failed: ${(err as Error).message}`);
+      }
+    }, 6 * 60 * 60 * 1000);
+
     const addr = this.server.address();
     const port = typeof addr === 'object' && addr ? addr.port : this.config.port;
     const url = `http://${this.config.host}:${port}`;
@@ -251,6 +262,10 @@ export class OverBridgeServer {
    * Ferme proprement le serveur HTTP et les dépendances.
    */
   async stop(): Promise<void> {
+    if (this.pruneTimer) {
+      clearInterval(this.pruneTimer);
+      this.pruneTimer = undefined;
+    }
     if (this.server) {
       await new Promise<void>((resolve) => this.server!.close(() => resolve()));
       this.server = undefined;
@@ -411,14 +426,28 @@ export class OverBridgeServer {
     res: http.ServerResponse,
     url: URL,
   ): Promise<void> {
-    const filename = url.pathname.slice(3); // strip /f/
-    if (!filename || filename.includes('..')) {
+    // Decode le filename (les clients peuvent l'URL-encoder) et bloque
+    // tout tentative de path traversal. On résout en absolu et on
+    // vérifie que le résultat reste sous staticDir.
+    const rawFilename = url.pathname.slice(3); // strip /f/
+    if (!rawFilename) {
       this.writeJson(res, 400, { error: 'Invalid filename' });
       return;
     }
-    // Le dossier est configuré via BRIDGE_STATIC_DIR env ou défaut './public'
-    const staticDir = process.env.BRIDGE_STATIC_DIR ?? './public';
-    const filepath = path.join(staticDir, filename);
+    let filename: string;
+    try {
+      filename = decodeURIComponent(rawFilename);
+    } catch {
+      this.writeJson(res, 400, { error: 'Invalid filename encoding' });
+      return;
+    }
+    const staticDir = path.resolve(process.env.BRIDGE_STATIC_DIR ?? './public');
+    const filepath = path.resolve(staticDir, filename);
+    const expectedPrefix = staticDir.endsWith(path.sep) ? staticDir : staticDir + path.sep;
+    if (!filepath.startsWith(expectedPrefix) && filepath !== staticDir) {
+      this.writeJson(res, 403, { error: 'Forbidden' });
+      return;
+    }
     if (!fs.existsSync(filepath)) {
       this.writeJson(res, 404, { error: 'Not found' });
       return;
