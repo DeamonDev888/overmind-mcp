@@ -836,6 +836,82 @@ sudo rm -rf /opt/overmind-mcp /etc/overmind /var/log/overmind
 sudo userdel overmind
 ```
 
+### 12. Smoke test post-install
+
+Un script bash de validation est fourni : `scripts/bridge-smoke-test.sh`.
+Il vérifie en 6 tests que le bridge est correctement installé et
+accessible. À lancer après `systemctl start overmind-bridge`.
+
+**Usage :**
+```bash
+# Auto-détecte le token depuis /etc/overmind/bridge.env
+sudo /opt/overmind-mcp/scripts/bridge-smoke-test.sh
+
+# Ou avec options explicites
+./scripts/bridge-smoke-test.sh \
+  --host 127.0.0.1 \
+  --port 3100 \
+  --auth-token "votre-token" \
+  --env-file /etc/overmind/bridge.env
+```
+
+**6 tests exécutés :**
+  1. **Reachability** — HTTP /health répond
+  2. **/health endpoint** — JSON valide avec un champ `status`
+  3. **Authentication** — 401 sans token, 200 avec (si activé)
+  4. **JSON-RPC methods** — `health.ping` répond `{pong: true}`
+  5. **Error handling** — params invalides retournent `-32602`
+  6. **Batch RPC** — array de 2 requêtes retourne 2 réponses
+
+**Exit codes :**
+  - `0` = tous les tests OK
+  - `1` = au moins un test a échoué
+  - `2` = args invalides
+
+**Exemple de sortie (succès) :**
+```
+=======================================================
+  Overmind Bridge - Smoke Test
+  Target: http://127.0.0.1:3100
+=======================================================
+
+>> 1. Reachability
+  OK HTTP /health repond [200/401/403]
+
+>> 2. /health endpoint
+  OK /health expose un status : online
+
+>> 3. Authentication
+  OK Sans token -> 401, auth actif
+  OK Avec token -> 200, auth OK
+
+>> 4. JSON-RPC methods
+  OK RPC health.ping repond
+
+>> 5. Error handling
+  OK Params invalides -> -32602 Invalid params
+
+>> 6. Batch RPC
+  OK Batch RPC retourne 2 reponses
+
+=======================================================
+  OK 7 tests OK, 0 echec
+  Bridge operationnel sur http://127.0.0.1:3100
+=======================================================
+```
+
+**Intégration au déploiement :** ajouter en fin de section 7 (actif +
+démarrage) pour valider automatiquement :
+```bash
+sudo systemctl start overmind-bridge.service
+sleep 2
+sudo -u overmind /opt/overmind-mcp/scripts/bridge-smoke-test.sh || \
+  { echo "Bridge smoke test failed"; exit 1; }
+```
+
+**Dépendances :** `bash 4+`, `curl`, `jq` (optionnel mais recommandé
+pour parser le /health).
+
 ## Licence
 
 Voir `LICENSE` à la racine du repo.
