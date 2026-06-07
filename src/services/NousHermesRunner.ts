@@ -555,6 +555,72 @@ export class NousHermesRunner {
         '[HERMES_ARGS] Passing --provider (2.8.33: needed to bypass upstream auto-router that picked openrouter for MiniMax-M3).',
       );
     }
+
+    // ============================================================
+    // 2.8.36 — PASS --toolsets TO ACTIVATE MCP SERVERS
+    // ============================================================
+    // Hermes upstream ONLY loads MCP servers that are explicitly listed via
+    // -t/--toolsets (or registered in the agent's per-agent settings.json
+    // under a `toolsets` key — but the field is `enabledMcpjsonServers`,
+    // which we already write). Looking at Hermes upstream's CLI: the
+    // `enabledMcpjsonServers` field in settings.json is a *Hermes-side*
+    // filter, but it requires the toolset to be discovered first via
+    // `mcp.json` AND the runtime toolset registry to mark it enabled.
+    //
+    // The simplest, most reliable cross-version trick: pass the MCP server
+    // names as a comma-separated list via `--toolsets`. Hermes upstream
+    // will then ensure those toolsets are loaded AND exposed to the
+    // conversation as `mcp__<server>__<tool>` callable tools.
+    //
+    // Source of truth for the list:
+    //   - If settings has `enabledMcpjsonServers: [...non-empty...]`, use that.
+    //   - Else, if `enableAllProjectMcpServers: true`, use ALL server names
+    //     from Workflow/.mcp.json.
+    //   - Else, skip — no toolset hint.
+    const toolsetList: string[] = [];
+    // Read the canonical settings.json we just wrote to find the MCP server hints.
+    // (settingsJson lives inside the `if (agentName)` block above, so we re-read
+    // it from disk here to keep the args-building code path-independent.)
+    const effectiveSettings: { enabledMcpjsonServers?: string[]; enableAllProjectMcpServers?: boolean } = {};
+    if (agentName) {
+      try {
+        const canonicalPath = path.join(overmindHermesSubPath, 'settings.json');
+        if (fs.existsSync(canonicalPath)) {
+          const raw = JSON.parse(fs.readFileSync(canonicalPath, 'utf8'));
+          if (Array.isArray(raw.enabledMcpjsonServers)) {
+            effectiveSettings.enabledMcpjsonServers = raw.enabledMcpjsonServers.filter(Boolean);
+          }
+          if (raw.enableAllProjectMcpServers !== undefined) {
+            effectiveSettings.enableAllProjectMcpServers = raw.enableAllProjectMcpServers === true;
+          }
+        }
+      } catch (e) {
+        logger.warn({ error: e }, '[HERMES_ARGS] Failed to read canonical settings.json for toolset hints.');
+      }
+    }
+    const enabledInSettings = effectiveSettings.enabledMcpjsonServers || [];
+    if (enabledInSettings.length > 0) {
+      toolsetList.push(...enabledInSettings);
+    } else if (effectiveSettings.enableAllProjectMcpServers === true) {
+      // Read Workflow/.mcp.json and extract all server names
+      try {
+        const projectMcpPath = path.join(getWorkspaceDir(), '.mcp.json');
+        if (fs.existsSync(projectMcpPath)) {
+          const projectMcp = JSON.parse(fs.readFileSync(projectMcpPath, 'utf8'));
+          const allServers = Object.keys(projectMcp?.mcpServers || {});
+          toolsetList.push(...allServers);
+        }
+      } catch (e) {
+        logger.warn({ error: e }, '[HERMES_ARGS] Failed to read .mcp.json for toolsets, continuing without --toolsets.');
+      }
+    }
+    if (toolsetList.length > 0) {
+      cleanArgs.push('--toolsets', toolsetList.join(','));
+      logger.info(
+        { agentName, toolsets: toolsetList },
+        '[HERMES_ARGS] Passing --toolsets (2.8.36: activates MCP servers as callable tools in this session).',
+      );
+    }
     if (sessionId) cleanArgs.push('--resume', sessionId);
 
     // Token fallback setup (same as ClaudeRunner)
@@ -782,7 +848,53 @@ export class NousHermesRunner {
     // Hermes upstream resolves `agents/<name>/`, `config.yaml`, `auth.json`, etc.
     // relative to this single root. We do NOT seed `agentCustomEnv.HERMES_HOME`
     // here anymore because spawnHermes() sets it explicitly from getSharedHermesHome().
+    const sharedHome = getSharedHermesHome();
     if (!fs.existsSync(overmindHermesSubPath)) fs.mkdirSync(overmindHermesSubPath, { recursive: true });
+
+    // ============================================================
+    // 2.8.37 — BOOTSTRAP MINIMAL config.yaml IN OVERRIDDEN HERMES_HOME
+    // ============================================================
+    // When we redirect HERMES_HOME to <workspace>/.overmind/hermes/ (the
+    // Overmind-shared root), Hermes upstream has NO config.yaml in that
+    // path yet. It only writes one after the FIRST successful startup. But
+    // for the FIRST startup, the agent would have ZERO MCP servers
+    // registered (because mcp_servers: lives in config.yaml). That was the
+    // root cause of "le sniperbot n'a pas de MCP" — the sniperbot_analyst
+    // was being spawned with HERMES_HOME pointing at an empty dir.
+    //
+    // Fix: at spawn time, if <sharedHome>/config.yaml doesn't exist, write
+    // a minimal one copied from the default ~/.hermes/config.yaml. The user
+    // can also point OVERMIND_HERMES_CONFIG_TEMPLATE at a custom file. We
+    // preserve anything Hermes has already written in <sharedHome>/config.yaml
+    // (e.g. if the user already has a real config there, we don't overwrite it).
+    const sharedConfigPath = path.join(sharedHome, 'config.yaml');
+    if (!fs.existsSync(sharedConfigPath)) {
+      // Look for a source config to copy: default Hermes home, then env override
+      const defaultHermesHome = process.platform === 'win32'
+        ? path.join(process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Local'), 'hermes')
+        : path.join(process.env.HOME || '~', '.hermes');
+      const defaultConfigPath = process.env.OVERMIND_HERMES_CONFIG_TEMPLATE
+        || path.join(defaultHermesHome, 'config.yaml');
+      if (fs.existsSync(defaultConfigPath)) {
+        try {
+          fs.copyFileSync(defaultConfigPath, sharedConfigPath);
+          logger.info(
+            { sharedHome, sourceConfig: defaultConfigPath },
+            '[HERMES_HOME] Bootstrapped minimal config.yaml from default Hermes home (2.8.37).',
+          );
+        } catch (e) {
+          logger.warn({ error: e, defaultConfigPath }, '[HERMES_HOME] Failed to bootstrap config.yaml; will create empty one.');
+          fs.writeFileSync(sharedConfigPath, 'mcp_servers: {}\n', 'utf8');
+        }
+      } else {
+        // No default config to copy — write a stub that the user can fill in.
+        fs.writeFileSync(sharedConfigPath, 'mcp_servers: {}\n', 'utf8');
+        logger.warn(
+          { defaultConfigPath, sharedConfigPath },
+          '[HERMES_HOME] No default Hermes config.yaml found. Wrote empty stub. MCP servers will not be available until you populate this file.',
+        );
+      }
+    }
     // HOME / USERPROFILE override: point Hermes at the parent .overmind dir,
     // NOT the cwd. This makes relative .hermes lookups inside Hermes
     // (e.g. `~/.hermes/.env` resolution) resolve to the same canonical
