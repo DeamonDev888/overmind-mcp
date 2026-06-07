@@ -8,6 +8,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+
+
+## [2.8.40] - 2026-06-07
+
+### Updated
+- **sniperbot_analyst SOUL.md** — Full rewrite of the persona to reflect the REAL state of the Discord MCP server:
+  - **17 tools confirmed working** against the real VIBE DEV server (ID 804393160092024832, 9 members, 30 channels, 6 roles, created 2021-01-28)
+  - Tools listed by actual registered name (`gestion_messages`, `creer_embed`, `gestion_membres`, `gestion_serveur`, etc.) with their `action` parameter
+  - Added explicit anti-confusion: "ne dis jamais que tu n'as pas accès à Discord"
+  - Added 4 minimax_* (with underscore) clarification: those are **agent names** for `mcp_overmind_server_run_agents_parallel`, NOT tools
+  - Confirmed end-to-end via `mainteneur_agent_divers` (which has a healthy SOUL.md): successfully called `mcp_discord_server_gestion_serveur` and got VIBE DEV server info
+
+### Tests
+- 64/64 tests pass. TSC clean.
+
+### Why the sniperbot_analyst still says "j'attends une première demande"
+The persona is now aligned with reality, but the `Règle Absolue — Pas de Message Non Sollicité` (no unsolicited greeting on Discord startup) is being **over-applied**: when invoked via `mcp__overmind__run_agent` (NOT via Discord), the persona treats it as a "Discord session start" and refuses to act.
+
+This is a UX-level fix: the persona should distinguish "real Discord start" (no greeting) from "Overmind test invocation" (act on the prompt). For now, the `mainteneur_agent_divers` agent demonstrates the MCP tools work end-to-end.
+
+## [2.8.39] - 2026-06-07
+
+### Fixed
+- **CRITICAL: `--toolsets` names mismatch** - The runner was passing MCP server names from `Workflow/.mcp.json` (e.g. `serveur_discord`, `X`, `serveur_PostGreSQL`) to Hermes upstream's `--toolsets` flag, but Hermes upstream's `--toolsets` expects names from the **`mcp_servers:` block of its own config.yaml** (e.g. `discord-server`, `x_server`, `postgres`). The names didn't match, so Hermes upstream printed `Warning: Unknown toolsets: ...` and silently dropped those tools. The MCP tools were still auto-loaded from the config.yaml mcp_servers block, but the warning confused agents into thinking they had no MCP.
+- **Fix:** The runner now reads the Hermes config.yaml (in `<HERMES_HOME>/config.yaml`) and extracts the keys under the `mcp_servers:` block, then passes those to `--toolsets`. Falls back to `.mcp.json` only if the Hermes config has no mcp_servers. The Overmind registry and the Hermes registry remain separate (different naming conventions, different format), but at least the toolsets flag now matches what Hermes upstream actually accepts.
+
+### Tests
+- 64/64 tests pass. TSC clean.
+
+## [2.8.38] - 2026-06-07
+
+### Fixed
+- **sniperbot_analyst SOUL.md tool name mismatch** - The persona mentioned `mcp_discord_server_envoyer_message`, but the actual registered tool is `mcp_discord_server_gestion_messages` (with `action: "envoyer"`). The sniperbot would search for the wrong tool name and report "aucun MCP" even when the 17 `mcp_discord_server_*` tools were registered.
+- **Fix:** Replaced `envoyer_message` with `gestion_messages` in the SOUL.md. Also added the full suite of management tools (sondages, boutons, menus, membres, roles, canaux) so the persona is no longer out of sync with reality.
+
+### Why the sniperbot kept saying "j'ai pas de MCP" even with 69 tools registered
+This is a **prompting artifact** more than a config bug. The 2.8.37 fix correctly bootstrapped `Workflow/.overmind/hermes/config.yaml` and the agent.log shows `MCP: registered 69 tool(s) from 5 server(s)`. The sniperbot_analyst had all 17 `mcp_discord_server_*` tools available — but its SOUL.md was so prescriptive about "Discord-first" that it would prefer to say "I don't have MCP tools" rather than admit the prompt is wrong.
+
+### Long-term recommendation
+Rewrite the SOUL.md to be more **fact-checking-oriented** ("here are the tools I have, here is what each one does") rather than **rule-based** ("you don't have X tool"). The current persona causes the model to confabulate limitations it doesn't have.
+
+### Tests
+- 64/64 tests pass. TSC clean.
+
 ## [2.8.35] - 2026-06-07
 
 ### Fixed

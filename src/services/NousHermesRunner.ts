@@ -602,16 +602,53 @@ export class NousHermesRunner {
     if (enabledInSettings.length > 0) {
       toolsetList.push(...enabledInSettings);
     } else if (effectiveSettings.enableAllProjectMcpServers === true) {
-      // Read Workflow/.mcp.json and extract all server names
+      // ============================================================
+      // 2.8.39 — READ MCP SERVERS FROM HERMES CONFIG.YAML (NOT .mcp.json)
+      // ============================================================
+      // Earlier (2.8.36) we read `Workflow/.mcp.json` for the toolset names,
+      // but that's the Overmind-CLI/Claude-Code format. Hermes upstream's
+      // `--toolsets` flag expects names that match the `mcp_servers:` block
+      // of the **Hermes config.yaml** (i.e. <HERMES_HOME>/config.yaml).
+      // The two registries use DIFFERENT names — `serveur_discord` vs
+      // `discord-server`, `X` vs `x_server`, etc. — and the Hermes one is
+      // the one Hermes actually recognises. Passing `serveur_discord` to
+      // `--toolsets` produces the `Warning: Unknown toolsets` we saw at
+      // 17:50, which silently dropped those tools and the agent reported
+      // "j'ai pas de MCP".
+      //
+      // Read the Hermes config.yaml `mcp_servers:` block and pass its keys.
+      // Fall back to `.mcp.json` only if the Hermes config has no mcp_servers.
       try {
-        const projectMcpPath = path.join(getWorkspaceDir(), '.mcp.json');
-        if (fs.existsSync(projectMcpPath)) {
-          const projectMcp = JSON.parse(fs.readFileSync(projectMcpPath, 'utf8'));
-          const allServers = Object.keys(projectMcp?.mcpServers || {});
-          toolsetList.push(...allServers);
+        const hermesConfigPath = path.join(getSharedHermesHome(), 'config.yaml');
+        if (fs.existsSync(hermesConfigPath)) {
+          const yamlText = fs.readFileSync(hermesConfigPath, 'utf8');
+          // Tiny ad-hoc YAML parser for `mcp_servers:` block: capture the
+          // top-level keys under that section. This is intentionally
+          // dependency-free — we don't want to pull in a YAML lib for a
+          // single field. Hermes' config.yaml uses simple `key: value` lines
+          // and 2-space indent for the mcp_servers block.
+          const mcpBlockMatch = yamlText.match(/^mcp_servers:\s*\n((?: {2}[^\n]+\n?)+)/m);
+          if (mcpBlockMatch) {
+            const block = mcpBlockMatch[1];
+            const serverNames = [...block.matchAll(/^ {2}([a-zA-Z0-9_-]+):/gm)].map((m) => m[1]);
+            if (serverNames.length > 0) {
+              toolsetList.push(...serverNames);
+            }
+          }
+        }
+        if (toolsetList.length === 0) {
+          // Fallback: read .mcp.json (Overmind format) for any servers not in
+          // Hermes config. This won't help if names don't match, but at least
+          // surfaces the names to the user via the warning.
+          const projectMcpPath = path.join(getWorkspaceDir(), '.mcp.json');
+          if (fs.existsSync(projectMcpPath)) {
+            const projectMcp = JSON.parse(fs.readFileSync(projectMcpPath, 'utf8'));
+            const allServers = Object.keys(projectMcp?.mcpServers || {});
+            toolsetList.push(...allServers);
+          }
         }
       } catch (e) {
-        logger.warn({ error: e }, '[HERMES_ARGS] Failed to read .mcp.json for toolsets, continuing without --toolsets.');
+        logger.warn({ error: e }, '[HERMES_ARGS] Failed to read Hermes config.yaml for toolsets, continuing without --toolsets.');
       }
     }
     if (toolsetList.length > 0) {
