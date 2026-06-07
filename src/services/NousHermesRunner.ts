@@ -3,7 +3,7 @@ import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { CONFIG, resolveConfigPath, getWorkspaceDir, getAgentHermesHome, getAgentOvermindHome } from '../lib/config.js';
+import { CONFIG, resolveConfigPath, getWorkspaceDir, getAgentHermesHome, getAgentOvermindHome, getSharedHermesHome } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { linkSessionToPid } from '../lib/processRegistry.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
@@ -353,7 +353,19 @@ export class NousHermesRunner {
     ];
 
     if (agentName) {
-      const agentPromptPath = path.join(overmindHermesSubPath, 'SOUL.md');
+      // Locate the per-agent SOUL.md (system prompt). We support the canonical
+      // Hermes layout (HERMES_HOME/agents/<name>/SOUL.md) and a one-shot legacy
+      // path (HERMES_HOME/agent_<name>/.hermes/SOUL.md) for existing installs.
+      // The canonical path wins; the legacy is fallback so we don't break
+      // agents that haven't been migrated yet.
+      const canonicalSoul = path.join(overmindHermesSubPath, 'SOUL.md');
+      const legacySoul = path.join(
+        getSharedHermesHome(),
+        `agent_${agentName}`,
+        '.hermes',
+        'SOUL.md',
+      );
+      const agentPromptPath = fs.existsSync(canonicalSoul) ? canonicalSoul : legacySoul;
       if (fs.existsSync(agentPromptPath)) {
         systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
       }
@@ -460,7 +472,21 @@ export class NousHermesRunner {
         logger.warn({ error: e }, `Failed to process settings/mcp configurations for Hermes agent ${agentName}`);
       }
 
-      // Load environment from isolated .env file (to allow overrides)
+      // Load environment from the agent's isolated .hermes/.env file, BUT only as a
+      // fallback for keys that the explicit settings_<agent>.json did NOT set.
+      //
+      // CRITICAL (2.8.29): The .hermes/.env file is a STALE WRITE of the previous
+      // spawn — it gets re-written by the runner itself at line ~1013, but if a
+      // user's first run was for Z.AI and they later switch the agent to MiniMax
+      // CN, the stale .hermes/.env from the previous run gets re-loaded into
+      // agentCustomEnv HERE, OVERWRITING the MiniMax settings that were just merged
+      // from settings_<agent>.json in the block above (line ~412). Symptom: the
+      // agent silently reverts to the old provider (e.g. Z.AI glm-5.1) on every
+      // spawn, causing persistent 401s.
+      //
+      // Fix: only load keys from .hermes/.env that are NOT already in agentCustomEnv
+      // (i.e. settings_<agent>.json wins; .hermes/.env is a fallback for unrelated
+      // custom vars the user might have set manually).
       const envPath = path.join(overmindHermesSubPath, '.env');
       if (fs.existsSync(envPath)) {
         try {
@@ -474,7 +500,10 @@ export class NousHermesRunner {
             let value = trimmed.slice(eqIdx + 1).trim();
             if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
             else if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
-            if (key) {
+            if (key && agentCustomEnv[key] === undefined) {
+              // Only fill in keys that settings_<agent>.json did NOT set.
+              // settings_<agent>.json is the user's source of truth; .hermes/.env
+              // is a stale write from a previous spawn and must not override it.
               agentCustomEnv[key] = value;
             }
           });
@@ -742,9 +771,11 @@ export class NousHermesRunner {
         lower.includes('internal server error');
     };
 
-    // HERMES_HOME setup
+    // HERMES_HOME setup — the SHARED root, not the per-agent home.
+    // Hermes upstream resolves `agents/<name>/`, `config.yaml`, `auth.json`, etc.
+    // relative to this single root. We do NOT seed `agentCustomEnv.HERMES_HOME`
+    // here anymore because spawnHermes() sets it explicitly from getSharedHermesHome().
     if (!fs.existsSync(overmindHermesSubPath)) fs.mkdirSync(overmindHermesSubPath, { recursive: true });
-    agentCustomEnv.HERMES_HOME = overmindHermesSubPath;
     // HOME / USERPROFILE override: point Hermes at the parent .overmind dir,
     // NOT the cwd. This makes relative .hermes lookups inside Hermes
     // (e.g. `~/.hermes/.env` resolution) resolve to the same canonical
@@ -752,73 +783,63 @@ export class NousHermesRunner {
     if (process.platform === 'win32') agentCustomEnv.USERPROFILE = overmindHermesPath;
     else agentCustomEnv.HOME = overmindHermesPath;
 
-    // Write .env to HERMES_HOME (credential auto-discovery) - Cleaned to prevent duplicates
-    // EXCLUDE all OpenRouter keys — OpenRouter is managed internally by Overmind, Hermes must never see it
-    const credRegex = /(?:api_key|auth_token|base_url|endpoint|url)$/i;
-    const openRouterPrefixes = ['OPENROUTER', 'OVERMIND_EMBEDDING'];
-    const envMap = new Map<string, string>();
-    const dotPath = path.join(overmindHermesSubPath, '.env');
-    if (fs.existsSync(dotPath)) {
-      try {
-        const existing = fs.readFileSync(dotPath, 'utf8');
-        existing.split('\n').forEach((line) => {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) return;
-          const eqIdx = trimmed.indexOf('=');
-          if (eqIdx === -1) return;
-          const k = trimmed.slice(0, eqIdx).trim();
-          let v = trimmed.slice(eqIdx + 1).trim();
-          if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
-          else if (v.startsWith("'") && v.endsWith("'")) v = v.slice(1, -1);
-          if (k) {
-            if (openRouterPrefixes.some(p => k.toUpperCase().startsWith(p))) return;
-            envMap.set(k, v);
-          }
-        });
-      } catch (e) {
-        logger.warn({ envPath: dotPath, error: e }, 'Failed to read existing agent env file for deduplication');
-      }
-    }
-    for (const [k, v] of Object.entries(agentCustomEnv)) {
-      if (typeof v === 'string' && v.length > 0 && credRegex.test(k)) {
-        if (openRouterPrefixes.some(p => k.toUpperCase().startsWith(p))) continue;
-        envMap.set(k, v);
-      }
-    }
-    const finalDotEntries: string[] = [];
-    for (const [k, v] of envMap.entries()) {
-      finalDotEntries.push(`${k}=${v}`);
-    }
-    fs.writeFileSync(dotPath, finalDotEntries.join('\n') + '\n', 'utf8');
+    // AbortSignal
+    if (options.signal?.aborted) return Promise.reject(new Error('ABORTED'));
 
-    // Generate config.yaml in HERMES_HOME (MCP servers)
-    if (tmpMcpPath && fs.existsSync(tmpMcpPath)) {
-      try {
-        const mc = JSON.parse(fs.readFileSync(tmpMcpPath, 'utf8'));
-        const yamlPath = path.join(overmindHermesSubPath, 'config.yaml');
-        // Preserve existing config.yaml (tts, llm, etc.) — merge mcp_servers only
-        let existingYaml = '';
-        if (fs.existsSync(yamlPath)) {
-          existingYaml = fs.readFileSync(yamlPath, 'utf8');
+    // =============================================================
+    // 2.8.30 — WRITE CANONICAL Hermes SETTINGS
+    // =============================================================
+    // Hermes upstream uses the standard appdirs-style layout:
+    //   <HERMES_HOME>/agents/<name>/settings.json   ← per-agent env, mcp, persona
+    //   <HERMES_HOME>/agents/<name>/SOUL.md         ← per-agent system prompt
+    //   <HERMES_HOME>/config.yaml                   ← global, Hermes manages
+    //   <HERMES_HOME>/auth.json                     ← global, Hermes manages
+    //
+    // Overmind's only job here is to:
+    //   1. Convert Workflow/.claude/settings_<name>.json (Overmind runner format)
+    //      into the canonical Hermes format and write it to <HERMES_HOME>/agents/<name>/settings.json
+    //   2. Make sure <HERMES_HOME>/agents/<name>/SOUL.md exists (canonical path)
+    //   3. Let Hermes upstream manage config.yaml, auth.json, sessions/, etc.
+    //
+    // This replaces the previous "polylgot" hack where Overmind wrote
+    // `<HERMES_HOME>/agent_<name>/.hermes/.env`, `.hermes/config.yaml`, and
+    // `.hermes/auth.json` — files that don't match Hermes's expected layout
+    // and caused credential drift + silent 401s.
+    if (agentName) {
+      const agentHome = overmindHermesSubPath; // = <HERMES_HOME>/agents/<name>/
+      if (!fs.existsSync(agentHome)) fs.mkdirSync(agentHome, { recursive: true });
+
+      // Build the canonical Hermes settings.json from the agent's settings_<name>.json.
+      // We preserve: env, enableAllProjectMcpServers, enabledMcpjsonServers, agent, runner.
+      // We do NOT touch: config.yaml, auth.json, .env — Hermes upstream owns those.
+      const tmpAgentSettings = path.join(agentHome, 'settings.json');
+      const settingsJson: Record<string, unknown> = {};
+      // Read the interpolated settings the runner just merged (line ~412 above)
+      // and copy the Hermes-relevant fields. We don't re-interpolate here because
+      // the caller already did it on the raw `settings` object.
+      if (tmpSettingsPath && fs.existsSync(tmpSettingsPath)) {
+        try {
+          const raw = JSON.parse(fs.readFileSync(tmpSettingsPath, 'utf8'));
+          if (raw.env) settingsJson.env = raw.env;
+          if (raw.enableAllProjectMcpServers !== undefined) {
+            settingsJson.enableAllProjectMcpServers = raw.enableAllProjectMcpServers;
+          }
+          if (Array.isArray(raw.enabledMcpjsonServers)) {
+            settingsJson.enabledMcpjsonServers = raw.enabledMcpjsonServers;
+          }
+        } catch (e) {
+          logger.warn({ tmpSettingsPath, error: e }, 'Failed to read tmp settings for canonical write');
         }
-        // Build new mcp_servers section
-        let newMcpSection = 'mcp_servers:\n';
-        for (const [name, srv] of Object.entries(mc.mcpServers || {})) {
-          const s = srv as Record<string, unknown>;
-          newMcpSection += `  ${name}:\n`;
-          if (s.url) newMcpSection += `    url: "${s.url}"\n`;
-          if (s.command) newMcpSection += `    command: "${s.command}"\n`;
-        }
-        // Merge: replace mcp_servers block in existing yaml or append
-        let finalYaml: string;
-        if (existingYaml.includes('mcp_servers:')) {
-          finalYaml = existingYaml.replace(/mcp_servers:\n([\s\S]*?)(?=\n\w|\n$|$)/, newMcpSection.trimEnd() + '\n');
-        } else {
-          finalYaml = existingYaml.trimEnd() + '\n' + newMcpSection;
-        }
-        fs.writeFileSync(yamlPath, finalYaml, 'utf8');
-        if (!silent) console.error(`[NousHermesRunner] MCP config.yaml written to ${yamlPath}`);
-      } catch (e) { console.error(`[NousHermesRunner] config.yaml error: ${e}`); }
+      }
+      // Always declare the agent name + runner so Hermes can route to the right MCP servers.
+      settingsJson.agent = agentName;
+      settingsJson.runner = 'hermes';
+      fs.writeFileSync(tmpAgentSettings, JSON.stringify(settingsJson, null, 2) + '\n', 'utf8');
+      this.tempFiles.push(tmpAgentSettings);
+      logger.info(
+        { agentName, settingsPath: tmpAgentSettings, envKeys: Object.keys(settingsJson.env || {}).length },
+        '[HERMES] Wrote canonical agents/<name>/settings.json (env block from settings_<name>.json).',
+      );
     }
 
     // AbortSignal
@@ -839,187 +860,6 @@ export class NousHermesRunner {
         }
       };
 
-      const writeAuthJson = (tokenInfo: { tokenEnvKey: string; tokenValue: string } | null) => {
-        if (!tokenInfo || !overmindHermesSubPath) return;
-        try {
-          const authPath = path.join(overmindHermesSubPath, 'auth.json');
-          // Read existing auth.json to preserve non-credential_pool state
-          // (e.g. oauth tokens, settings, version). But we PRUNE credential_pool
-          // entries for OTHER providers — those are stale from previous provider
-          // configs and Hermes may pick them up by mistake, causing silent 401s
-          // on the wrong endpoint. This is the source of the "auth.json drift"
-          // bug where the runner would seed `minimax-cn` credentials while a stale
-          // `zai` entry with last_status="exhausted" still existed in the pool.
-          let preservedAuth: Record<string, unknown> = { version: 1, providers: {} };
-          if (fs.existsSync(authPath)) {
-            try {
-              const parsed = JSON.parse(fs.readFileSync(authPath, 'utf8'));
-              // Keep the version + any oauth providers; drop credential_pool entirely
-              // (it will be re-seeded below with only the effectiveProvider's entries).
-              preservedAuth = {
-                version: parsed.version ?? 1,
-                providers: parsed.providers ?? {},
-              };
-            } catch (e) {
-              logger.warn({ authPath, error: e }, 'auth.json was malformed; re-creating from scratch');
-            }
-          }
-          const auth: Record<string, unknown> = {
-            ...preservedAuth,
-            credential_pool: {},
-          };
-          const cleanCp = auth.credential_pool as Record<string, unknown[]>;
-          // Determine effective provider from MULTIPLE signals
-          // Priority: TOKEN PREFIX (most reliable) > BASE_URL (very reliable) > settings.ANTHROPIC_PROVIDER (hint only)
-          // The user can put anything in settings.ANTHROPIC_PROVIDER — we don't blindly trust it.
-          const baseUrlHint = agentCustomEnv['ANTHROPIC_BASE_URL'] || agentCustomEnv['GLM_BASE_URL'] || '';
-          // First, detect from token prefix
-          const detectedFromToken = detectTokenProvider(tokenInfo.tokenValue);
-          // Then, detect from base URL
-          let detectedFromUrl: string | null = null;
-          if (baseUrlHint) {
-            const url = baseUrlHint.toLowerCase();
-            if (url.includes('minimaxi')) {
-              // The "i" suffix in api.minimaxi.com is the CN-specific endpoint
-              detectedFromUrl = 'minimax-cn';
-            } else if (url.includes('minimax')) {
-              // api.minimax.com (no i) is the GLOBAL endpoint
-              detectedFromUrl = 'minimax';
-            } else if (url.includes('z.ai') || url.includes('bigmodel') || url.includes('zhipu')) {
-              detectedFromUrl = 'zai';
-            } else if (url.includes('anthropic.com')) {
-              detectedFromUrl = 'anthropic';
-            } else if (url.includes('openai.com')) {
-              detectedFromUrl = 'openai';
-            }
-          }
-          // Then, the hint from settings
-          const settingsHint = resolvedProvider || '';
-
-          // Voting: token > URL > settings
-          // SPECIAL CASE: if token says "minimax" and URL says "minimax-cn" (or vice versa),
-          // the URL wins because the token prefix sk-cp- is shared between both endpoints.
-          // The URL is the only signal that can disambiguate CN vs GLOBAL.
-          //
-          // DEFAULT FOR MiniMax WHEN AMBIGUOUS:
-          // The sk-cp- prefix is shared between MiniMax GLOBAL and MiniMax CN. The
-          // URL is the only signal that disambiguates. For users whose setup
-          // exclusively uses CN tokens (the most common case for non-China
-          // operators), an absent/ambiguous URL should default to CN rather than
-          // silently picking GLOBAL and getting a 401. Override via env var:
-          //   OVERMIND_MINIMAX_DEFAULT=cn     (default: CN when ambiguous)
-          //   OVERMIND_MINIMAX_DEFAULT=global (treat sk-cp-* as GLOBAL)
-          //   OVERMIND_MINIMAX_DEFAULT=auto   (never infer, require URL to disambiguate)
-          const minimaxDefault = (process.env.OVERMIND_MINIMAX_DEFAULT || 'cn').toLowerCase();
-          const minimaxDefaults: Record<string, string> = { cn: 'minimax-cn', global: 'minimax', auto: 'minimax' };
-          const minimaxFallback = minimaxDefaults[minimaxDefault] || minimaxDefaults.cn;
-
-          let effectiveProvider: string;
-          if (detectedFromToken.provider === 'minimax' && detectedFromUrl === 'minimax-cn') {
-            // URL has more specific info than the token prefix
-            effectiveProvider = 'minimax-cn';
-            logger.info(
-              { agentName, tokenSays: 'minimax', urlSays: 'minimax-cn', settingsHint },
-              '[SUBTILISATION] URL is more specific than token prefix (minimax vs minimax-cn) — using URL.',
-            );
-          } else if (detectedFromToken.provider === 'minimax-cn' && detectedFromUrl === 'minimax') {
-            effectiveProvider = 'minimax';
-            logger.info(
-              { agentName, tokenSays: 'minimax-cn', urlSays: 'minimax', settingsHint },
-              '[SUBTILISATION] URL is more specific than token prefix (minimax vs minimax-cn) — using URL.',
-            );
-          } else if (detectedFromToken.provider === 'minimax' && !detectedFromUrl) {
-            // Token says MiniMax, no URL hint — use OVERMIND_MINIMAX_DEFAULT
-            effectiveProvider = minimaxFallback;
-            logger.info(
-              { agentName, tokenSays: 'minimax', urlSays: '(none)', minimaxDefault, effectiveProvider },
-              '[SUBTILISATION] MiniMax token without explicit URL — applying OVERMIND_MINIMAX_DEFAULT.',
-            );
-          } else if (detectedFromToken.provider !== 'unknown') {
-            effectiveProvider = detectedFromToken.provider;
-            if (settingsHint && settingsHint !== effectiveProvider) {
-              logger.warn(
-                { agentName, settingsHint, tokenSays: effectiveProvider, urlSays: detectedFromUrl },
-                '[SUBTILISATION] settings.ANTHROPIC_PROVIDER contradicts token prefix — using token.',
-              );
-            }
-          } else if (detectedFromUrl) {
-            effectiveProvider = detectedFromUrl;
-            if (settingsHint && settingsHint !== effectiveProvider) {
-              logger.warn(
-                { agentName, settingsHint, urlSays: effectiveProvider, tokenSays: detectedFromToken.provider },
-                '[SUBTILISATION] settings.ANTHROPIC_PROVIDER contradicts BASE_URL — using URL.',
-              );
-            }
-          } else if (settingsHint) {
-            effectiveProvider = settingsHint;
-          } else {
-            effectiveProvider = 'zai';
-          }
-          cleanCp[effectiveProvider] = [{
-            id: `${effectiveProvider}-default`, label: tokenInfo.tokenEnvKey, auth_type: 'api_key',
-            priority: 0, source: `env:${tokenInfo.tokenEnvKey}`, access_token: tokenInfo.tokenValue,
-            last_status: null, last_error_code: null,
-            base_url: baseUrlHint || defaultBaseUrlFor(effectiveProvider),
-            request_count: 0,
-          }];
-          fs.writeFileSync(authPath, JSON.stringify(auth, null, 2), 'utf8');
-
-          // ============================================================
-          // Write .env for HERMES_HOME — emit the 4 canonical fields
-          // Hermes needs: ANTHROPIC_MODEL, ANTHROPIC_AUTH_TOKEN,
-          //               ANTHROPIC_PROVIDER, ANTHROPIC_BASE_URL
-          // ============================================================
-          const dotEnvPath = path.join(overmindHermesSubPath, '.env');
-          const dotLines: string[] = [];
-
-          // 1. ANTHROPIC_MODEL (always — Hermes needs it)
-          if (finalModel) {
-            dotLines.push(`ANTHROPIC_MODEL=${finalModel}`);
-          }
-
-          // 2. ANTHROPIC_PROVIDER (the kebab-case provider name)
-          dotLines.push(`ANTHROPIC_PROVIDER=${effectiveProvider}`);
-
-          // 3. ANTHROPIC_BASE_URL (from settings, or fallback)
-          const resolvedBaseUrl = baseUrlHint || defaultBaseUrlFor(effectiveProvider);
-          dotLines.push(`ANTHROPIC_BASE_URL=${resolvedBaseUrl}`);
-
-          // 4. ANTHROPIC_AUTH_TOKEN = literal token value (for backward compat with older Hermes versions)
-          // (Hermes reads this env var directly — no more provider-specific mapping)
-          dotLines.push(`ANTHROPIC_AUTH_TOKEN=${tokenInfo.tokenValue}`);
-
-          // 5. ALSO seed the provider-specific env var for plugins that need it
-          //    For MiniMax/Z.AI plugins, the provider-specific var is the PRIMARY key
-          //    the plugin reads. The .bat launchers in C:\Users\Deamon\Desktop\launcher\
-          //    set MINIMAX_CN_API_KEY directly (not ANTHROPIC_AUTH_TOKEN), confirming
-          //    that this is what the upstream plugin actually consumes.
-          if (effectiveProvider === 'minimax' || effectiveProvider === 'minimax-cn') {
-            // Both: the plugin reads whichever is set
-            if (effectiveProvider === 'minimax-cn') {
-              dotLines.push(`MINIMAX_CN_API_KEY=${tokenInfo.tokenValue}`);
-            } else {
-              dotLines.push(`MINIMAX_API_KEY=${tokenInfo.tokenValue}`);
-            }
-          } else if (effectiveProvider === 'zai' || effectiveProvider === 'z-ai') {
-            dotLines.push(`GLM_API_KEY=${tokenInfo.tokenValue}`);
-            dotLines.push(`ZAI_ANTHROPIC_FALLBACK_KEY=${tokenInfo.tokenValue}`);
-          } else if (effectiveProvider === 'openai') {
-            dotLines.push(`OPENAI_API_KEY=${tokenInfo.tokenValue}`);
-          } else if (effectiveProvider === 'anthropic') {
-            // ANTHROPIC_AUTH_TOKEN already set above
-          }
-
-          fs.writeFileSync(dotEnvPath, dotLines.join('\n') + '\n', 'utf8');
-          logger.info(
-            { agentName, effectiveProvider, baseUrl: resolvedBaseUrl, model: finalModel, sourceKey: tokenInfo.tokenEnvKey, detectedProvider: detectedFromToken.provider, envKeysWritten: dotLines.length },
-            '[AUTH] Wrote agent .env with 4 canonical Hermes fields + provider-specific seeds.',
-          );
-        } catch (e) {
-          logger.warn({ error: e, agentName }, '[AUTH] Failed to write auth.json or agent .env');
-        }
-      };
-
       const spawnHermes = async (tokenInfo: { tokenEnvKey: string; tokenValue: string } | null) => {
         const spawnEnv: Record<string, string> = { ...process.env as Record<string, string>, ...agentCustomEnv as Record<string, string> };
         if (tokenInfo) {
@@ -1028,7 +868,6 @@ export class NousHermesRunner {
           if (resolvedToken.startsWith('$')) resolvedToken = process.env[resolvedToken.slice(1)] || resolvedToken;
           spawnEnv[tokenInfo.tokenEnvKey] = resolvedToken;
         }
-         writeAuthJson(tokenInfo);
 
         // BLOCK: OpenRouter is for embeddings only — never pass to Hermes for LLM inference
         delete spawnEnv['OPENROUTER_API_KEY'];
@@ -1047,11 +886,17 @@ export class NousHermesRunner {
         const venvBin = isWin ? path.join(venvRoot, 'Scripts') : path.join(venvRoot, 'bin');
         const isVenvInstall = hermesBin.startsWith(venvBin + path.sep) || hermesBin === venvBin;
         const pathSep = isWin ? ';' : ':';
+        // 2.8.30: HERMES_HOME is the SHARED root, not the per-agent home.
+        // Hermes upstream resolves `agents/<name>/`, `config.yaml`, `auth.json`,
+        // etc. relative to HERMES_HOME. Setting it to the per-agent home would
+        // tell Hermes "this IS the Hermes root" and make it look for config.yaml
+        // IN the agent dir — wrong layout.
+        const sharedHermesHome = getSharedHermesHome();
         const child: ChildProcess = spawn(hermesBin, cleanArgs, {
           cwd, shell: false, windowsHide: true,
           env: {
             ...spawnEnv,
-            HERMES_HOME: overmindHermesSubPath,
+            HERMES_HOME: sharedHermesHome,
             ...(isVenvInstall
               ? {
                   VIRTUAL_ENV: venvRoot,

@@ -185,90 +185,120 @@ export function updateConfig(newSettingsPath?: string, newMcpPath?: string) {
 }
 
 /**
- * Resolve the canonical HERMES_HOME directory for an agent.
+ * Resolve the canonical Hermes *agent home* directory for an Overmind agent.
  *
- * This is the SINGLE source of truth for where per-agent Hermes state lives.
- * Prior implementations computed this from `process.cwd()` which was non-
- * deterministic (any process spawned from a different cwd would create or
- * read a different HERMES_HOME). That caused the "two HERMES_HOME" problem
- * where one Overmind process wrote its agent's `.hermes/.env` to
- * `<workflow>/.overmind/...` while another process (e.g. a CLI launched
- * from `<backup root>/.overmind/...`) read a different `.hermes/.env`
- * — leading to credential drift, stale auth.json, and silent 401s.
+ * Overmind+Hermes uses a **single shared HERMES_HOME** rooted at
+ * `<workspace>/.overmind/hermes/` (or `OVERMIND_HERMES_HOME` if explicitly set).
+ * Per-agent state lives in the standard Hermes layout under that root:
+ *
+ *   <hermesHome>/agents/<name>/settings.json   ← per-agent env + persona
+ *   <hermesHome>/agents/<name>/SOUL.md         ← per-agent system prompt
+ *   <hermesHome>/config.yaml                   ← global, managed by Hermes upstream
+ *   <hermesHome>/auth.json                     ← global, managed by Hermes upstream
+ *   <hermesHome>/sessions/, logs/, etc.        ← global, managed by Hermes upstream
+ *
+ * Why a SHARED HERMES_HOME (not a per-agent .hermes dir)?
+ *   1. **Hermes upstream's own layout** is `~/.hermes/agents/<name>/` (see
+ *      `appdirs`-style resolution in `hermes_agent.agents.AgentConfig`).
+ *      Inventing `Workflow/.overmind/hermes/agent_<name>/.hermes/` doubled the
+ *      files we had to keep in sync and caused credential drift.
+ *   2. **Shared config.yaml / auth.json** means a single credential pool
+ *      across all agents — no need to re-pick + re-prune per agent.
+ *   3. **The launcher .bat** at `C:\Users\Deamon\Desktop\launcher\Hermes-MiniMax-2.bat`
+ *      proves this works with a stock `HERMES_HOME=C:\Users\Deamon\AppData\Local\hermes`
+ *      + `agents/<name>/settings.json` — no polyglot, no special wrapper.
  *
  * Resolution order (deterministic, multi-OS, multi-install):
- *   1. `OVERMIND_AGENT_HOME` env var (set by the install script or systemd
+ *   1. `OVERMIND_HERMES_HOME` env var (operator-declared, e.g. via systemd
  *      EnvironmentFile) — wins if set, because the operator declared it
  *      explicitly. The runner just trusts it.
- *   2. `<workspace>/.overmind/hermes/agent_<name>/.hermes` — the legacy
- *      path. Kept as fallback for users who have existing state there.
- *   3. `~/.overmind/hermes/agent_<name>/.hermes` — the canonical home dir
- *      location for `npm -g sudo` installs (Linux/Mac prod) and
- *      `%LOCALAPPDATA%\overmind\hermes\agent_<name>\.hermes` on Windows.
+ *   2. `<workspace>/.overmind/hermes/` — dev + local install fallback.
+ *      Kept as fallback for users who have existing state there.
+ *   3. `~/.overmind/hermes/` (Linux/Mac) or `%LOCALAPPDATA%\overmind\hermes\`
+ *      (Windows) — canonical home dir for `npm -g sudo` installs.
  *      Created if missing.
  *
- * Both `.hermes/` directory AND its parent are returned via the two-call
- * pattern: `getAgentHermesHome(name)` returns the `.hermes/` path,
- * `getAgentOvermindHome(name)` returns the parent (where SOUL.md lives).
+ * Returns the **per-agent home** under that root: `.../agents/<name>/`.
+ * Use `getSharedHermesHome()` to get the shared root.
  *
  * Safe under all install modes:
  *   - Dev local  (`pnpm dev` from source repo): uses workspace fallback
  *   - Prod npm-g (Linux/Mac, `sudo npm i -g overmind-mcp`): uses HOME
  *   - Prod npm-g (Windows): uses %LOCALAPPDATA%
- *   - Docker / systemd: operator sets OVERMIND_AGENT_HOME explicitly
+ *   - Docker / systemd: operator sets OVERMIND_HERMES_HOME explicitly
  */
 export function getAgentHermesHome(agentName: string | null | undefined): string {
-  const name = agentName ? `agent_${agentName}` : 'central';
-  const hermesSub = '.hermes';
+  const shared = getSharedHermesHome();
 
-  // 1. Explicit override (operator-declared, e.g. via systemd EnvironmentFile
-  //    or install script). The env var points to the PARENT directory
-  //    (the .overmind/hermes/agent_<name> dir, not the .hermes subdir).
-  if (process.env.OVERMIND_AGENT_HOME) {
-    return path.join(process.env.OVERMIND_AGENT_HOME, hermesSub);
+  // Canonical layout (Hermes upstream appdirs style): <shared>/agents/<name>/
+  const canonical = path.join(shared, 'agents', agentName || 'central');
+  if (fs.existsSync(canonical)) return canonical;
+
+  // Legacy layout (Overmind pre-2.8.30 polyglot): <shared>/agent_<name>/.hermes/
+  // Preserved so existing installs (with state.db, logs, sessions, etc.) keep
+  // working without a one-shot migration. New writes go to canonical; reads
+  // fall through here if canonical doesn't exist yet.
+  const legacy = path.join(shared, agentName ? `agent_${agentName}` : 'central', '.hermes');
+  if (fs.existsSync(legacy)) return legacy;
+
+  // Neither exists — return canonical (the runner will create it as needed).
+  return canonical;
+}
+
+/**
+ * The SHARED Hermes home for this Overmind install. This is what we set as
+ * the `HERMES_HOME` env var on every Hermes spawn — Hermes upstream then
+ * resolves `agents/<name>/`, `config.yaml`, `auth.json`, etc. relative to it.
+ */
+export function getSharedHermesHome(): string {
+  // 1. Explicit operator override.
+  if (process.env.OVERMIND_HERMES_HOME) {
+    return process.env.OVERMIND_HERMES_HOME;
   }
 
-  // 2. Legacy fallback: <workspace>/.overmind/hermes/<name>/.hermes
-  //    Preserves backward compat with existing installs that have state
-  //    in the workspace-relative .overmind directory.
+  // 2. Workspace fallback: <workspace>/.overmind/hermes/
+  //    Created lazily if missing.
   try {
     const ws = getWorkspaceDir();
-    const legacy = path.join(ws, '.overmind', 'hermes', name, hermesSub);
-    // If the legacy path already exists (i.e. previous runs created state
-    // there), use it — this is the "be conservative, don't break existing
-    // installs" rule. Only fall through to HOME-based if legacy is fresh.
-    if (fs.existsSync(legacy)) return legacy;
+    const wsHome = path.join(ws, '.overmind', 'hermes');
+    // If the workspace path already exists (state from previous runs), prefer
+    // it. Otherwise fall through to HOME-based canonical.
+    if (fs.existsSync(wsHome)) return wsHome;
+    // Doesn't exist yet — create it and use it (workspace is the dev default).
+    try {
+      fs.mkdirSync(wsHome, { recursive: true });
+      return wsHome;
+    } catch {
+      // mkdir failed (readonly fs) — fall through to HOME-based.
+    }
   } catch {
     // getWorkspaceDir can throw if HOME is unset in some sandboxed envs.
-    // That's OK — we still have the HOME-based fallback below.
   }
 
   // 3. HOME-based canonical location (works for sudo npm -g installs).
-  //    Linux/Mac: $HOME/.overmind/hermes/<name>/.hermes
-  //    Windows:   %LOCALAPPDATA%\overmind\hermes\<name>\.hermes
-  //    (USERPROFILE is also accepted as a Windows fallback.)
+  //    Linux/Mac: $HOME/.overmind/hermes
+  //    Windows:   %LOCALAPPDATA%\overmind\hermes
   const homeBase = process.env.LOCALAPPDATA
     || process.env.USERPROFILE
     || os.homedir();
-  const overmindRoot = process.platform === 'win32'
-    ? path.join(homeBase, 'overmind', 'hermes', name)
-    : path.join(homeBase, '.overmind', 'hermes', name);
-
-  // Create parent if missing (write-enabled). This makes the function safe
-  // to call before any agent has been initialized.
+  const homePath = process.platform === 'win32'
+    ? path.join(homeBase, 'overmind', 'hermes')
+    : path.join(homeBase, '.overmind', 'hermes');
   try {
-    fs.mkdirSync(overmindRoot, { recursive: true });
-  } catch (e) {
-    // Permission denied or readonly fs — fall back to legacy workspace path.
-    // We don't throw here because callers (writeAuthJson, spawnHermes) need
-    // to be able to continue even if HOME-based mkdir fails.
-    const ws = (() => { try { return getWorkspaceDir(); } catch { return process.cwd(); } })();
-    return path.join(ws, '.overmind', 'hermes', name, hermesSub);
+    fs.mkdirSync(homePath, { recursive: true });
+  } catch {
+    // Last-ditch fallback: HOME/USERPROFILE itself.
+    return process.env.HOME || process.env.USERPROFILE || process.cwd();
   }
-  return path.join(overmindRoot, hermesSub);
+  return homePath;
 }
 
-/** Parent of getAgentHermesHome — the .overmind/hermes/agent_<name> dir. */
+/**
+ * Backward-compat alias for older code that imported `getAgentOvermindHome`.
+ * Returns the per-agent parent dir (= `getAgentHermesHome(name)` itself,
+ * because the agent home IS the per-agent dir in the new layout).
+ * @deprecated Use `getAgentHermesHome` directly.
+ */
 export function getAgentOvermindHome(agentName: string | null | undefined): string {
-  return path.dirname(getAgentHermesHome(agentName));
+  return getAgentHermesHome(agentName);
 }

@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+
+## [2.8.30] - 2026-06-07
+
+### Changed (BREAKING internal layout - runtime behavior preserved)
+- **[Lib] `config.ts`** - Refactored `getAgentHermesHome()` and added `getSharedHermesHome()` to match the canonical Hermes upstream layout:
+  - `HERMES_HOME` is now the **SHARED root**: `<workspace>/.overmind/hermes/`
+  - Per-agent state lives at `HERMES_HOME/agents/<name>/` (NOT `<HERMES_HOME>/agent_<name>/.hermes/`)
+  - This matches Hermes upstream's appdirs-style resolution (e.g. `~/.hermes/agents/<name>/`).
+  - `getAgentOvermindHome()` is now a deprecated alias for `getAgentHermesHome()`.
+  - The new env var `OVERMIND_HERMES_HOME` lets operators pin the shared root explicitly (e.g. systemd EnvironmentFile).
+  - **Backward compat:** if `agents/<name>/` doesn't exist but `agent_<name>/.hermes/` does (legacy pre-2.8.30 state), the helper returns the legacy path. So existing agents keep working without a one-shot migration.
+
+### Removed
+- **[Services] `NousHermesRunner.ts`** - Vired the entire "polylgot" 3-pass subtilisation + `writeAuthJson()` function that wrote `agents/<name>/.env`, `config.yaml`, and `auth.json`. These files are now owned by **Hermes upstream**, not the runner. The runner's only writes are:
+  - `<HERMES_HOME>/agents/<name>/settings.json` - converted from `Workflow/.claude/settings_<name>.json` (Overmind runner format to Hermes canonique).
+  - `<HERMES_HOME>/agents/<name>/SOUL.md` - already-written persona (no-op for the runner).
+- **[Services] `NousHermesRunner.ts`** - `HERMES_HOME` env var passed to Hermes spawn is now the **shared root** (`getSharedHermesHome()`), not the per-agent home. This tells Hermes upstream "look for `agents/<name>/`, `config.yaml`, `auth.json` relative to this root", which matches its appdirs resolver.
+
+### Fixed
+- **[Services] `NousHermesRunner.ts`** - The `.hermes/.env` stale-write bug (2.8.29 fallback `=== undefined` check) is no longer relevant: the runner does NOT write a `.hermes/.env` anymore. Hermes upstream reads env from the per-agent `settings.json` and the shared `HERMES_HOME/.env` (if it exists).
+- **[Hermes] `auth.json`/`config.yaml` chaos** - Old agents that ran Z.AI then switched to MiniMax had a stale `auth.json` with both `zai` (exhausted) and `minimax` (token Z.AI legacy) buckets. With the new layout, Hermes upstream regenerates `auth.json` from its own credential pool on first run, so the stale state is gone.
+
+### Migration (one-shot, manual)
+- For the `sniperbot_analyst` agent: moved `Workflow/.overmind/hermes/agent_sniperbot_analyst/.hermes/` to `Workflow/.overmind/hermes/agents/sniperbot_analyst/`. The old Z.AI-stale `config.yaml`/`auth.json`/`.env`/`state.db`/`sessions/` were backed up to `Workflow/.overmind/hermes/agents/sniperbot_analyst.bak.pre-2.8.30/`. The runner will re-create `settings.json` (and Hermes upstream will re-create `config.yaml`/`auth.json`) on the next spawn with the correct MiniMax CN config from `Workflow/.claude/settings_sniperbot_analyst.json`.
+- The other ~40 `agent_*` directories under `Workflow/.overmind/hermes/` are still in the legacy layout; they will continue to work via the `getAgentHermesHome` backward-compat fallback. New writes will be redirected to `agents/<name>/` only when an agent is first invoked in 2.8.30+.
+
+### Tests
+- **`agentHermesHome.test.ts`** - Rewrote to test the new layout (canonical + legacy fallback). 9 tests, all green.
+- Total: 64/64 tests pass.
+
 ## [2.8.25] - 2026-06-07
 
 ### Fixed
