@@ -1,7 +1,8 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║   OVERMIND BRIDGE — BridgeProxy (Daemon RPC Layer)                  ║
+ * ║   OVERMIND BRIDGE — BridgeProxy (Base Client SDK Proxy)              ║
  * ║                                                                      ║
+ * ║   [SCRIPT DE BASE - CLIENT SDK LOW-LEVEL TRANSPORT]                  ║
  * ║   Couche basse : transport JSON-RPC 2.0 vers Overmind MCP Server.   ║
  * ║   Gère : reconnexion, health checks, circuit breaker, SSE streaming.║
  * ║                                                                      ║

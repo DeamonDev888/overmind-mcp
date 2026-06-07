@@ -1,13 +1,15 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║   OVERMIND BRIDGE — OverBridgeService (High-Level API)              ║
+ * ║   OVERMIND BRIDGE — OverBridgeService (Base Client SDK Wrapper)      ║
  * ║                                                                      ║
- * ║   API haut niveau : agents, memory, cron, runs, sessions.           ║
- * ║   Wrappe BridgeProxy pour fournir des méthodes métier claires.      ║
+ * ║   [SCRIPT DE BASE - CLIENT SDK WRAPPER]                              ║
+ * ║   API haut niveau pour interagir avec les agents, la mémoire, les    ║
+ * ║   runs, et les sessions. Wrappe BridgeProxy pour offrir une          ║
+ * ║   interface client simple et robuste (SDK).                          ║
  * ║                                                                      ║
  * ║   ARCHITECTURE                                                       ║
  * ║   ─────────────                                                      ║
- * ║   App/Route → OverBridgeService → BridgeProxy → Overmind MCP        ║
+ * ║   App/Client SDK → OverBridgeService → BridgeProxy → Overmind MCP    ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 

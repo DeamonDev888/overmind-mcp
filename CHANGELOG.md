@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
+
+
+## [2.8.32] - 2026-06-07
+
+### Fixed
+- **[Services] `NousHermesRunner.ts`** - The canonical `agents/<name>/settings.json` now INJECTS the provider-specific env var that the upstream Hermes plugin actually reads. Detection logic:
+  - MiniMax token (`sk-cp-*` or `sk-mm-*`) + URL contains `minimaxi` (with the `i`) -> seed `MINIMAX_CN_API_KEY` only (CN plugin).
+  - MiniMax token + URL contains `minimax` (no `i`) -> seed `MINIMAX_API_KEY` only (GLOBAL plugin).
+  - MiniMax token + no URL -> default to CN per `OVERMIND_MINIMAX_DEFAULT=cn`, seed `MINIMAX_CN_API_KEY`.
+  - Z.AI token (32hex or 32hex.32hex) -> seed `ZAI_ANTHROPIC_FALLBACK_KEY` + `GLM_API_KEY`.
+  - **`ANTHROPIC_AUTH_TOKEN` is kept** as a generic fallback for any code path that still reads it.
+- **ROOT CAUSE of 13:20 404 -> 13:33 401 -> 13:34 401 progression**:
+  1. `Workflow/.claude/settings_sniperbot_analyst.json` only had `ANTHROPIC_AUTH_TOKEN`, not `MINIMAX_CN_API_KEY`. The plugin `minimax-cn` reads `MINIMAX_CN_API_KEY` from the per-agent `agents/<name>/settings.json`, so it failed to find the credential.
+  2. Without the right env var, Hermes upstream's plugin resolver fell back to `nvidia` (then 404 because `MiniMax-M3` is not a NVIDIA model), then `openrouter` (then 401 because there's no `OPENROUTER_API_KEY` and we explicitly purge it).
+  3. The 2.8.31 fix that seeded `MINIMAX_CN_API_KEY` in the **process env** was correct, but the bug 2.8.30 introduced was that I seeded BOTH `MINIMAX_CN_API_KEY` AND `MINIMAX_API_KEY`. The plugin resolver's first-match logic picked the GLOBAL one (`minimax`, no `i`) and went to `api.minimax.io` (GLOBAL endpoint) with a CN token -> 401 "invalid api key".
+  4. 2.8.32 fixes this by writing the env var into `settings.json` (which is what the plugin actually reads) AND by only seeding the matching one (CN vs GLOBAL based on URL).
+
+### Manual fix
+- **Wrote the canonical `Workflow/.overmind/hermes/agents/sniperbot_analyst/settings.json`** with `MINIMAX_CN_API_KEY` set to `$ANTHROPIC_AUTH_TOKEN_5` (interpolated from `.env`). The sniperbot_analyst external Discord bot can now spawn Hermes and the `minimax-cn` plugin will find the credential.
+
+### Tests
+- All 64/64 tests pass. TSC clean.
+
+## [2.8.31] - 2026-06-07
+
+### Fixed
+- **[Services] `NousHermesRunner.ts`** - Spawn env plugin-compat seed: when the agent's resolved token starts with `sk-cp-` or `sk-mm-` (MiniMax), also seed `MINIMAX_CN_API_KEY` + `MINIMAX_API_KEY` in the spawn env (in addition to the generic `ANTHROPIC_AUTH_TOKEN`). Same for Z.AI 32hex tokens: seed `ZAI_ANTHROPIC_FALLBACK_KEY` + `GLM_API_KEY`. Reason: the Hermes `minimax` plugin reads `MINIMAX_CN_API_KEY` (not `ANTHROPIC_AUTH_TOKEN`); without the seed, Hermes fell back to the wrong plugin (we observed it pick `nvidia` and 404 on `MiniMax-M3` because that model does not exist at `integrate.api.nvidia.com`). The seed is process-env-only and scoped to a single spawn - it does NOT write to any file on disk.
+- **[Services] `NousHermesRunner.ts`** - Stale provider env var purge: before seeding, delete `MINIMAX_CN_API_KEY`, `MINIMAX_API_KEY`, `ZAI_ANTHROPIC_FALLBACK_KEY`, `GLM_API_KEY`, `Z_AI_API_KEY`, `Z_AI_BASE_URL`, `GLM_BASE_URL`, `NVIDIA_API_KEY`, `NVIDIA_API_BASE` from the spawn env. Reason: a `Workflow/.env` from a previous provider config (e.g. Z.AI legacy) could leak a stale `MINIMAX_CN_API_KEY` into the spawn env and shadow the correct credential.
+
+### Cleaned
+- **Migrated 35/37 legacy `agent_<name>/.hermes/` dirs** to the canonical `<HERMES_HOME>/agents/<name>/` layout. Total: 35 agents, 35/35 successful.
+  - 2 path-too-long edge cases (Windows 260 char limit) on `agent_pdf_bon_travail` and `agent_minimax_test_placeholder` - skipped; will need a manual xcopy / robocopy workaround. The runner's legacy fallback (`getAgentHermesHome` checks both layouts) keeps them working.
+- **Deleted duplicate HERMES_HOME** at `Backup\Serveur MCP\.overmind\` (193 MB, 5 legacy agent dirs). The canonical root is now `Backup\Serveur MCP\Workflow\.overmind\hermes\`.
+- **Deleted 34 empty `agent_<name>/` parent dirs** left behind after migration.
+- **Deleted `settings_zai_test.json`** (stale Z.AI test settings from May 2026).
+- **Deleted temp backups** `agents\sniperbot_analyst.bak.pre-2.8.30\` and `agents\sniperbot_analyst.bak.pre-2.8.30_sessions\` (~45 MB).
+- **Kept `agents._migrate_backup_20260607_131751/`** (262 MB) for one session in case anything broke. User can remove with: `rm -rf 'Workflow/.overmind/hermes/agents._migrate_backup_20260607_131751'`.
+
+### Tests
+- All 64/64 tests pass. TSC clean. ESLint 0 errors (12 pre-existing warnings).
+
 ## [2.8.30] - 2026-06-07
 
 ### Changed (BREAKING internal layout - runtime behavior preserved)

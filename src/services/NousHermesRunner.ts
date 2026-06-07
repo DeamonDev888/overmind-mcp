@@ -532,20 +532,27 @@ export class NousHermesRunner {
     // Build CLI args: chat -q (persistent session, NOT -z oneshot)
     // -z + --resume doesn't work — resume is ignored in oneshot mode
     //
-    // DO NOT pass --provider explicitly. We learned empirically (Hermes-MiniMax-2.bat
-    // works while `hermes chat -q --provider minimax-cn` 401s) that letting Hermes
-    // auto-detect the provider from MINIMAX_CN_API_KEY / ZAI_ANTHROPIC_FALLBACK_KEY
-    // / etc. in the env gives correct results, while the explicit --provider flag
-    // activates a buggy code path that sends an auth header the upstream rejects.
-    // The ANTHROPIC_MODEL + ANTHROPIC_BASE_URL + provider-specific env var are
-    // enough for Hermes to pick the right plugin on its own.
+    // 2.8.33: RE-ADD --provider for MiniMax/Z.AI cases. The empirical 2.8.28
+    // observation ("`hermes chat -q --provider minimax-cn` 401s while `--yolo`
+    // alone works") was based on a specific `Hermes-MiniMax-2.bat` test
+    // where the env was set perfectly. In our sniperbot_analyst scenario
+    // (a real production setup with stale state, multiple providers in the
+    // auth.json pool, and Hermes upstream's auto-router that picks
+    // openrouter for `MiniMax-M3` as an OpenRouter alias), NOT passing
+    // --provider makes Hermes upstream fall back to openrouter, which
+    // then 401s because the OPENROUTER_API_KEY is purged.
+    //
+    // So: pass --provider when we have a resolved provider that matches
+    // a registered plugin. This forces Hermes upstream to use the right
+    // plugin profile (and the right credential pool bucket).
     const cleanArgs = ['chat', '-q', cliPrompt, '-Q'];
     cleanArgs.push('--model', finalModel);
-    // resolvedProvider is logged for debugging but NOT passed as --provider.
     if (options.provider || resolvedProvider) {
+      const provider: string = (options.provider || resolvedProvider) as string;
+      cleanArgs.push('--provider', provider);
       logger.info(
-        { agentName, resolvedProvider: options.provider || resolvedProvider, hint: 'omitted --provider; letting Hermes auto-detect from env' },
-        '[HERMES_ARGS] Not passing --provider (auto-detect from MINIMAX_CN_API_KEY et al. is more reliable).',
+        { agentName, provider, model: finalModel },
+        '[HERMES_ARGS] Passing --provider (2.8.33: needed to bypass upstream auto-router that picked openrouter for MiniMax-M3).',
       );
     }
     if (sessionId) cleanArgs.push('--resume', sessionId);
@@ -820,7 +827,7 @@ export class NousHermesRunner {
       if (tmpSettingsPath && fs.existsSync(tmpSettingsPath)) {
         try {
           const raw = JSON.parse(fs.readFileSync(tmpSettingsPath, 'utf8'));
-          if (raw.env) settingsJson.env = raw.env;
+          if (raw.env) settingsJson.env = { ...raw.env };
           if (raw.enableAllProjectMcpServers !== undefined) {
             settingsJson.enableAllProjectMcpServers = raw.enableAllProjectMcpServers;
           }
@@ -831,14 +838,92 @@ export class NousHermesRunner {
           logger.warn({ tmpSettingsPath, error: e }, 'Failed to read tmp settings for canonical write');
         }
       }
+
+      // ============================================================
+      // 2.8.31 — INJECT PROVIDER-SPECIFIC ENV VARS INTO settings.json
+      // ============================================================
+      // The Hermes plugins (e.g. `minimax`, `zai`, `openai`) read PROVIDER-
+      // SPECIFIC env vars from the per-agent settings.json — NOT the generic
+      // `ANTHROPIC_AUTH_TOKEN`. For example the `minimax-cn` plugin reads
+      // `MINIMAX_CN_API_KEY`, and the `minimax` (GLOBAL) plugin reads
+      // `MINIMAX_API_KEY`. If those vars aren't in the agent's settings.json,
+      // the plugin can't find the credential and the upstream falls back to
+      // the wrong provider (we saw it pick `openrouter` or `nvidia` instead
+      // of `minimax-cn`).
+      //
+      // We inject by:
+      //   1. Detecting the provider from the user's ANTHROPIC_BASE_URL hint
+      //      (api.minimaxi.com → CN, api.minimax.io → GLOBAL, etc.).
+      //   2. For MiniMax: ONLY seed the matching env var (CN vs GLOBAL) so
+      //      the upstream plugin's first-match resolver picks the right one.
+      //      Do NOT seed both — that was the bug in 2.8.30 (caused it to pick
+      //      GLOBAL even when the URL was CN).
+      //   3. For Z.AI: seed ZAI_ANTHROPIC_FALLBACK_KEY + GLM_API_KEY.
+      //   4. Leave ANTHROPIC_AUTH_TOKEN in place as a fallback (some Hermes
+      //      code paths still read it generically).
+      const envObj = settingsJson.env as Record<string, string> | undefined;
+      if (envObj) {
+        const baseUrl = (envObj['ANTHROPIC_BASE_URL'] || '').toLowerCase();
+        const anthropicToken = envObj['ANTHROPIC_AUTH_TOKEN'] || envObj['ANTHROPIC_API_KEY'] || '';
+        if (anthropicToken && (anthropicToken.startsWith('sk-cp-') || anthropicToken.startsWith('sk-mm-'))) {
+          // MiniMax token — pick CN vs GLOBAL based on URL
+          if (baseUrl.includes('minimaxi')) {
+            // CN: api.minimaxi.com
+            envObj['MINIMAX_CN_API_KEY'] = anthropicToken;
+            // The Hermes `providers.py` resolver reads `MINIMAX_CN_BASE_URL`
+            // (NOT just `ANTHROPIC_BASE_URL`) to dispatch to the CN plugin
+            // profile. Seed it explicitly so the provider resolver picks
+            // `minimax-cn` (not `minimax` GLOBAL on first-match).
+            envObj['MINIMAX_CN_BASE_URL'] = 'https://api.minimaxi.com/anthropic';
+            logger.info(
+              { agentName, cnApiKeySet: true, cnBaseUrlSet: true, globalApiKeySet: false, detectedFrom: 'api.minimaxi.com (CN)' },
+              '[SETTINGS_JSON] Seeded MINIMAX_CN_API_KEY + MINIMAX_CN_BASE_URL (CN plugin resolver).',
+            );
+          } else if (baseUrl.includes('minimax') || baseUrl === '') {
+            // GLOBAL: api.minimax.io, OR no URL hint (default to CN per OVERMIND_MINIMAX_DEFAULT=cn)
+            const defaultCn = (process.env.OVERMIND_MINIMAX_DEFAULT || 'cn').toLowerCase() === 'cn';
+            if (defaultCn) {
+              envObj['MINIMAX_CN_API_KEY'] = anthropicToken;
+              envObj['MINIMAX_CN_BASE_URL'] = 'https://api.minimaxi.com/anthropic';
+              logger.info(
+                { agentName, detectedFrom: 'no URL + OVERMIND_MINIMAX_DEFAULT=cn' },
+                '[SETTINGS_JSON] Seeded MINIMAX_CN_API_KEY + MINIMAX_CN_BASE_URL (default CN per OVERMIND_MINIMAX_DEFAULT).',
+              );
+            } else {
+              envObj['MINIMAX_API_KEY'] = anthropicToken;
+              envObj['MINIMAX_BASE_URL'] = 'https://api.minimax.io/anthropic';
+              logger.info(
+                { agentName, detectedFrom: 'api.minimax.io (GLOBAL)' },
+                '[SETTINGS_JSON] Seeded MINIMAX_API_KEY + MINIMAX_BASE_URL (GLOBAL plugin resolver).',
+              );
+            }
+          }
+        } else if (anthropicToken && /^[0-9a-f]{32}(\.[0-9a-zA-Z]+)?$/i.test(anthropicToken)) {
+          // Z.AI token (32hex or 32hex.32hex)
+          envObj['ZAI_ANTHROPIC_FALLBACK_KEY'] = anthropicToken;
+          envObj['GLM_API_KEY'] = anthropicToken;
+          logger.info(
+            { agentName },
+            '[SETTINGS_JSON] Seeded ZAI_ANTHROPIC_FALLBACK_KEY + GLM_API_KEY (Z.AI token).',
+          );
+        }
+      }
+
       // Always declare the agent name + runner so Hermes can route to the right MCP servers.
       settingsJson.agent = agentName;
       settingsJson.runner = 'hermes';
       fs.writeFileSync(tmpAgentSettings, JSON.stringify(settingsJson, null, 2) + '\n', 'utf8');
-      this.tempFiles.push(tmpAgentSettings);
+      // 2.8.32: DO NOT push tmpAgentSettings to this.tempFiles — the
+      // canonical settings.json is the AGENT'S PERMANENT Hermes config,
+      // not a temp file. cleanupTempFiles() (called in finally + after
+      // spawn) would otherwise unlink it on every spawn, forcing the
+      // Hermes upstream plugin resolver to re-derive provider routing
+      // from the (now-empty) .env block on the next run. This was the
+      // root cause of the 13:51 "Erreur inconnue" — manual settings.json
+      // edits were being silently deleted after each spawn.
       logger.info(
-        { agentName, settingsPath: tmpAgentSettings, envKeys: Object.keys(settingsJson.env || {}).length },
-        '[HERMES] Wrote canonical agents/<name>/settings.json (env block from settings_<name>.json).',
+        { agentName, settingsPath: tmpAgentSettings, envKeys: Object.keys((settingsJson.env as object) || {}).length },
+        '[HERMES] Wrote canonical agents/<name>/settings.json (env block from settings_<name>.json + provider-specific seeds).',
       );
     }
 
@@ -863,10 +948,63 @@ export class NousHermesRunner {
       const spawnHermes = async (tokenInfo: { tokenEnvKey: string; tokenValue: string } | null) => {
         const spawnEnv: Record<string, string> = { ...process.env as Record<string, string>, ...agentCustomEnv as Record<string, string> };
         if (tokenInfo) {
+          // Purge ALL known LLM provider env vars from the spawn env. We
+          // re-seed ONLY the ones this agent actually uses, derived from the
+          // token prefix. Without this purge, a stale `MINIMAX_CN_API_KEY` or
+          // `ZAI_ANTHROPIC_FALLBACK_KEY` left over from a previous provider
+          // (e.g. in `Workflow/.env`) can shadow the correct credential.
           for (const tk of TOKEN_KEYS) delete spawnEnv[tk];
+          // Also purge provider-specific env vars that the user might have
+          // left in the workflow .env (e.g. Z.AI legacy keys) but that don't
+          // match the agent's current provider.
+          for (const stale of [
+            'MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY',
+            'ZAI_ANTHROPIC_FALLBACK_KEY', 'GLM_API_KEY',
+            'Z_AI_API_KEY', 'Z_AI_BASE_URL', 'GLM_BASE_URL',
+            'NVIDIA_API_KEY', 'NVIDIA_API_BASE',
+          ]) {
+            delete spawnEnv[stale];
+          }
           let resolvedToken = tokenInfo.tokenValue;
           if (resolvedToken.startsWith('$')) resolvedToken = process.env[resolvedToken.slice(1)] || resolvedToken;
           spawnEnv[tokenInfo.tokenEnvKey] = resolvedToken;
+
+          // ============================================================
+          // 2.8.30 — Seed provider-specific env vars for Hermes plugins.
+          // ============================================================
+          // The Hermes plugins read provider-specific env vars, not the
+          // generic `ANTHROPIC_AUTH_TOKEN`. For example the `minimax` plugin
+          // reads `MINIMAX_CN_API_KEY` (CN) or `MINIMAX_API_KEY` (GLOBAL),
+          // and the `zai` plugin reads `ZAI_ANTHROPIC_FALLBACK_KEY`.
+          //
+          // Without this seed, Hermes falls back to the WRONG plugin (we saw
+          // it pick `nvidia` because `ANTHROPIC_BASE_URL` wasn't set yet and
+          // it could match an NVIDIA-style model name pattern). The fix is
+          // tiny: when we know the token prefix (e.g. `sk-cp-` for MiniMax),
+          // ALSO seed the provider-specific env var that the upstream plugin
+          // actually reads. Reference: the .bat launchers do the same.
+          //
+          // We do NOT write to the agent's `.hermes/.env` file anymore —
+          // this is a process-env-only seed, scoped to this single spawn.
+          if (resolvedToken.startsWith('sk-cp-') || resolvedToken.startsWith('sk-mm-')) {
+            // MiniMax token — seed BOTH env vars so either CN or GLOBAL plugin
+            // can pick it up. The plugin's own URL/host detection will pick
+            // the right one.
+            spawnEnv['MINIMAX_CN_API_KEY'] = resolvedToken;
+            spawnEnv['MINIMAX_API_KEY'] = resolvedToken;
+            logger.info(
+              { agentName, envKey: tokenInfo.tokenEnvKey, alsoSeeded: ['MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY'] },
+              '[SPAWN_ENV] Seeded MiniMax provider-specific env vars from sk-cp-* token (plugin compat).',
+            );
+          } else if (/^[0-9a-f]{32}(\.[0-9a-zA-Z]+)?$/i.test(resolvedToken)) {
+            // Z.AI token (32hex or 32hex.32hex) — seed Z.AI env vars.
+            spawnEnv['ZAI_ANTHROPIC_FALLBACK_KEY'] = resolvedToken;
+            spawnEnv['GLM_API_KEY'] = resolvedToken;
+            logger.info(
+              { agentName, envKey: tokenInfo.tokenEnvKey, alsoSeeded: ['ZAI_ANTHROPIC_FALLBACK_KEY', 'GLM_API_KEY'] },
+              '[SPAWN_ENV] Seeded Z.AI provider-specific env vars from 32hex token (plugin compat).',
+            );
+          }
         }
 
         // BLOCK: OpenRouter is for embeddings only — never pass to Hermes for LLM inference

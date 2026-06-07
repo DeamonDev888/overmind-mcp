@@ -5,11 +5,17 @@
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 
-// ─── Client API (existant) ────────────────────────────────────────────────
+// ─── Client SDK / Scripts de Base ─────────────────────────────────────────
 export { BridgeProxy } from './BridgeProxy.js';
 export { OverBridgeService } from './OverBridgeService.js';
+export { BridgeHttpClient } from './BridgeHttpClient.js';
+export type {
+  BridgeHttpClientConfig,
+  JsonRpcCallRequest,
+  JsonRpcCallResponse,
+} from './BridgeHttpClient.js';
 
-// ─── Server API (nouveau) ─────────────────────────────────────────────────
+// ─── Server API ──────────────────────────────────────────────────────────
 export { OverBridgeServer } from './OverBridgeServer.js';
 export type { OverBridgeServerConfig, JsonRpcRequest, JsonRpcResponse } from './OverBridgeServer.js';
 
@@ -30,14 +36,8 @@ export type {
   StepResult,
   ScenarioRunnerContext,
 } from './ScenarioLoader.js';
-export { BridgeHttpClient } from './BridgeHttpClient.js';
-export type {
-  BridgeHttpClientConfig,
-  JsonRpcCallRequest,
-  JsonRpcCallResponse,
-} from './BridgeHttpClient.js';
 
-// ─── Server Components (nouveau) ─────────────────────────────────────────
+// ─── Server Components ───────────────────────────────────────────────────
 export { AgentRegistry } from './AgentRegistry.js';
 export type { AgentLiveState, AgentLiveStatus, ListAgentsFilter } from './AgentRegistry.js';
 export { MessageLog, loadMessageLogConfigFromEnv } from './MessageLog.js';
