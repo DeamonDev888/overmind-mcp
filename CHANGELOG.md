@@ -16,6 +16,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **[Services] `hermesTokenResolver.ts`** — Canonical, side-effect-free module exporting `detectTokenProvider` and `resolveTokenWithDetection`. The runner keeps its local closure for ergonomics, but the canonical version is the source of truth and is what the tests exercise.
 - **[Tests] `envUtils.test.ts`** — 10 unit tests covering the `${VAR}` bug fix, recursing into objects/arrays, and defensive behavior.
 - **[Tests] `hermesSubtilisation.test.ts`** — 15 unit tests covering Z.AI token detection (32hex.32hex, 32hex, 16+hex), MiniMax (sk-cp-, sk-mm-), anthropic, openrouter, openai, unknown; 3-pass resolution strategy; Pass A re-map hijack fix; real Z.AI + MiniMax end-to-end scenarios.
+## [2.8.28] - 2026-06-07
+
+### Fixed
+- **[Services] `NousHermesRunner.ts`** — Removed `--provider` flag from CLI args
+  when spawning Hermes. Empirical observation: `hermes chat -q --provider minimax-cn`
+  returns 401 from `api.minimaxi.com`, while `hermes chat --yolo` (no `--provider`)
+  with the same env vars succeeds. The explicit `--provider` flag activates a
+  buggy code path in the Hermes plugin that sends an auth header the upstream
+  rejects. Letting Hermes auto-detect the provider from the env vars
+  (`MINIMAX_CN_API_KEY`, `ZAI_ANTHROPIC_FALLBACK_KEY`, etc.) is more reliable.
+  The resolved provider is still logged at INFO level for debugging.
+  Reference: `C:\Users\Deamon\Desktop\launcher\Hermes-MiniMax-2.bat` works
+  with `hermes chat --yolo` (no `--provider`).
+
 ## [2.8.27] - 2026-06-07
 
 ### Fixed

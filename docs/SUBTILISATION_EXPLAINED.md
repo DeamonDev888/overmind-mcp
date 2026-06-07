@@ -1,7 +1,7 @@
 LA SUBTILISATION — comment Overmind devine ton provider LLM à partir de ton token
 ==============================================================================
 
-Version: Overmind 2.8.27 (2026-06-07)
+Version: Overmind 2.8.28 (2026-06-07)
 Hermes requis: v0.16.0+
 
 
@@ -256,6 +256,28 @@ est re-seedé from scratch.
 Symptôme résolu : "Anthropic 401 invalid api key" avec token prefix
 correct (sk-cp-...) qui était en fait servi par un vieux credential
 zai dans le pool, pas par le nouveau MINIMAX_CN_API_KEY du .env.
+
+
+NE PAS PASSER --provider au CLI Hermes (NOUVEAU en 2.8.28)
+-----------------------------------------------------------
+Découverte empirique : quand le runner Overmind passait
+`hermes chat -q --provider minimax-cn` (avec un settings qui a déjà
+`ANTHROPIC_PROVIDER=minimax-cn`), le plugin Hermes upstream renvoyait
+401. Mais `hermes chat --yolo` (SANS --provider, juste les env vars
+MINIMAX_CN_API_KEY + ANTHROPIC_BASE_URL + ANTHROPIC_MODEL) marchait.
+
+Cause : le flag --provider explicite active un code path buggé dans
+le plugin Hermes qui envoie un format d'auth header rejeté par
+api.minimaxi.com. Sans --provider, Hermes auto-détecte le provider
+depuis l'env var (MINIMAX_CN_API_KEY, ZAI_ANTHROPIC_FALLBACK_KEY, etc.)
+et passe par le bon code path.
+
+Fix appliqué en 2.8.28 : le runner ne passe PLUS --provider. Le
+resolvedProvider est juste loggué en INFO pour debug. Hermes choisit
+le bon plugin depuis l'env.
+
+Référence : C:\Users\Deamon\Desktop\launcher\Hermes-MiniMax-2.bat
+marche parce qu'il fait juste `hermes chat --yolo` (pas --provider).
 
 
 Implementation

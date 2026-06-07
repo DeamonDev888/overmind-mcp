@@ -176,6 +176,33 @@ toujours sur `OVERMIND_MINIMAX_DEFAULT`.
 
 ---
 
+## Ne PAS passer --provider au CLI Hermes (NOUVEAU en 2.8.28)
+
+Le runner Overmind **ne passe plus** le flag `--provider` au CLI Hermes.
+Découverte empirique (le `Hermes-MiniMax-2.bat` du bureau marche mais
+le sniperbot échoue) :
+
+| Commande | Résultat |
+|---|---|
+| `hermes chat -q --provider minimax-cn ...` | **401** (bug plugin upstream) |
+| `hermes chat --yolo` (sans --provider) | **200 OK** |
+
+**Cause** : le flag `--provider` explicite active un code path buggé
+dans le plugin Hermes upstream (`hermes-agent/plugins/model-providers/minimax/`)
+qui envoie un format d'auth header rejeté par `api.minimaxi.com`.
+
+**Fix appliqué** : le runner retire `--provider` de `cleanArgs` mais
+loggue le `resolvedProvider` à INFO pour debug. Hermes auto-détecte
+le bon provider depuis l'env var :
+- `MINIMAX_CN_API_KEY` → plugin `minimax-cn`
+- `MINIMAX_API_KEY` → plugin `minimax` (GLOBAL)
+- `ZAI_ANTHROPIC_FALLBACK_KEY` ou `GLM_API_KEY` → plugin `zai`
+- `ANTHROPIC_AUTH_TOKEN` avec préfixe `sk-ant-` → plugin `anthropic`
+
+`ANTHROPIC_BASE_URL` et `ANTHROPIC_MODEL` sont toujours passés, donc
+Hermes a assez d'info pour ne pas se tromper.
+
+
 ## HERMES_HOME resolution (multi-OS, multi-install)
 
 Chaque agent Hermes a son propre HERMES_HOME. Le path est resolu de maniere

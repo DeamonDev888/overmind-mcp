@@ -184,11 +184,20 @@ async function findHermesBinary(): Promise<string> {
 }
 
 /**
- * NousHermesRunner — Runner polyglote pour Hermes Agent.
- * • Providers : OpenAI, MiniMax, Zhipu/GLM, Mistral, NVIDIA NIM, OpenRouter (fallback)
- * • Lit settings/agents/.mcp depuis .claude/ comme les autres runners
- * • Interpolation $VAR et ${VAR} sur tout settings + mcp config (via envUtils)
- * • Isolation : .overmind/hermes/agent_<name>/ (HERMES_HOME)
+ * NousHermesRunner — Runner polyglote pour Hermes Agent (Overmind 2.8.27+).
+ *
+ *  • Providers : OpenAI, MiniMax GLOBAL/CN, Zhipu/GLM, Mistral, NVIDIA NIM, OpenRouter (embeddings only)
+ *  • Lit settings_<agent>.json + .mcp.<agent>.json depuis .claude/ comme les autres runners
+ *  • Interpolation $VAR et ${VAR} sur tout settings + mcp config (via envUtils, regex fix 2.8.25)
+ *  • Subtilisation 3-pass (Pass 1: settings-explicit, Pass A: prefer provider-specific,
+ *    Pass B: re-map generic key, Pass C: rare fallback) — see hermesTokenResolver.ts
+ *  • CN/GLOBAL disambiguation for sk-cp-* via ANTHROPIC_BASE_URL (URL wins)
+ *  • OVERMIND_MINIMAX_DEFAULT=cn|global|auto for setups where all MiniMax tokens are CN
+ *  • HERMES_HOME resolved via getAgentHermesHome() — deterministic across cwd (2.8.27+)
+ *    Priority: OVERMIND_AGENT_HOME > legacy workspace > $HOME/.overmind/hermes/agent_<name>/
+ *  • auth.json credential_pool is PRUNED every run (keep version+oauth, drop stale creds)
+ *    to prevent Hermes from picking an exhausted bucket from a previous provider config
+ *  • HOME/USERPROFILE propagated to spawned Hermes so ~/.hermes lookups resolve canonically
  */
 export class NousHermesRunner {
   private timeoutMs: number;
@@ -493,10 +502,22 @@ export class NousHermesRunner {
 
     // Build CLI args: chat -q (persistent session, NOT -z oneshot)
     // -z + --resume doesn't work — resume is ignored in oneshot mode
+    //
+    // DO NOT pass --provider explicitly. We learned empirically (Hermes-MiniMax-2.bat
+    // works while `hermes chat -q --provider minimax-cn` 401s) that letting Hermes
+    // auto-detect the provider from MINIMAX_CN_API_KEY / ZAI_ANTHROPIC_FALLBACK_KEY
+    // / etc. in the env gives correct results, while the explicit --provider flag
+    // activates a buggy code path that sends an auth header the upstream rejects.
+    // The ANTHROPIC_MODEL + ANTHROPIC_BASE_URL + provider-specific env var are
+    // enough for Hermes to pick the right plugin on its own.
     const cleanArgs = ['chat', '-q', cliPrompt, '-Q'];
     cleanArgs.push('--model', finalModel);
+    // resolvedProvider is logged for debugging but NOT passed as --provider.
     if (options.provider || resolvedProvider) {
-      cleanArgs.push('--provider', options.provider || resolvedProvider!);
+      logger.info(
+        { agentName, resolvedProvider: options.provider || resolvedProvider, hint: 'omitted --provider; letting Hermes auto-detect from env' },
+        '[HERMES_ARGS] Not passing --provider (auto-detect from MINIMAX_CN_API_KEY et al. is more reliable).',
+      );
     }
     if (sessionId) cleanArgs.push('--resume', sessionId);
 
