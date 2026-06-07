@@ -64,6 +64,48 @@ HTTP client → POST /rpc → OverBridgeServer
                             Overmind MCP :3099 (run_agent tool)
 ```
 
+## Résumé express
+
+Le **Overmind Bridge** est une couche JSON-RPC 2.0 stable au-dessus du
+serveur MCP Overmind. Il transforme n'importe quel client HTTP
+(curl, Discord, SMS, autre agent) en orchestrateur multi-agents.
+
+**En 30 secondes :**
+  1. Tu envoies `POST /rpc` avec un JSON-RPC 2.0
+  2. Le bridge route vers un agent via `OverBridgeService` + `BridgeProxy`
+  3. Triple timeout, retry, circuit breaker, session store — c'est inclus
+  4. Réponse JSON standardisée
+
+**Trois couches, une seule API :**
+
+| Couche             | Classe              | Rôle                                               |
+|--------------------|---------------------|----------------------------------------------------|
+| Client (lib)       | `BridgeProxy`       | Transport HTTP bas-niveau vers MCP                 |
+| Service (lib)      | `OverBridgeService` | API haut-niveau + session state                    |
+| Server (HTTP)      | `OverBridgeServer`  | Endpoints `/rpc`, `/health`, `/webhook/:provider`  |
+| Helpers (lib)      | `SessionStore`, `AgentRegistry`, `DirectiveParser`, `WebhookAdapter`, `MessageLog` | Composants réutilisables |
+
+**15 méthodes RPC** dans 5 catégories :
+  - `health.ping` — 1 méthode
+  - `agent.run` / `agent.a2a` / `agent.status` / `agent.list` / `agent.kill` — 5 méthodes
+  - `message.history` / `message.get` / `message.replay` / `message.stats` — 4 méthodes (Postgres)
+  - `session.get` / `session.list` / `session.delete` / `session.stats` — 4 méthodes
+  - `webhook.sms` — 1 méthode
+
+**Features clés :**
+  - ✓ Circuit breaker (5 échecs → open 30s)
+  - ✓ Triple timeout (connect + body + per-chunk)
+  - ✓ Retry auto sur ETIMEDOUT/EBODYREAD/ECONNRESET
+  - ✓ SessionStore multi-tenant (phone, userId, channelId)
+  - ✓ DirectiveParser (auto-update session depuis `SESSION_ID:` dans la réponse)
+  - ✓ AgentRegistry avec mutex (1 run par agent)
+  - ✓ MessageLog Postgres (optionnel)
+  - ✓ WebhookAdapter (VoIP.ms, Twilio, Discord, generic)
+  - ✓ Path traversal bloqué (`/f/`)
+  - ✓ JSON-RPC 2.0 strict (batch + error codes standards)
+
+**SDK unifié :** `import { OverBridgeService, OverBridgeServer, ... } from 'overmind-mcp/bridge'`
+
 ## Installation
 
 Le bridge est inclus dans le package `overmind-mcp` :
@@ -197,6 +239,64 @@ supporte les requêtes single et batch (array de requêtes).
 ```
 
 ## Méthodes disponibles
+
+### Table de référence rapide
+
+| Méthode            | Catégorie | Params requis          | Retour                              | Notes                           |
+|--------------------|-----------|------------------------|-------------------------------------|---------------------------------|
+| `health.ping`      | Health    | (aucun)                | `{ pong, ts }`                      | Liveness K8s/Docker             |
+| `agent.run`        | Agent     | `agentName, runner, prompt` | `{ messageId, sessionId, content, isError }` | Supporte `externalKey` + `parseDirectives` |
+| `agent.a2a`        | Agent     | `fromAgent, toAgent, runner, prompt` | `{ from, to, messageId, sessionId, content, isError }` | Hub orchestre A→B              |
+| `agent.status`     | Agent     | `agentName`            | `{ local, action, mcp? }`           | `action`: status/stream/kill/wait |
+| `agent.list`       | Agent     | (aucun)                | `{ agents, stats, filters? }`       | Filtres `status` et `runner`    |
+| `agent.kill`       | Agent     | `agentName`            | `{ content, isError }`              | Tue un agent en cours           |
+| `message.history`  | MessageLog| `limit`                | `{ messages, count }`               | **Postgres requis**             |
+| `message.get`      | MessageLog| `id` (UUID)            | `{ message }`                       | **Postgres requis**             |
+| `message.replay`   | MessageLog| `id` (UUID)            | `{ messageId, content, isError }`   | **Postgres requis**             |
+| `message.stats`    | MessageLog| (aucun)                | `{ total, byStatus, byRunner, avgDurationMs }` | **Postgres requis**    |
+| `session.get`      | Session   | `externalKey, agentName` | `{ session }`                     | Multi-tenant                    |
+| `session.list`     | Session   | (aucun)                | `{ sessions, stats }`               | Tous les tenants                |
+| `session.delete`   | Session   | `externalKey, agentName` | `{ deleted: boolean }`            | Purge 1 session                 |
+| `session.stats`    | Session   | (aucun)                | `{ total, byAgent }`                | Métriques globales              |
+| `webhook.sms`      | Webhook   | `payload`              | `{ externalKey, content, sessionId }` | `autoDispatch` optionnel      |
+
+### Codes d'erreur (JSON-RPC 2.0 standard + extensions)
+
+| Code   | Constante          | Signification                                      | Action client                    |
+|--------|--------------------|----------------------------------------------------|----------------------------------|
+| -32700 | `PARSE_ERROR`      | JSON mal formé                                     | Vérifier le body                 |
+| -32600 | `INVALID_REQUEST`  | Pas un JSON-RPC 2.0 valide (manque `jsonrpc`/`method`) | Vérifier la structure      |
+| -32601 | `METHOD_NOT_FOUND` | Méthode inconnue                                   | Voir table ci-dessus             |
+| -32602 | `INVALID_PARAMS`   | Params manquants ou mauvais type                   | Voir schema de la méthode        |
+| -32603 | `INTERNAL_ERROR`   | Erreur serveur (transport, MCP down, etc.)         | Réessayer, vérifier logs         |
+| -32003 | `FEATURE_DISABLED` | MessageLog/SessionStore désactivé sur ce serveur   | Activer dans la config           |
+| -32004 | `NOT_FOUND`        | Ressource inexistante (message UUID inconnu)       | Vérifier l'ID                    |
+
+### Exemple de réponse d'erreur
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "error": {
+    "code": -32602,
+    "message": "agentName, runner, prompt are required",
+    "data": { "issues": ["agentName is required"] }
+  }
+}
+```
+
+### Format unifié des réponses réussies
+
+Toutes les méthodes de la catégorie `agent.*` retournent un objet avec :
+  - `content: Array<{ type: 'text', text: string }>` — le contenu agent
+  - `isError: boolean` — true si erreur applicative
+  - `sessionId?: string` — session ID (si applicable)
+  - `messageId?: string` — UUID MessageLog (si activé)
+
+Les méthodes `session.*` et `message.stats` retournent des objets
+métier spécifiques (sessions, stats). `webhook.sms` retourne le
+résultat de l'agent dispatché + l'externalKey extrait.
 
 ### `agent.run`
 
