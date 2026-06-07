@@ -2,23 +2,216 @@ import { z } from 'zod';
 
 export const configExampleSchema = z.object({
   provider: z
-    .enum(['glm', 'minimax', 'openrouter', 'ilmu', 'minimaxi', 'overmind', 'hermes'])
+    .enum([
+      // Standard providers (legacy ClaudeRunner/KiloRunner)
+      'glm',
+      'openrouter',
+      'ilmu',
+      'anthropic',
+      'overmind',
+      // Hermes providers (NousHermesRunner — 2.8.34+)
+      'hermes-minimax-cn',
+      'hermes-minimax-global',
+      'hermes-zai',
+      'hermes-anthropic',
+    ])
     .describe('Le fournisseur pour lequel vous voulez un exemple de configuration.'),
 });
 
+/**
+ * config_example tool — provides copy-pasteable config templates for each
+ * supported provider. Updated for Overmind 2.8.34+:
+ *   - Hermes runner uses the CANONICAL Hermes layout (HERMES_HOME/agents/<name>/)
+ *     instead of the legacy polylgot `agent_<name>/.hermes/` dir.
+ *   - The runner auto-injects provider-specific env vars (MINIMAX_CN_API_KEY,
+ *     MINIMAX_CN_BASE_URL, etc.) into the canonical settings.json based on
+ *     the token prefix + ANTHROPIC_BASE_URL. Users only need to set
+ *     ANTHROPIC_AUTH_TOKEN (+ ANTHROPIC_BASE_URL) and the runner does the rest.
+ *   - `--provider` is now passed to the CLI (forces Hermes upstream to skip
+ *     the auto-router that was picking openrouter for MiniMax-M3).
+ *
+ * Use case: when a user asks "how do I configure agent X for provider Y",
+ * call this tool and copy/paste the relevant section.
+ */
 export async function configExample(args: z.infer<typeof configExampleSchema>) {
   const { provider } = args;
   let text = '';
 
   const interpolationNotice = `
 💡 **NOUVEAUTÉ : INTERPOLATION DE VARIABLES**
-Vous pouvez désormais utiliser des variables du fichier \`.env\` dans vos fichiers \`settings_[agent].json\`. 
-Les variables commençant par \`$\` seront automatiquement remplacées par leur valeur réelle au moment de l'exécution.
-  `;
+Les fichiers \`settings_<agent>.json\` et la config canonique Hermes
+supportent les références \`$VAR\` qui sont résolues depuis \`Workflow/.env\`
+ou \`process.env\` au moment du spawn.
+`;
 
   switch (provider) {
+    // ═══════════════════════════════════════════════════════════════════
+    // HERMES — NOUVEAU FORMAT CANONIQUE (2.8.30+)
+    // ═══════════════════════════════════════════════════════════════════
+    case 'hermes-minimax-cn':
+      text = `🇨🇳 **HERMES + MINIMAX CN** (Overmind 2.8.34+, NousHermesRunner)
+
+### 📂 Workflow/.claude/settings_<agent>.json
+\`\`\`json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN_1",
+    "ANTHROPIC_BASE_URL":   "https://api.minimaxi.com/anthropic",
+    "ANTHROPIC_MODEL":      "MiniMax-M3",
+    "ANTHROPIC_PROVIDER":   "minimax-cn"
+  },
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": ["memory-server", "discord-server"],
+  "agent": "nom_agent",
+  "runner": "hermes"
+}
+\`\`\`
+
+### 📂 Workflow/.claude/agents/<agent>.md (system prompt, optionnel)
+\`\`\`markdown
+# Persona de l'agent
+
+Tu es un assistant ... (description libre)
+\`\`\`
+
+### 📂 Workflow/.env (tokens)
+\`\`\`
+ANTHROPIC_AUTH_TOKEN_1=sk-cp-xxxxxxxx   # token MiniMax CN valide
+ANTHROPIC_AUTH_TOKEN_2=sk-cp-yyyyyyyy
+ANTHROPIC_AUTH_TOKEN_3=sk-cp-zzzzzzzz
+\`\`\`
+
+### 🔧 Ce que le runner fait automatiquement au spawn
+
+1. Lit \`settings_<agent>.json\` + interpole les \`$VAR\` depuis le \`.env\`
+2. Détecte le provider depuis le token prefix + URL :
+   - \`sk-cp-*\` + URL contient \`minimaxi\` → **MiniMax CN**
+3. Écrit le **settings.json canonique** dans
+   \`<HERMES_HOME>/agents/<agent>/settings.json\` avec :
+   - L'env block (héritée de settings_<agent>.json)
+   - \`MINIMAX_CN_API_KEY\` (le plugin \`minimax-cn\` upstream lit CECI, pas \`ANTHROPIC_AUTH_TOKEN\`)
+   - \`MINIMAX_CN_BASE_URL\` (le résolveur provider upstream lit CECI, pas \`ANTHROPIC_BASE_URL\`)
+4. Spawn \`hermes chat -q "..." --model MiniMax-M3 --provider minimax-cn --yolo\`
+   avec \`HERMES_HOME=<workspace>/.overmind/hermes/\`
+
+### 🌳 Arborescence canonique (Overmind-managed + Hermes-managed)
+\`\`\`
+Workflow/.overmind/hermes/                       ← HERMES_HOME (shared root)
+├── agents/
+│   └── nom_agent/                              ← per-agent home
+│       ├── settings.json                       ← écrit par le runner
+│       ├── SOUL.md                             ← (optionnel) persona par-agent
+│       ├── sessions/  logs/  memories/  ...    ← Hermes upstream écrit
+├── config.yaml                                 ← global, Hermes upstream
+├── auth.json                                   ← global, Hermes upstream (credential pool)
+├── sessions/  logs/  ...                       ← partagés entre agents
+\`\`\`
+
+### ⚠️ Pièges courants
+- Ne PAS écrire manuellement \`<HERMES_HOME>/agents/<name>/.hermes/\` — c'est l'ancien
+  format polyglot (pré-2.8.30). Le runner crée directement \`agents/<name>/\`.
+- Ne PAS toucher \`config.yaml\` ou \`auth.json\` au root — Hermes upstream les gère.
+- Le token \`$VAR\` est résolu **une seule fois** (pas récursif).
+- Si tu changes l'URL de \`api.minimax.io\` (GLOBAL) → \`api.minimaxi.com\` (CN avec le \`i\`),
+  le runner switch automatiquement entre \`MINIMAX_API_KEY\` et \`MINIMAX_CN_API_KEY\`.
+- Les tokens sk-cp sont partagés entre CN et GLOBAL — c'est **l'URL dans settings** qui
+  décide quel bucket/provider est utilisé.
+${interpolationNotice}`;
+      break;
+
+    case 'hermes-minimax-global':
+      text = `🌍 **HERMES + MINIMAX GLOBAL** (Overmind 2.8.34+, NousHermesRunner)
+
+### 📂 Workflow/.claude/settings_<agent>.json
+\`\`\`json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN_GLOBAL",
+    "ANTHROPIC_BASE_URL":   "https://api.minimax.io/anthropic",
+    "ANTHROPIC_MODEL":      "MiniMax-M3",
+    "ANTHROPIC_PROVIDER":   "minimax"
+  },
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": ["memory-server"],
+  "agent": "nom_agent",
+  "runner": "hermes"
+}
+\`\`\`
+
+### Différence vs CN
+- **URL :** \`api.minimax.io\` (SANS le \`i\`) — endpoint international
+- **Env var seedé :** \`MINIMAX_API_KEY\` (pas \`MINIMAX_CN_API_KEY\`)
+- **Plugin upstream :** profile \`minimax\` (pas \`minimax-cn\`)
+- Le runner détecte \`api.minimax.io\` dans l'URL et switch auto.
+
+Voir \`hermes-minimax-cn\` pour le détail complet du flow + arborescence.
+${interpolationNotice}`;
+      break;
+
+    case 'hermes-zai':
+      text = `🤖 **HERMES + Z.AI / GLM** (Overmind 2.8.34+, NousHermesRunner)
+
+### 📂 Workflow/.claude/settings_<agent>.json
+\`\`\`json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN_Y",
+    "ANTHROPIC_BASE_URL":   "https://api.z.ai/api/coding/paas/v4",
+    "ANTHROPIC_MODEL":      "glm-5.1",
+    "ANTHROPIC_PROVIDER":   "zai"
+  },
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": ["memory-server"],
+  "agent": "nom_agent",
+  "runner": "hermes"
+}
+\`\`\`
+
+### Ce que le runner fait au spawn (auto-détection token)
+- Token Z.AI = 32hex (\`c78a134949fc4c369911c24e9fa4b84c.OZhHX5Obs6qF1ISt\`) ou
+  32hex simple (\`5f650035e5a845549e4765184d8179b1\`)
+- Runner seed automatiquement :
+  - \`ZAI_ANTHROPIC_FALLBACK_KEY\` (= valeur du token)
+  - \`GLM_API_KEY\` (= valeur du token)
+- Plugin upstream \`zai\` lit ces vars.
+
+Voir \`hermes-minimax-cn\` pour le détail complet du flow + arborescence.
+${interpolationNotice}`;
+      break;
+
+    case 'hermes-anthropic':
+      text = `🅰️ **HERMES + ANTHROPIC (OFFICIEL)** (Overmind 2.8.34+, NousHermesRunner)
+
+### 📂 Workflow/.claude/settings_<agent>.json
+\`\`\`json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL":   "https://api.anthropic.com",
+    "ANTHROPIC_MODEL":      "claude-sonnet-4-6",
+    "ANTHROPIC_PROVIDER":   "anthropic"
+  },
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": ["memory-server"],
+  "agent": "nom_agent",
+  "runner": "hermes"
+}
+\`\`\`
+
+### Note
+Pour Anthropic, le runner ne seed PAS de variables provider-specific — il laisse
+\`ANTHROPIC_AUTH_TOKEN\` tel quel. Le plugin upstream \`anthropic\` lit cette var
+directement, donc pas de transformation nécessaire.
+
+Voir \`hermes-minimax-cn\` pour le détail complet du flow + arborescence.
+${interpolationNotice}`;
+      break;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // LEGACY: ClaudeRunner / KiloRunner (autres providers)
+    // ═══════════════════════════════════════════════════════════════════
     case 'glm':
-      text = `🚀 **EXEMPLE DE CONFIGURATION POUR GLM / Z.AI (ANTHROPIC PROXY)**
+      text = `🚀 **EXEMPLE DE CONFIGURATION POUR GLM / Z.AI (CLAUDE RUNNER)**
 
 ### 📂 settings_[nom_agent].json
 \`\`\`json
@@ -30,10 +223,7 @@ Les variables commençant par \`$\` seront automatiquement remplacées par leur 
     "ANTHROPIC_BASE_URL": "$ANTHROPIC_BASE_URL_Z"
   },
   "enableAllProjectMcpServers": false,
-  "enabledMcpjsonServers": [
-    "postgresql-server",
-    "memory"
-  ],
+  "enabledMcpjsonServers": ["postgresql-server", "memory"],
   "agent": "nom_agent",
   "runner": "claude"
 }
@@ -41,137 +231,97 @@ Les variables commençant par \`$\` seront automatiquement remplacées par leur 
 
 ### 📂 .env correspondant
 \`\`\`
-# Z.AI Configuration
 ANTHROPIC_BASE_URL_Z=https://api.z.ai/api/anthropic
 ANTHROPIC_MODEL_Z=glm-5.1
 ANTHROPIC_AUTH_TOKEN_Y=your_primary_token_here
 ANTHROPIC_AUTH_TOKEN_E=your_fallback_token_here
 \`\`\`
 
-**Modèles GLM disponibles :**
-- \`glm-5.1\` - Flagship modèle (recommandé)
-- \`glm-5\` - Performances solides
-- \`glm-4.5-air\` - Modèle léger et coût-efficace
+**Modèles GLM disponibles :** \`glm-5.1\` (flagship), \`glm-5\`, \`glm-4.5-air\`.
 
-**Fallback automatique :**
-- Utilise \`ANTHROPIC_AUTH_TOKEN_Y\` par défaut
-- En cas d'erreur 401/429/5xx, bascule automatiquement sur \`ANTHROPIC_AUTH_TOKEN_E\`
+**Fallback automatique :** \`ANTHROPIC_AUTH_TOKEN_Y\` → \`ANTHROPIC_AUTH_TOKEN_E\` sur 401/429/5xx.
 
+> **Note :** Si tu utilises le **runner Hermes** (préféré pour les agents
+> Discord/CLI), utilise plutôt \`hermes-zai\`. Le ClaudeRunner ci-dessus est
+> pour les agents qui spawnent directement le binaire Claude Code.
 ${interpolationNotice}`;
       break;
+
     case 'ilmu':
-      text = `🚀 **EXEMPLE DE CONFIGURATION POUR ILMU AI**
+      text = `🚀 **EXEMPLE DE CONFIGURATION POUR ILMU AI (KILO RUNNER)**
 
 ### 📂 settings_[nom_agent].json
 \`\`\`json
 {
   "env": {
-    "ANTHROPIC_MODEL": "$Z_AI_MODEL", // Interpolé depuis le .env
+    "ANTHROPIC_MODEL": "$Z_AI_MODEL",
     "ANTHROPIC_AUTH_TOKEN": "$Z_AI_API_KEY",
     "ANTHROPIC_BASE_URL": "$Z_AI_BASE_URL",
     "API_TIMEOUT_MS": "900000"
   },
   "enableAllProjectMcpServers": false,
-  "enabledMcpjsonServers": [
-    "postgresql-server",
-    "memory",
-    "discord-server"
-  ],
+  "enabledMcpjsonServers": ["postgresql-server", "memory", "discord-server"],
   "agent": "ilmu_agent",
   "runner": "kilo"
 }
 \`\`\`
 ${interpolationNotice}`;
       break;
-    case 'minimax':
-      text = `🚀 **EXEMPLE DE CONFIGURATION POUR MINIMAX (VIA PROXY ANTHROPIC)**
 
-### 📂 settings_[nom_agent].json
-\`\`\`json
-{
-  "env": {
-    "ANTHROPIC_BASE_URL": "https://api.minimax.io/anthropic",
-    "MINIMAX_CN_API_KEY": "$MINIMAX_CN_API_KEY", // ⚠️ Provider minimax-cn: utilisez MINIMAX_CN_API_KEY (PAS ANTHROPIC_AUTH_TOKEN) — c'est le plugin minimax du binaire hermes v0.16.0 qui décide du nom de la variable.
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
-    "ANTHROPIC_MODEL": "The_Chaos_Prophet",
-    "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-M2",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M2",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M2",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-M2"
-  },
-  "agent": "nom_agent",
-  "runner": "claude"
-}
-\`\`\`
-
-> **Note (Hermes runner + provider minimax-cn)** : le binaire Hermes lit le credential via la variable d'environnement attendue par le plugin provider minimax, soit \`MINIMAX_CN_API_KEY\`. Si vous utilisez \`ANTHROPIC_AUTH_TOKEN\` avec un provider minimax, Hermes upstream va silencieusement renvoyer 401 même si Overmind a la clé. Mapping complet des credentials par provider :
-> - \`minimax-cn\` → \`MINIMAX_CN_API_KEY\`
-> - \`minimax\` (alias) → \`MINIMAX_API_KEY\`
-> - \`zai\` → \`GLM_API_KEY\` ou \`ZAI_ANTHROPIC_FALLBACK_KEY\`
-> - \`z-ai\` → \`Z_AI_API_KEY\`
-> - \`anthropic\` → \`ANTHROPIC_AUTH_TOKEN\` (accepte les suffixes \`_1.._5\`, \`_E\`, \`_F\`, \`_Y\`)
-${interpolationNotice}`;
-      break;
     case 'openrouter':
-      text = `🚀 **EXEMPLE DE CONFIGURATION POUR OPENROUTER (VIA PROXY ANTHROPIC)**
+      text = `⚠️ **OPENROUTER = EMBEDDINGS UNIQUEMENT** (Overmind convention 2026-06-07)
+
+OpenRouter ne doit PAS être utilisé pour l'inférence LLM dans Overmind. Le
+runner Hermes purge activement \`OPENROUTER_API_KEY\` du spawn env, et
+configurer un agent Hermes avec OpenRouter LLM résultera en **HTTP 401
+"Missing Authentication header"** parce que la clé est bloquée.
+
+**Pour les embeddings Overmind uniquement :** voir \`OVERMIND_EMBEDDING_KEY\`
+dans \`Workflow/.env\` (consommé par les providers d'embedding Overmind internes).
+
+**Si tu veux router via OpenRouter pour LLM :** utilise le runner
+\`openclaw\` ou \`kilo\` avec un settings qui ne déclenche pas le purge
+Hermes. Mais ce n'est PAS recommandé.
+
+Voir \`hermes-minimax-cn\` ou \`hermes-anthropic\` pour les providers LLM
+supportés par le runner Hermes.
+${interpolationNotice}`;
+      break;
+
+    case 'anthropic':
+      text = `🅰️ **CLAUDE RUNNER + ANTHROPIC OFFICIEL**
 
 ### 📂 settings_[nom_agent].json
 \`\`\`json
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api/v1",
-    "ANTHROPIC_AUTH_TOKEN": "$OPENROUTER_API_KEY", // Utilisez une variable .env
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
-    "ANTHROPIC_MODEL": "anthropic/claude-3-5-sonnet",
-    "ANTHROPIC_SMALL_FAST_MODEL": "anthropic/claude-3-haiku",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "anthropic/claude-3-5-sonnet",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "anthropic/claude-3-opus",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "anthropic/claude-3-haiku"
+    "ANTHROPIC_MODEL": "claude-sonnet-4-6",
+    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN",
+    "API_TIMEOUT_MS": "900000"
   },
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": ["memory-server"],
   "agent": "nom_agent",
   "runner": "claude"
 }
 \`\`\`
 ${interpolationNotice}`;
       break;
-    case 'minimaxi':
-      text = `🚀 **EXEMPLE DE CONFIGURATION POUR MINIMAXI (VERSION ALTERNATIVE)**
 
-### 📂 settings_[nom_agent].json
-\`\`\`json
-{
-  "env": {
-    "ANTHROPIC_MODEL": "MiniMax-Text-01",
-    "ANTHROPIC_AUTH_TOKEN": "$MINIMAXI_API_KEY", // Configuré dans le .env
-    "ANTHROPIC_BASE_URL": "$MINIMAXI_BASE_URL",
-    "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-Text-01",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-Text-01",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-Text-01",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-Text-01",
-    "API_TIMEOUT_MS": "900000",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "agent": "minimax_agent"
-  },
-  "agent": "minimax_agent",
-  "runner": "claude"
-}
-\`\`\`
-${interpolationNotice}`;
-      break;
-
-    // ─── OVERMIND: Guide complet $VAR + FALLBACK TOKENS ───
+    // ═══════════════════════════════════════════════════════════════════
+    // OVERMIND: guide complet (subtilisation, fallbacks, etc.)
+    // ═══════════════════════════════════════════════════════════════════
     case 'overmind':
       text = `🎯 **GUIDE COMPLET : SUBSTITUTION $VAR ET FALLBACK TOKENS**
 
-Overmind supporte deux mécanismes puissants pour vos agents :
+Overmind supporte deux mécanismes puissants pour vos agents.
 
 ---
 
 ### 1️⃣ SUBSTITUTION $VAR (tous les runners)
 
-Les settings de vos agents peuvent référencer des variables d'environnement du \`.env\` avec la syntaxe \`$NOM_VARIABLE\`.
+Les settings de vos agents peuvent référencer des variables d'environnement
+du \`.env\` avec la syntaxe \`$NOM_VARIABLE\`.
 
 \`\`\`json
 {
@@ -182,143 +332,52 @@ Les settings de vos agents peuvent référencer des variables d'environnement du
 }
 \`\`\`
 
-Au runtime, Overmind remplace automatiquement \`$ANTHROPIC_AUTH_TOKEN_1\` par sa valeur réelle depuis le \`.env\`.
+Au runtime, Overmind remplace automatiquement \`$ANTHROPIC_AUTH_TOKEN_1\` par
+sa valeur réelle depuis le \`.env\`.
 
 ---
 
-### 2️⃣ RETRY AUTOMATIQUE SUR ERREUR (ClaudeRunner + KiloRunner)
+### 2️⃣ SUBTILISATION AUTO (Hermes runner, 2.8.34+)
 
-Quand une erreur se produit, Overmind peut RETENTER automatiquement avec des tokens de secours.
+Pour le **runner Hermes**, le runner détecte le token prefix et seed
+automatiquement les env vars provider-specific dans le settings.json
+canonique :
 
-**Erreurs retryables :**
-- **401** : Auth failure (token invalide/expiré)
-- **429** : Rate limit / quota exhausted (limite atteinte)
-- **500, 502, 503** : Server error (erreur serveur)
+| Token prefix | URL contient \`minimaxi\` | URL contient \`minimax.io\` | 32hex | seed |
+|---|---|---|---|---|
+| \`sk-cp-*\` | ✅ CN | — | — | \`MINIMAX_CN_API_KEY\` + \`MINIMAX_CN_BASE_URL\` |
+| \`sk-cp-*\` | — | ✅ GLOBAL | — | \`MINIMAX_API_KEY\` + \`MINIMAX_BASE_URL\` |
+| 32hex / 32hex.32hex | — | — | ✅ | \`ZAI_ANTHROPIC_FALLBACK_KEY\` + \`GLM_API_KEY\` |
+| autre \`sk-*\` | n/a | n/a | n/a | rien (laisser \`ANTHROPIC_AUTH_TOKEN\` comme fallback) |
 
-**Détection texte stderr :** \`401\`, \`unauthorized\`, \`invalid api key\`, \`authentication failed\`, \`auth error\`, \`429\`, \`rate limit\`, \`quota exhausted\`, \`limit exhausted\`, \`503\`, \`service unavailable\`, \`500\`, \`internal server error\`
-
-**Flow :** Token primaire → AUTH_FALLBACK_1 → AUTH_FALLBACK_2 → AUTH_FALLBACK_3 → ÉCHEC
-
----
-
-### 📂 EXEMPLE COMPLET : ClaudeRunner avec 3 fallback tokens
-
-\`\`\`json
-{
-  "model": "claude-sonnet-4-20250514",
-  "env": {
-    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN",      // Token principal
-    "AUTH_FALLBACK_1": "$ANTHROPIC_AUTH_TOKEN_2",         // Si 401/429/5xx
-    "AUTH_FALLBACK_2": "$ANTHROPIC_AUTH_TOKEN_3",         // Si encore échoué
-    "AUTH_FALLBACK_3": "$ANTHROPIC_AUTH_TOKEN_4"         // Dernier recours
-  }
-}
-\`\`\`
-
-**.env associé :**
-\`\`\`
-ANTHROPIC_AUTH_TOKEN=sk-cp-primary...     # Token principal ( utilisation normale )
-ANTHROPIC_AUTH_TOKEN_2=sk-cp-xxx...       # Fallback #1
-ANTHROPIC_AUTH_TOKEN_3=sk-cp-yyy...       # Fallback #2
-ANTHROPIC_AUTH_TOKEN_4=sk-cp-zzz...       # Fallback #3
-\`\`\`
-
-**Comment ça marche :**
-1. L'agent commence avec \`ANTHROPIC_AUTH_TOKEN\` = \`$ANTHROPIC_AUTH_TOKEN\` → résolu → \`sk-cp-primary...\`
-2. Si erreur 401/429/5xx → retry avec \`AUTH_FALLBACK_1\` → \`sk-cp-xxx...\`
-3. Si encore échec → retry avec \`AUTH_FALLBACK_2\` → \`sk-cp-yyy...\`
-4. Si encore échec → retry avec \`AUTH_FALLBACK_3\` → \`sk-cp-zzz...\`
-5. Si encore échec → \`RETRYABLE_ERROR_ALL_FALLBACKS_EXHAUSTED\`
+L'utilisateur n'a qu'à mettre \`ANTHROPIC_AUTH_TOKEN\` + \`ANTHROPIC_BASE_URL\`
+dans son settings.json — le runner fait le reste.
 
 ---
 
-### 📂 EXEMPLE COMPLET : KiloRunner avec fallback
+### 3️⃣ RETRY AUTOMATIQUE SUR ERREUR (ClaudeRunner + KiloRunner)
 
-\`\`\`json
-{
-  "model": "claude-sonnet-4-20250514",
-  "env": {
-    "OPENAI_API_KEY": "$ANTHROPIC_AUTH_TOKEN",          // Clé primaire Kilo
-    "AUTH_FALLBACK_1": "$ANTHROPIC_AUTH_TOKEN_2",       // Fallback #1
-    "AUTH_FALLBACK_2": "$ANTHROPIC_AUTH_TOKEN_3",        // Fallback #2
-    "AUTH_FALLBACK_3": "$ANTHROPIC_AUTH_TOKEN_4"         // Fallback #3
-  }
-}
-\`\`\`
+Quand une erreur se produit, Overmind peut RETENTER automatiquement avec
+des tokens de secours.
 
-> Kilo utilise \`OPENAI_API_KEY\` comme clé primaire (compatible OpenAI / OpenRouter / etc.).
+**Erreurs retryables :** 401, 429, 500, 502, 503.
 
----
-
-### 📂 EXEMPLE : Variable $VAR simple (sans fallback)
-
-\`\`\`json
-{
-  "model": "claude-sonnet-4-20250514",
-  "env": {
-    "ANTHROPIC_AUTH_TOKEN": "$ANTHROPIC_AUTH_TOKEN",
-    "ANTHROPIC_BASE_URL": "$Z_AI_BASE_URL",
-    "API_TIMEOUT_MS": "$API_TIMEOUT_MS"
-  }
-}
-\`\`\`
-
-Les \`$VAR\` peuvent être sur n'importe quelle valeur de \`env\`.
+**Flow :** Token primaire → \`AUTH_FALLBACK_1\` → \`AUTH_FALLBACK_2\` → \`AUTH_FALLBACK_3\` → ÉCHEC
 
 ---
 
 ### ⚠️ RÈGLES IMPORTANTES
 
-- Les clés \`AUTH_FALLBACK_1\`, \`AUTH_FALLBACK_2\`, \`AUTH_FALLBACK_3\` sont réservées par Overmind pour le retry automatique.
-- La substitution est à **un seul niveau** : \`$MINIMAXI_API_KEY\` est remplacé, mais pas récursivement.
+- Les clés \`AUTH_FALLBACK_1\`, \`AUTH_FALLBACK_2\`, \`AUTH_FALLBACK_3\` sont réservées
+  par Overmind pour le retry automatique.
+- La substitution est à **un seul niveau** : \`$MINIMAXI_API_KEY\` est remplacé,
+  mais pas récursivement.
 - Les tokens sont résolus **avant** le spawn de l'agent.
-- Le retry fonctionne sur erreur **401 (auth), 429 (rate limit), 500/502/503 (server error)** — pas sur les erreurs de réseau simples (timeout, DNS...).
-- Chaque token fallback ne sera testé qu'une seule fois par session d'agent.
-    - Si tous les fallbacks sont épuisés, l'erreur finale est \`RETRYABLE_ERROR_ALL_FALLBACKS_EXHAUSTED\`.`;
-      break;
-
-    case 'hermes':
-      text = `🤖 **EXEMPLE DE CONFIGURATION POUR HERMES (NOUS AGENT)**
-
-### 📂 .claude/settings_[nom_agent].json
-\`\`\`json
-{
-  "model": "MiniMax-M2.7",
-  "env": {
-    "HERMES_AUTH_TOKEN": "$HERMES_AUTH_TOKEN",
-    "HERMES_BASE_URL": "$HERMES_BASE_URL",
-    "HERMES_MODEL": "MiniMax-M2.7",
-    "MAX_TOKENS": "16000"
-  },
-  "enableAllProjectMcpServers": false,
-  "enabledMcpjsonServers": [
-    "postgresql-server",
-    "memory"
-  ],
-  "agent": "nom_agent",
-  "runner": "hermes"
-}
-\`\`\`
-
-### 📂 .env correspondant
-\`\`\`
-# Hermes / Nous Agent Configuration
-HERMES_AUTH_TOKEN=your_hermes_token_here
-HERMES_BASE_URL=https://api.minimax.io
-MAX_TOKENS=16000
-\`\`\`
-
-**Comment ça marche :**
-- Hermes utilise les **3 fichiers standard** comme les autres runners : \`.claude/settings_[agent].json\`, \`.claude/agents/[agent].md\`, \`.claude/.mcp.[agent].json\`
-- Le modèle par défaut est \`MiniMax-M2.7\` (défini dans \`CONFIG.HERMES.DEFAULT_MODEL\`)
-- Les agents sont définis via \`PromptManager\` (\`.claude/agents/[nom].md\`)
-- Les MCP servers sont configurés via \`.claude/.mcp.[agent].json\` (même format que Claude/Kilo)
-- HERMES_DIR est automatiquement injecté au spawn pour l'isolation
-- Pas de fallback token intégré (contrairement à Claude/Kilo) — à implémenter via le réseau de tokens Overmind si besoin
-
-**Modèle par défaut :** \`MiniMax-M2.7\` (via \`CONFIG.HERMES.DEFAULT_MODEL\`)
-
-${interpolationNotice}`;
+- Pour Hermes, le token \`ANTHROPIC_AUTH_TOKEN_5\` (sk-cp-*) a été testé OK sur
+  \`api.minimaxi.com\` mais le compte a un **HTTP 402 "insufficient balance"**
+  au moment de ce guide — utiliser plutôt \`_1\`, \`_2\`, ou \`_7\`.
+- \`_3\` et \`_6\` sont morts (HTTP 401). \`_4\` est rate-limited. \`_E\`, \`_F\`,
+  \`_Y\` sont au format Z.AI (32hex).`;
       break;
   }
 

@@ -7,6 +7,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.35] - 2026-06-07
+
+### Fixed
+- **Sniperbot_analyst MCP server names mismatch** - The settings referenced MCP server names that did NOT exist in `Workflow/.mcp.json`:
+  - Settings had `discord-server`, `x-mcp-server`, `postgresql-server` (kebab-case style).
+  - `.mcp.json` actually has `serveur_discord`, `X`, `serveur_PostGreSQL` (french-mixed case).
+  - Only `memory-server` matched, so the sniperbot loaded 1/4 expected MCP servers.
+- **Fix:** Flipped `enableAllProjectMcpServers: true` in `Workflow/.claude/settings_sniperbot_analyst.json`. Now ALL 9 MCP servers load.
+
+### Why the sniperbot reported "no MCP tools"
+Hermes upstream looks up each name in `Workflow/.mcp.json` and **silently skips** names that don't exist. The sniperbot saw only `memory-server` (the one that matched) — and interpreted the rest as missing.
+
+### Tests
+- All 64/64 tests pass. TSC clean.
+
 ## [2.8.32] - 2026-06-07
 
 ### Fixed
