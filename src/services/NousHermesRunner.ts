@@ -503,6 +503,12 @@ export class NousHermesRunner {
     //   OpenRouter  → "sk-or-..."  → env OPENROUTER_API_KEY (BLOCKED for LLM)
     //   Mistral     → (variable)   → env MISTRAL_API_KEY_*
     //   Other       → unknown      → env ANTHROPIC_AUTH_TOKEN (default Anthropic)
+    //
+    // NOTE: This function-local copy mirrors the canonical implementation in
+    // src/services/hermesTokenResolver.ts. The runner uses these local closures
+    // so it doesn't have to thread env/logger through every call site; the
+    // canonical exported versions exist for testing and for any future caller
+    // that wants the same behavior without instantiating NousHermesRunner.
     const TOKEN_PREFIX_PROVIDERS: Array<{ test: (t: string) => boolean; provider: string; envKey: string }> = [
       // Z.AI: c78a134949fc4c369911c24e9fa4b84c.OZhHX5Obs6qF1ISt (32hex.32hex — 2 blocks)
       { test: (t) => /^[0-9a-f]{32}\.[0-9a-zA-Z]+$/i.test(t), provider: 'zai', envKey: 'ZAI_ANTHROPIC_FALLBACK_KEY' },
@@ -532,43 +538,11 @@ export class NousHermesRunner {
     // ============================================================
     // TOKEN RESOLUTION ORDER (settings.env first, then process.env, then detection)
     // ============================================================
-    // IMPORTANT — provider/credentials mapping (Hermes v0.16.0):
-    //   minimax-cn  → MINIMAX_CN_API_KEY  (NOT ANTHROPIC_AUTH_TOKEN)
-    //   minimax     → MINIMAX_API_KEY
-    //   zai         → GLM_API_KEY or ZAI_ANTHROPIC_FALLBACK_KEY
-    //   z-ai (alt)  → Z_AI_API_KEY
-    //   anthropic   → ANTHROPIC_AUTH_TOKEN (any of _1.._5, _E, _F, _Y)
-    //
-    // The agent's settings_<name>.json MUST use the env var name that matches
-    // its ANTHROPIC_PROVIDER value, otherwise Hermes upstream will silently
-    // 401 even though Overmind has the key. The minimax plugin in Hermes
-    // (plugins/model-providers/minimax/init.py) decides the env var name — not Overmind.
-    //
-    // Resolution order (NEW in 2.8.16+):
-    //   1. settings_<agent>.json env block (explicit, agent-specific — WINS)
-    //   2. agent's .hermes/.env (isolated override)
-    //   3. process.env (global .env via systemd EnvironmentFile)
-    //   4. Detection by token prefix (subtilisation — last resort, maps to right provider)
-    //
-    // (Full list moved to top of scope for use in RAW pre-interpolation capture.)
-    // See const TOKEN_KEYS at top of runHermesAgent() function.
+    // See src/services/hermesTokenResolver.ts for the canonical exported version
+    // and the rationale for the 3-pass strategy. The local closure below
+    // captures agentCustomEnv, TOKEN_KEYS, agentName, logger, and tmpSettingsPath
+    // from the enclosing scope so call sites stay terse.
 
-    /**
-     * Resolve a token with explicit settings priority + provider detection.
-     *
-     * Strategy:
-     *   1. Read settings_<agent>.json env block.
-     *      - If user set a LITERAL token (e.g. "sk-cp-..."), use it directly.
-     *      - If user set a $VAR REFERENCE (e.g. "$GLM_API_KEY_Y"), RESOLVE IT.
-     *        - If $VAR is found in process.env → use the resolved value.
-     *        - If $VAR is NOT found in process.env → FAIL LOUD. Do NOT silently
-     *          fall back to TOKEN_KEYS (the user explicitly said "use THIS var").
-     *      - If user set something else (e.g. template, expression), try to resolve.
-     *   2. If no settings token (or settings has no env block at all), fall back
-     *      to TOKEN_KEYS iteration in priority order from process.env.
-     *   3. For each candidate, sniff the token prefix to know which provider it
-     *      belongs to, and re-map to the right env var name for that provider.
-     */
     function resolveTokenWithDetection(
       explicitSettingsTokens: Array<{ key: string; value: string }>,
     ): { tokenEnvKey: string; tokenValue: string; detectedProvider: string; source: 'settings-explicit' | 'env-fallback' | 'detected' } | null {
@@ -614,25 +588,67 @@ export class NousHermesRunner {
         return { tokenEnvKey: t.key, tokenValue: resolvedValue, detectedProvider: detected.provider, source: 'settings-explicit' };
       }
 
-      // Step 2: iterate TOKEN_KEYS in priority order, picking the first non-empty
+      // Step 2: iterate TOKEN_KEYS in priority order.
+      //
+      // Two passes are needed to avoid a re-map bug where a generic key
+      // (e.g. ANTHROPIC_AUTH_TOKEN=sk-cp-...) would hijack a provider-specific
+      // key the user explicitly set (e.g. MINIMAX_API_KEY=sk-cp-...-DIFFERENT).
+      //
+      // Pass A: prefer keys whose NAME matches the detected provider
+      //         (e.g. tk='MINIMAX_API_KEY' with value sk-cp-* → use as-is).
+      // Pass B: fall back to the first non-empty key, re-mapping its env-var
+      //         name to match the detected provider prefix.
+      //
+      // We must scan ALL candidate values across BOTH passes to know which
+      // provider each one is. So do a single scan that pairs (key, detected).
+
+      type Candidate = { key: string; value: string; detected: ReturnType<typeof detectTokenProvider> };
+      const candidates: Candidate[] = [];
       for (const tk of TOKEN_KEYS) {
         const v = agentCustomEnv[tk];
         if (v && typeof v === 'string' && v.length > 0) {
-          const detected = detectTokenProvider(v);
-          // If the env-var name doesn't match the detected provider, re-map.
-          // (e.g. ANTHROPIC_AUTH_TOKEN=sk-cp-... → real env should be MINIMAX_API_KEY)
-          if (detected.envKey !== tk && detected.provider !== 'unknown') {
-            logger.info(
-              { agentName, sourceKey: tk, detectedProvider: detected.provider, remappedTo: detected.envKey },
-              '[SUBTILISATION] Token prefix detected provider mismatch — re-mapping env var.',
-            );
-            return { tokenEnvKey: detected.envKey, tokenValue: v, detectedProvider: detected.provider, source: 'detected' };
-          }
-          return { tokenEnvKey: tk, tokenValue: v, detectedProvider: detected.provider, source: 'env-fallback' };
+          candidates.push({ key: tk, value: v, detected: detectTokenProvider(v) });
+        }
+      }
+      if (candidates.length === 0) return null;
+
+      // Pass A: any candidate whose env-var name already matches its detected provider
+      // (e.g. MINIMAX_API_KEY=sk-cp-...  →  detected.envKey='MINIMAX_API_KEY' → match).
+      // TOKEN_KEYS ordering means provider-specific keys come first, so this preserves
+      // the user's explicit choice over a generic-key re-map.
+      for (const c of candidates) {
+        if (c.detected.provider !== 'unknown' && c.detected.envKey === c.key) {
+          return {
+            tokenEnvKey: c.key,
+            tokenValue: c.value,
+            detectedProvider: c.detected.provider,
+            source: 'env-fallback',
+          };
         }
       }
 
-      return null;
+      // Pass B: re-map the first candidate to the right provider env-var name.
+      const first = candidates[0];
+      if (first.detected.provider !== 'unknown' && first.detected.envKey !== first.key) {
+        logger.info(
+          { agentName, sourceKey: first.key, detectedProvider: first.detected.provider, remappedTo: first.detected.envKey },
+          '[SUBTILISATION] Token prefix detected provider mismatch — re-mapping env var.',
+        );
+        return {
+          tokenEnvKey: first.detected.envKey,
+          tokenValue: first.value,
+          detectedProvider: first.detected.provider,
+          source: 'detected',
+        };
+      }
+
+      // Pass C (rare): all candidates have provider='unknown' or envKey already matches.
+      return {
+        tokenEnvKey: first.key,
+        tokenValue: first.value,
+        detectedProvider: first.detected.provider,
+        source: 'env-fallback',
+      };
     }
 
     const getAvailableFallbacks = (): Array<{ key: string; value: string }> => {

@@ -5,14 +5,21 @@
 Chaque variable suit cette priorite (la premiere gagne):
 
 ```
-HERMES_HOME/.env  (C:\Users\Deamon\AppData\Local\hermes\.env)
-      ↓
-settings_[agent].json  →  env  (apres interpolation $VAR par process.env)
+process.env  (env du parent, herite par le spawn)
       ↓
 Workflow/.env  (C:\Users\Deamon\Desktop\Backup\Serveur MCP\Workflow\.env)
       ↓
-process.env  (env du parent, herite par le spawn)
+settings_[agent].json  →  env  (apres interpolation $VAR par process.env)
+      ↓
+HERMES_HOME/.env  (C:\Users\Deamon\AppData\Local\hermes\.env)  ← DERNIER MOT
 ```
+
+**Detail du code** (`NousHermesRunner.ts` l.268-456):
+1. `agentCustomEnv = { ...process.env, ...settings.env }` (line 268 puis 384)
+2. Puis lit `overmindHermesSubPath/.env` (le `.hermes/.env` de l'agent) et fait `agentCustomEnv[key] = value` (line 437-456) — ce qui OVERRIDE tout ce qui precede.
+3. Finalement ecrit ce `agentCustomEnv` dans le `.env` final de l'agent (line 722-732) avec dedup sur les cles `*api_key` / `*auth_token`.
+
+Donc le `.hermes/.env` de l'agent a **toujours le dernier mot**. Si tu mets `MINIMAX_API_KEY=*** dans le .hermes/.env, il ecrase `MINIMAX_API_KEY` du process.env et du settings.
 
 **MAIS** pour `OPENROUTER_API_KEY` uniquement:
 - Hermes lit d'abord `HERMES_HOME/.env` puis `os.environ`
@@ -147,6 +154,27 @@ MINIMAX_CN_API_KEY=ton_token_minimax_ici
 
 ## Comment Hermes decide quel provider utiliser
 
+Il y a DEUX niveaux de decision:
+
+### Niveau 1: Overmind runner (avant spawn)
+
+`NousHermesRunner.writeAuthJson()` (l.782-918) vote entre 3 signaux pour determiner le `effectiveProvider` qui sera seed dans `auth.json` et le `.env` de l'agent:
+
+1. **Token prefix** (le plus fiable) — `detectTokenProvider()` reconnait:
+   - `sk-cp-...` ou `sk-mm-...` → `minimax`
+   - `32hex.32hex` ou 32-char hex → `zai`
+   - `sk-ant-...` → `anthropic`
+   - `sk-or-...` → `openrouter` (mais BLOQUE pour LLM par la suite)
+   - `sk-...` (autre) → `openai`
+2. **BASE_URL** (tres fiable, plus specifique que le token pour CN vs GLOBAL) — `api.minimaxi.com` → `minimax-cn`, `api.minimax.com` → `minimax`, `api.z.ai/api/coding/paas/v4` → `zai`, `anthropic.com` → `anthropic`, `openai.com` → `openai`.
+3. **ANTHROPIC_PROVIDER** hint du settings (le moins fiable).
+
+**Cas special CN vs GLOBAL**: `sk-cp-` est ambigu entre `minimax` et `minimax-cn` (meme prefix). Si l'URL dit `minimaxi` (avec le `i`), c'est CN. Si `minimax` (sans le `i`), c'est GLOBAL. **L'URL gagne dans ce cas precis** parce qu'elle est la seule a desambiguïser.
+
+### Niveau 2: Hermes upstream (apres spawn)
+
+Hermes relit son `auth.json` + `HERMES_HOME/.env` + `os.environ` avec sa propre logique (dans `hermes_cli/auth.py`):
+
 ```
 1.  Si `provider` explicite dans config.yaml → utilise ce provider
 2.  Sinon si `ANTHROPIC_BASE_URL` contient openrouter → "openrouter"
@@ -156,7 +184,7 @@ MINIMAX_CN_API_KEY=ton_token_minimax_ici
 4.  Sinon fallback: model.default dans config.yaml
 ```
 
-Le model resolve le provider. Donc `ANTHROPIC_MODEL=glm-5.1` sans provider explicite → `zai`. `ANTHROPIC_MODEL=MiniMax-M2.7` → `minimax-cn`.
+**Le runner a deja vote au Niveau 1** — donc ce que tu mets dans `auth.json` (via `writeAuthJson()`) determine ce qu'Hermes verra au Niveau 2. Si le runner a seed `minimax-cn` mais que `config.yaml` dit `provider: minimax`, Hermes va probablement se plaindre. **Garde les deux alignes** ou laisse le runner ecrire le `config.yaml` (ce qu'il fait deja a chaque run).
 
 ---
 

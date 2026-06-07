@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.8.25] - 2026-06-07
+
+### Fixed
+- **[Lib] `envUtils.ts`** — `interpolateEnvVars()` regex bug: the previous `\$(\w+)|\${(\w+)}` had only ONE capture group (so the callback received `undefined` for the second arg and `${VAR}` crashed on `process.env[undefined]`), and it did not consume the closing `}` (leaked as literal text). Fixed regex: `\$\{(\w+)\}|\$(\w+)` with explicit capture group on each alternation branch and closing brace consumed.
+- **[Services] `NousHermesRunner.ts`** — Token re-map hijack bug: when both a generic key (e.g. `ANTHROPIC_AUTH_TOKEN=*** and a provider-specific key (e.g. `MINIMAX_API_KEY=sk-cp-...DIFFERENT`) were set, the old code took `ANTHROPIC_AUTH_TOKEN` first, re-mapped it to `MINIMAX_API_KEY`, and ignored the user explicit choice. New 3-pass strategy: Pass A prefers the candidate whose env-var name already matches its detected provider; Pass B re-maps the first candidate to the right provider; Pass C is the rare fallback.
+- **[Docs] `provider-config-map.md`** — Corrected the priority order (was inverted: HERMES_HOME/.env listed first, but the code reads process.env first then settings then .hermes/.env which has the last word). Added a "Niveau 1 vs Niveau 2" section explaining that the runner votes 3-signal to seed auth.json, and Hermes upstream re-reads with its own model-name-based logic.
+- **[Docs] `SUBTILISATION_EXPLAINED.txt`** — Added the CN vs GLOBAL disambiguation case (sk-cp- prefix is shared between both, URL is the only signal that disambiguates). Documented the new 3-pass strategy and the canonical vs local-closure split.
+
+### Added
+- **[Services] `hermesTokenResolver.ts`** — Canonical, side-effect-free module exporting `detectTokenProvider` and `resolveTokenWithDetection`. The runner keeps its local closure for ergonomics, but the canonical version is the source of truth and is what the tests exercise.
+- **[Tests] `envUtils.test.ts`** — 10 unit tests covering the `${VAR}` bug fix, recursing into objects/arrays, and defensive behavior.
+- **[Tests] `hermesSubtilisation.test.ts`** — 15 unit tests covering Z.AI token detection (32hex.32hex, 32hex, 16+hex), MiniMax (sk-cp-, sk-mm-), anthropic, openrouter, openai, unknown; 3-pass resolution strategy; Pass A re-map hijack fix; real Z.AI + MiniMax end-to-end scenarios.
 ## [2.8.15] - 2026-06-06
 
 ### Fixed

@@ -21,9 +21,17 @@ export function interpolateEnvVars(
   visited: WeakSet<object> = new WeakSet(),
 ): Interpolatable {
   if (typeof obj === 'string') {
-    // Replace unresolved vars with empty string and track which keys are missing
-    return obj.replace(/\$(\w+)|\${(\w+)}/g, (_, name1, name2) => {
-      const name = name1 || name2;
+    // Match $VAR and ${VAR}. The closing '}' MUST be inside the match so it does
+    // not leak into the output. The previous regex `\$(\w+)|\${\w+}` (a) had only
+    // one capture group (so `name2` was always undefined, and `${VAR}` crashed
+    // on `process.env[undefined]`), and (b) did not consume the '}' — leaking
+    // it as literal text. Fixed: explicit capture group on each alternation branch,
+    // closing brace consumed by the first branch.
+    return obj.replace(/\$\{(\w+)\}|\$(\w+)/g, (_, braced, bare) => {
+      const name = braced || bare;
+      // Defensive: should never happen, but if name is undefined (no capture
+      // matched), treat as literal text rather than crashing on process.env[undefined].
+      if (name === undefined) return _;
       const value = process.env[name];
       if (value === undefined) unresolvedVars.push(name);
       return value ?? '';
