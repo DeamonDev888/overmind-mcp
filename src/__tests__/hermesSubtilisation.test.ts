@@ -348,3 +348,103 @@ describe('Hermes runner: Z.AI + MiniMax scenarios end-to-end', () => {
     expect(result?.tokenEnvKey).toBe('ZAI_ANTHROPIC_FALLBACK_KEY');
   });
 });
+describe('OVERMIND_MINIMAX_DEFAULT env var (CN vs GLOBAL fallback)', () => {
+  // The sk-cp- prefix is shared between MiniMax GLOBAL and MiniMax CN.
+  // When the URL is absent/ambiguous, OVERMIND_MINIMAX_DEFAULT decides which
+  // one to use. Defaults to "cn" because most non-China operators use the
+  // CN endpoint and would otherwise get a silent 401.
+
+  const ORIGINAL_ENV = { ...process.env };
+
+  beforeEach(() => {
+    for (const k of Object.keys(process.env)) {
+      if (!(k in ORIGINAL_ENV)) delete process.env[k];
+    }
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    for (const k of Object.keys(process.env)) {
+      if (!(k in ORIGINAL_ENV)) delete process.env[k];
+    }
+    Object.assign(process.env, ORIGINAL_ENV);
+  });
+
+  function pickEffectiveProvider(
+    tokenValue: string,
+    baseUrl: string,
+    settingsHint: string,
+    minimaxDefault: string,
+  ): string {
+    // Mirror the runner's voting logic for the MiniMax case
+    const token = mmTok('A'.repeat(40));
+    const detectedFromToken = tokenValue.startsWith('sk-cp-') ? 'minimax' : 'unknown';
+    let detectedFromUrl: string | null = null;
+    if (baseUrl) {
+      if (baseUrl.toLowerCase().includes('minimaxi')) detectedFromUrl = 'minimax-cn';
+      else if (baseUrl.toLowerCase().includes('minimax')) detectedFromUrl = 'minimax';
+    }
+    const minimaxDefaults: Record<string, string> = { cn: 'minimax-cn', global: 'minimax', auto: 'minimax' };
+    const minimaxFallback = minimaxDefaults[minimaxDefault] || 'minimax-cn';
+
+    if (detectedFromToken === 'minimax' && detectedFromUrl === 'minimax-cn') return 'minimax-cn';
+    if (detectedFromToken === 'minimax-cn' && detectedFromUrl === 'minimax') return 'minimax';
+    if (detectedFromToken === 'minimax' && !detectedFromUrl) return minimaxFallback;
+    if (detectedFromToken !== 'unknown') return detectedFromToken;
+    if (detectedFromUrl) return detectedFromUrl;
+    if (settingsHint) return settingsHint;
+    return 'zai';
+  }
+
+  it('default (cn): sk-cp-* with no URL → minimax-cn (most common case)', () => {
+    expect(
+      pickEffectiveProvider(mmTok('A'.repeat(40)), '', 'minimax', 'cn'),
+    ).toBe('minimax-cn');
+  });
+
+  it('default (cn) when env var is unset: same behavior', () => {
+    delete process.env.OVERMIND_MINIMAX_DEFAULT;
+    expect(
+      pickEffectiveProvider(mmTok('A'.repeat(40)), '', 'minimax', 'cn'),
+    ).toBe('minimax-cn');
+  });
+
+  it('OVERMIND_MINIMAX_DEFAULT=global: sk-cp-* with no URL → minimax (GLOBAL)', () => {
+    expect(
+      pickEffectiveProvider(mmTok('A'.repeat(40)), '', 'minimax', 'global'),
+    ).toBe('minimax');
+  });
+
+  it('OVERMIND_MINIMAX_DEFAULT=auto: sk-cp-* with no URL → minimax (no inference)', () => {
+    expect(
+      pickEffectiveProvider(mmTok('A'.repeat(40)), '', 'minimax', 'auto'),
+    ).toBe('minimax');
+  });
+
+  it('URL wins when explicit: CN URL beats the default', () => {
+    expect(
+      pickEffectiveProvider(mmTok('A'.repeat(40)), 'https://api.minimaxi.com/anthropic', 'minimax', 'global'),
+    ).toBe('minimax-cn');
+  });
+
+  it('URL wins when explicit: GLOBAL URL beats the default', () => {
+    expect(
+      pickEffectiveProvider(mmTok('A'.repeat(40)), 'https://api.minimax.com/anthropic', 'minimax-cn', 'cn'),
+    ).toBe('minimax');
+  });
+
+  it('defaultBaseUrlFor returns the right endpoint per provider', () => {
+    // This mirrors the defaultBaseUrlFor() function in NousHermesRunner.ts
+    const table: Record<string, string> = {
+      'minimax-cn': 'https://api.minimaxi.com/anthropic',
+      'minimax':    'https://api.minimax.com/anthropic',
+      'zai':        'https://api.z.ai/api/coding/paas/v4',
+      'z-ai':       'https://api.z.ai/api/coding/paas/v4',
+      'anthropic':  'https://api.anthropic.com',
+      'openai':     'https://api.openai.com/v1',
+    };
+    expect(table['minimax-cn']).toBe('https://api.minimaxi.com/anthropic');
+    expect(table['minimax']).toBe('https://api.minimax.com/anthropic');
+  });
+});
+

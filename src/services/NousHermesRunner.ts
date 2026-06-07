@@ -3,7 +3,7 @@ import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
+import { CONFIG, resolveConfigPath, getWorkspaceDir, getAgentHermesHome, getAgentOvermindHome } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { linkSessionToPid } from '../lib/processRegistry.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
@@ -80,6 +80,23 @@ export interface RunAgentResult {
   model?: string; // resolved real model ID
   nickname?: string; // original value from config (if different)
   fallbackUsed?: string; // which fallback token was used (e.g. 'AUTH_FALLBACK_1')
+}
+
+/**
+ * Default base URL for a given provider. Used when settings_<agent>.json
+ * doesn't specify ANTHROPIC_BASE_URL. Each provider has its canonical
+ * endpoint baked in here so the runner doesn't need an external config.
+ */
+function defaultBaseUrlFor(provider: string): string {
+  switch (provider) {
+    case 'minimax-cn': return 'https://api.minimaxi.com/anthropic';
+    case 'minimax':    return 'https://api.minimax.com/anthropic';
+    case 'zai':
+    case 'z-ai':       return 'https://api.z.ai/api/coding/paas/v4';
+    case 'anthropic':  return 'https://api.anthropic.com';
+    case 'openai':     return 'https://api.openai.com/v1';
+    default:           return 'https://api.z.ai/api/coding/paas/v4';
+  }
 }
 
 /**
@@ -253,12 +270,14 @@ export class NousHermesRunner {
     const timeoutMs = this.timeoutMs;
     const HARD_TIMEOUT_MS = 60000;
 
-    // HERMES_HOME setup
-    const overmindHermesPath = path.resolve(cwd, '.overmind', 'hermes', agentName ? `agent_${agentName}` : 'central');
-    const overmindHermesSubPath = path.join(overmindHermesPath, '.hermes');
+    // HERMES_HOME setup — use the canonical helper (multi-OS, multi-install safe).
+    // This replaces the previous cwd-relative resolution that caused HERMES_HOME
+    // drift between dev/prod installs and between different spawn cwd's.
+    const overmindHermesPath = getAgentOvermindHome(agentName);
+    const overmindHermesSubPath = getAgentHermesHome(agentName);
 
     if (agentName && !fs.existsSync(overmindHermesPath)) {
-      return { result: '', error: `INVALID_AGENT: Agent Hermes "${agentName}" non trouvé.` };
+      return { result: '', error: `INVALID_AGENT: Agent Hermes "${agentName}" non trouvé (HERMES_HOME=${overmindHermesSubPath}).` };
     }
 
     // Load agent settings + MCP config (same pattern as ClaudeRunner)
@@ -277,7 +296,7 @@ export class NousHermesRunner {
       // OVERMIND_AGENT_HOME tells Hermes (v0.13.0+) to read agent-specific .env FIRST
       // get_env_value() in Hermes checks OVERMIND_AGENT_HOME/.hermes/.env before HERMES_HOME/.env
       // This allows $VAR expansion done by Overmind to take precedence over gateway .env
-      ...(agentName ? { OVERMIND_AGENT_HOME: path.resolve(cwd, '.overmind', 'hermes', `agent_${agentName}`) } : {}),
+      ...(agentName ? { OVERMIND_AGENT_HOME: getAgentOvermindHome(agentName) } : {}),
       // NOTE: do NOT pre-seed GLM_API_KEY with '' here. The real value comes from
       // settings_<agent>.json (merged below) or from the agent's .hermes/.env file.
       // Seeding '' here used to win against Object.assign() whenever interpolateEnvVars()
@@ -705,6 +724,10 @@ export class NousHermesRunner {
     // HERMES_HOME setup
     if (!fs.existsSync(overmindHermesSubPath)) fs.mkdirSync(overmindHermesSubPath, { recursive: true });
     agentCustomEnv.HERMES_HOME = overmindHermesSubPath;
+    // HOME / USERPROFILE override: point Hermes at the parent .overmind dir,
+    // NOT the cwd. This makes relative .hermes lookups inside Hermes
+    // (e.g. `~/.hermes/.env` resolution) resolve to the same canonical
+    // location regardless of where the spawn came from.
     if (process.platform === 'win32') agentCustomEnv.USERPROFILE = overmindHermesPath;
     else agentCustomEnv.HOME = overmindHermesPath;
 
@@ -799,9 +822,31 @@ export class NousHermesRunner {
         if (!tokenInfo || !overmindHermesSubPath) return;
         try {
           const authPath = path.join(overmindHermesSubPath, 'auth.json');
-          const auth: Record<string, unknown> = { version: 1, providers: {}, credential_pool: {} };
-          if (fs.existsSync(authPath)) Object.assign(auth, JSON.parse(fs.readFileSync(authPath, 'utf8')));
-          if (!auth.credential_pool) auth.credential_pool = {};
+          // Read existing auth.json to preserve non-credential_pool state
+          // (e.g. oauth tokens, settings, version). But we PRUNE credential_pool
+          // entries for OTHER providers — those are stale from previous provider
+          // configs and Hermes may pick them up by mistake, causing silent 401s
+          // on the wrong endpoint. This is the source of the "auth.json drift"
+          // bug where the runner would seed `minimax-cn` credentials while a stale
+          // `zai` entry with last_status="exhausted" still existed in the pool.
+          let preservedAuth: Record<string, unknown> = { version: 1, providers: {} };
+          if (fs.existsSync(authPath)) {
+            try {
+              const parsed = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+              // Keep the version + any oauth providers; drop credential_pool entirely
+              // (it will be re-seeded below with only the effectiveProvider's entries).
+              preservedAuth = {
+                version: parsed.version ?? 1,
+                providers: parsed.providers ?? {},
+              };
+            } catch (e) {
+              logger.warn({ authPath, error: e }, 'auth.json was malformed; re-creating from scratch');
+            }
+          }
+          const auth: Record<string, unknown> = {
+            ...preservedAuth,
+            credential_pool: {},
+          };
           const cleanCp = auth.credential_pool as Record<string, unknown[]>;
           // Determine effective provider from MULTIPLE signals
           // Priority: TOKEN PREFIX (most reliable) > BASE_URL (very reliable) > settings.ANTHROPIC_PROVIDER (hint only)
@@ -834,6 +879,20 @@ export class NousHermesRunner {
           // SPECIAL CASE: if token says "minimax" and URL says "minimax-cn" (or vice versa),
           // the URL wins because the token prefix sk-cp- is shared between both endpoints.
           // The URL is the only signal that can disambiguate CN vs GLOBAL.
+          //
+          // DEFAULT FOR MiniMax WHEN AMBIGUOUS:
+          // The sk-cp- prefix is shared between MiniMax GLOBAL and MiniMax CN. The
+          // URL is the only signal that disambiguates. For users whose setup
+          // exclusively uses CN tokens (the most common case for non-China
+          // operators), an absent/ambiguous URL should default to CN rather than
+          // silently picking GLOBAL and getting a 401. Override via env var:
+          //   OVERMIND_MINIMAX_DEFAULT=cn     (default: CN when ambiguous)
+          //   OVERMIND_MINIMAX_DEFAULT=global (treat sk-cp-* as GLOBAL)
+          //   OVERMIND_MINIMAX_DEFAULT=auto   (never infer, require URL to disambiguate)
+          const minimaxDefault = (process.env.OVERMIND_MINIMAX_DEFAULT || 'cn').toLowerCase();
+          const minimaxDefaults: Record<string, string> = { cn: 'minimax-cn', global: 'minimax', auto: 'minimax' };
+          const minimaxFallback = minimaxDefaults[minimaxDefault] || minimaxDefaults.cn;
+
           let effectiveProvider: string;
           if (detectedFromToken.provider === 'minimax' && detectedFromUrl === 'minimax-cn') {
             // URL has more specific info than the token prefix
@@ -847,6 +906,13 @@ export class NousHermesRunner {
             logger.info(
               { agentName, tokenSays: 'minimax-cn', urlSays: 'minimax', settingsHint },
               '[SUBTILISATION] URL is more specific than token prefix (minimax vs minimax-cn) — using URL.',
+            );
+          } else if (detectedFromToken.provider === 'minimax' && !detectedFromUrl) {
+            // Token says MiniMax, no URL hint — use OVERMIND_MINIMAX_DEFAULT
+            effectiveProvider = minimaxFallback;
+            logger.info(
+              { agentName, tokenSays: 'minimax', urlSays: '(none)', minimaxDefault, effectiveProvider },
+              '[SUBTILISATION] MiniMax token without explicit URL — applying OVERMIND_MINIMAX_DEFAULT.',
             );
           } else if (detectedFromToken.provider !== 'unknown') {
             effectiveProvider = detectedFromToken.provider;
@@ -873,7 +939,7 @@ export class NousHermesRunner {
             id: `${effectiveProvider}-default`, label: tokenInfo.tokenEnvKey, auth_type: 'api_key',
             priority: 0, source: `env:${tokenInfo.tokenEnvKey}`, access_token: tokenInfo.tokenValue,
             last_status: null, last_error_code: null,
-            base_url: baseUrlHint || 'https://api.z.ai/api/coding/paas/v4',
+            base_url: baseUrlHint || defaultBaseUrlFor(effectiveProvider),
             request_count: 0,
           }];
           fs.writeFileSync(authPath, JSON.stringify(auth, null, 2), 'utf8');
@@ -895,7 +961,7 @@ export class NousHermesRunner {
           dotLines.push(`ANTHROPIC_PROVIDER=${effectiveProvider}`);
 
           // 3. ANTHROPIC_BASE_URL (from settings, or fallback)
-          const resolvedBaseUrl = baseUrlHint || 'https://api.z.ai/api/coding/paas/v4';
+          const resolvedBaseUrl = baseUrlHint || defaultBaseUrlFor(effectiveProvider);
           dotLines.push(`ANTHROPIC_BASE_URL=${resolvedBaseUrl}`);
 
           // 4. ANTHROPIC_AUTH_TOKEN = literal token value (for backward compat with older Hermes versions)
@@ -925,7 +991,7 @@ export class NousHermesRunner {
 
           fs.writeFileSync(dotEnvPath, dotLines.join('\n') + '\n', 'utf8');
           logger.info(
-            { agentName, effectiveProvider, baseUrl: resolvedBaseUrl, model: finalModel, sourceKey: tokenInfo.tokenEnvKey, detectedProvider: detectedFromToken.provider },
+            { agentName, effectiveProvider, baseUrl: resolvedBaseUrl, model: finalModel, sourceKey: tokenInfo.tokenEnvKey, detectedProvider: detectedFromToken.provider, envKeysWritten: dotLines.length },
             '[AUTH] Wrote agent .env with 4 canonical Hermes fields + provider-specific seeds.',
           );
         } catch (e) {

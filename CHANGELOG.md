@@ -16,6 +16,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **[Services] `hermesTokenResolver.ts`** — Canonical, side-effect-free module exporting `detectTokenProvider` and `resolveTokenWithDetection`. The runner keeps its local closure for ergonomics, but the canonical version is the source of truth and is what the tests exercise.
 - **[Tests] `envUtils.test.ts`** — 10 unit tests covering the `${VAR}` bug fix, recursing into objects/arrays, and defensive behavior.
 - **[Tests] `hermesSubtilisation.test.ts`** — 15 unit tests covering Z.AI token detection (32hex.32hex, 32hex, 16+hex), MiniMax (sk-cp-, sk-mm-), anthropic, openrouter, openai, unknown; 3-pass resolution strategy; Pass A re-map hijack fix; real Z.AI + MiniMax end-to-end scenarios.
+## [2.8.27] - 2026-06-07
+
+### Fixed
+- **[Lib] `config.ts`** — Added canonical `getAgentHermesHome(agentName)` and
+  `getAgentOvermindHome(agentName)` helpers. Previous code computed HERMES_HOME
+  from `process.cwd()` which was non-deterministic (any process spawned from
+  a different cwd would create or read a different HERMES_HOME). This caused
+  "two HERMES_HOME" drift where one process wrote `.hermes/.env` to
+  `<workflow>/.overmind/...` while another read from
+  `<backup root>/.overmind/...` — leading to stale credentials, auth.json
+  drift, and silent 401s on the wrong endpoint.
+- **[Services] `NousHermesRunner.ts`** — Switched all HERMES_HOME references
+  to the new helper. The runner no longer cares about cwd for path resolution.
+- **[Services] `NousHermesRunner.ts`** — `auth.json` write now PRUNES stale
+  `credential_pool` entries from previous provider configurations instead
+  of merging them. Previously, an agent that switched from Z.AI to MiniMax
+  would have both buckets in auth.json, and Hermes could pick the stale
+  `zai` entry with `last_status="exhausted"` instead of the freshly-seeded
+  `minimax-cn` entry. The version + oauth providers from the existing
+  auth.json are preserved; only `credential_pool` is re-seeded from scratch
+  with the effectiveProvider's entries.
+
+### Multi-OS / multi-install
+- **`OVERMIND_AGENT_HOME`** env var now wins (operator-declared, e.g. via
+  systemd EnvironmentFile or `npm -g sudo` install script).
+- **Linux/Mac prod** (`sudo npm i -g overmind-mcp`): uses
+  `$HOME/.overmind/hermes/agent_<name>/.hermes` as canonical HOME-based path.
+- **Windows prod** (npm -g): uses
+  `%LOCALAPPDATA%\overmind\hermes\agent_<name>\.hermes`.
+- **Dev local** (`pnpm dev` from source repo): uses workspace-relative path
+  if it already exists (backward compat), else falls through to HOME.
+- **HOME override** (`HOME` / `USERPROFILE` / `LOCALAPPDATA`) is propagated
+  to the spawned Hermes subprocess so relative `~/.hermes/.env` lookups
+  inside Hermes resolve to the same canonical location.
+
+### Added
+- **[Tests] `agentHermesHome.test.ts`** — 9 tests covering all 3 install modes
+  (operator-declared, legacy workspace, HOME-based) on both Linux and Windows
+  platforms. Validates cwd-independence explicitly.
+
+## [2.8.26] - 2026-06-07
+
+### Fixed
+- **[Services] `NousHermesRunner.ts`** — MiniMax CN/GLOBAL disambiguation: when a token with the `sk-cp-` prefix is detected WITHOUT an explicit `ANTHROPIC_BASE_URL` (or with an ambiguous URL), the runner now defaults to `minimax-cn` instead of `minimax` (GLOBAL). The previous behavior caused silent 401s for users whose setup exclusively uses CN tokens. Configurable via `OVERMIND_MINIMAX_DEFAULT` env var (`cn` | `global` | `auto`).
+- **[Services] `NousHermesRunner.ts`** — Default `base_url` per provider is now baked into the runner (`defaultBaseUrlFor()`). Previously the fallback was always Z.AI, causing `auth.json` to be seeded with the wrong endpoint for non-Z.AI providers. Each provider now has its canonical endpoint as the fallback.
+
+### Changed
+- **[Settings] `sniperbot_analyst`** — Switched to MiniMax CN. `ANTHROPIC_BASE_URL` now points to `https://api.minimaxi.com/anthropic` and `ANTHROPIC_PROVIDER=minimax-cn` (was GLOBAL).
+
+### Added
+- **[Env] `OVERMIND_MINIMAX_DEFAULT`** — New env var controlling the MiniMax CN vs GLOBAL default. Defaults to `cn`. Documented in `provider-config-map.md` and `SUBTILISATION_EXPLAINED.txt`.
+- **[Tests] `hermesSubtilisation.test.ts`** — 7 new tests covering `OVERMIND_MINIMAX_DEFAULT` behavior and `defaultBaseUrlFor()` mapping.
 ## [2.8.15] - 2026-06-06
 
 ### Fixed

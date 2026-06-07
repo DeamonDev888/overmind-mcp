@@ -115,7 +115,7 @@ Pour qu'un agent utilise le token Y (secondary) au lieu de E (primary), le setti
 | Provider ID | `minimax-cn` | config.yaml ou settings |
 | API Key | `MINIMAX_CN_API_KEY` **uniquement** | `HERMES_HOME/.env` → `os.environ` |
 | Base URL | `https://api.minimaxi.com/anthropic` | hardcoded dans ProviderConfig |
-| Model | `MiniMax-M2.7` | settings `env.ANTHROPIC_MODEL` |
+| Model | `MiniMax-M3` | settings `env.ANTHROPIC_MODEL` |
 
 ```json
 // settings_[agent].json — MiniMax correct
@@ -123,17 +123,41 @@ Pour qu'un agent utilise le token Y (secondary) au lieu de E (primary), le setti
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "$MINIMAX_CN_API_KEY",
     "ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic",
-    "ANTHROPIC_MODEL": "MiniMax-M2.7"
+    "ANTHROPIC_MODEL": "MiniMax-M3"
   }
 }
 ```
 
 ```bash
-# .env minimal pour MiniMax
+# .env minimal pour MiniMax CN
 MINIMAX_CN_API_KEY=ton_token_minimax_ici
 ```
 
 **auth.json** stocke sous `MINIMAX_CN_API_KEY`.
+
+#### MiniMax CN par défaut (convention)
+
+Le préfixe `sk-cp-` est partagé entre MiniMax GLOBAL (`api.minimax.com`) et
+MiniMax CN (`api.minimaxi.com`). L'URL est le seul signal qui disambiguïse.
+Pour les setups où TOUS les tokens MiniMax sont CN (cas le plus commun),
+le runner a un fallback par défaut : quand un token `sk-cp-*` est détecté
+sans URL explicite, on bascule sur CN.
+
+Controlable via env var :
+
+```bash
+# Défaut (recommandé pour les setups CN-only)
+OVERMIND_MINIMAX_DEFAULT=cn      # sk-cp-* sans URL → minimax-cn
+
+# Pour les setups GLOBAL-only
+OVERMIND_MINIMAX_DEFAULT=global  # sk-cp-* sans URL → minimax
+
+# Strict mode (jamais d'inference, URL obligatoire)
+OVERMIND_MINIMAX_DEFAULT=auto    # sk-cp-* sans URL → minimax (no override)
+```
+
+Si une URL explicite est présente dans `ANTHROPIC_BASE_URL`, elle gagne
+toujours sur `OVERMIND_MINIMAX_DEFAULT`.
 
 ---
 
@@ -151,6 +175,40 @@ MINIMAX_CN_API_KEY=ton_token_minimax_ici
 **auth.json** a une entree OpenRouter — si le status est `exhausted`, Hermes ne retry plus mais peut quand meme picker le provider "openrouter" dans le credential pool.
 
 ---
+
+## HERMES_HOME resolution (multi-OS, multi-install)
+
+Chaque agent Hermes a son propre HERMES_HOME. Le path est resolu de maniere
+deterministe par `getAgentHermesHome(agentName)` dans `src/lib/config.ts`.
+
+Ordre de resolution (la premiere gagne):
+
+```
+OVERMIND_AGENT_HOME  (env var, set par l'install ou systemd)
+      ↓
+<workspace>/.overmind/hermes/agent_<name>/.hermes  (legacy, si deja existant)
+      ↓
+$HOME/.overmind/hermes/agent_<name>/.hermes                  (Linux/Mac sudo npm -g)
+%LOCALAPPDATA%\overmind\hermes\agent_<name>\.hermes        (Windows npm -g)
+%USERPROFILE%\overmind\hermes\agent_<name>\.hermes         (Windows fallback)
+```
+
+Pour un agent nomme `sniperbot_analyst`:
+- Dev local (workspace = `C:\Users\Deamon\Desktop\Backup\Serveur MCP\Workflow`):
+  `Workflow\.overmind\hermes\agent_sniperbot_analyst\.hermes` (si deja cree)
+- Prod Linux: `~/.overmind/hermes/agent_sniperbot_analyst/.hermes`
+- Prod Windows: `%LOCALAPPDATA%\overmind\hermes\agent_sniperbot_analyst\.hermes`
+
+**Pourquoi c'est important**: avant, le runner Overmind calculait HERMES_HOME
+depuis `process.cwd()`. Si le sniper etait lance depuis `C:\Users\Deamon\Desktop\Backup\Serveur MCP\`
+et le runner depuis `Workflow\`, ils lisaient des `.hermes/.env` differents
+et ecrivaient dans des `auth.json` differents. Maintenant, c'est cwd-independent.
+
+Pour forcer un chemin explicite (ex: deploy Docker), set:
+```bash
+export OVERMIND_AGENT_HOME=/var/lib/overmind/hermes
+```
+
 
 ## Comment Hermes decide quel provider utiliser
 
