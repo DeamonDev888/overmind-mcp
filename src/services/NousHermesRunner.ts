@@ -30,26 +30,50 @@ const logger = pino({ name: 'NousHermesRunner' });
 // orphelin. On utilise taskkill /F /T pour propager le kill au sous-arbre complet.
 const killProcessTree = (child: ChildProcess): Promise<void> => {
   return new Promise((resolve) => {
-    if (!child || child.exitCode !== null || child.killed) {
+    if (!child) {
+      logger.debug('[KILL] No child process reference provided.');
       resolve();
       return;
     }
+    if (child.exitCode !== null || child.killed) {
+      logger.debug({ pid: child.pid, exitCode: child.exitCode, killed: child.killed }, '[KILL] Process is already dead or marked killed.');
+      resolve();
+      return;
+    }
+    logger.info({ pid: child.pid }, '[KILL] Initiating process tree termination...');
     let settled = false;
     const finish = () => {
       if (settled) return;
       settled = true;
+      logger.debug({ pid: child.pid }, '[KILL] Process tree termination sequence completed.');
       resolve();
     };
     child.once('exit', finish);
-    if (process.platform === 'win32' && child.pid) {
-      exec(`taskkill /F /T /PID ${child.pid}`, () => {
-        // taskkill peut échouer si le process est déjà mort
+    if (process.platform === 'win32' && child.pid && typeof child.pid === 'number' && child.pid > 0) {
+      const cmd = `taskkill /F /T /PID ${child.pid}`;
+      logger.debug({ cmd }, '[KILL] Executing Windows taskkill...');
+      exec(cmd, (err, stdout, stderr) => {
+        if (err) {
+          logger.debug({ err, stderr }, '[KILL] taskkill failed or process was already dead.');
+        } else {
+          logger.debug({ stdout }, '[KILL] taskkill completed successfully.');
+        }
       });
     } else {
-      try { child.kill('SIGTERM'); } catch { /* ignored */ }
+      try { 
+        logger.debug({ pid: child.pid }, '[KILL] Dispatched SIGTERM signal.');
+        child.kill('SIGTERM'); 
+      } catch (e) {
+        logger.debug({ pid: child.pid, error: e }, '[KILL] SIGTERM dispatch failed.');
+      }
       setTimeout(() => {
         if (child.exitCode === null && !child.killed) {
-          try { child.kill('SIGKILL'); } catch { /* ignored */ }
+          try { 
+            logger.warn({ pid: child.pid }, '[KILL] SIGTERM ignored. Escalating to SIGKILL...');
+            child.kill('SIGKILL'); 
+          } catch (e) {
+            logger.debug({ pid: child.pid, error: e }, '[KILL] SIGKILL dispatch failed.');
+          }
         }
       }, 2000);
     }
@@ -203,12 +227,12 @@ async function findHermesBinary(): Promise<string> {
 }
 
 /**
- * NousHermesRunner — Runner polyglote pour Hermes Agent (Overmind 2.8.27+).
+ * NousHermesRunner — Runner polyglotte pour Hermes Agent (Overmind 2.8.27+).
  *
  *  • Providers : OpenAI, MiniMax GLOBAL/CN, Zhipu/GLM, Mistral, NVIDIA NIM, OpenRouter (embeddings only)
  *  • Lit settings_<agent>.json + .mcp.<agent>.json depuis .claude/ comme les autres runners
  *  • Interpolation $VAR et ${VAR} sur tout settings + mcp config (via envUtils, regex fix 2.8.25)
- *  • Subtilisation 3-pass (Pass 1: settings-explicit, Pass A: prefer provider-specific,
+ *  • Sélection/Emprunt de jeton 3-pass (Pass 1: settings-explicit, Pass A: prefer provider-specific,
  *    Pass B: re-map generic key, Pass C: rare fallback) — see hermesTokenResolver.ts
  *  • CN/GLOBAL disambiguation for sk-cp-* via ANTHROPIC_BASE_URL (URL wins)
  *  • OVERMIND_MINIMAX_DEFAULT=cn|global|auto for setups where all MiniMax tokens are CN
@@ -219,56 +243,61 @@ async function findHermesBinary(): Promise<string> {
  *  • HOME/USERPROFILE propagated to spawned Hermes so ~/.hermes lookups resolve canonically
  */
 function filterConfigYaml(sourceYamlPath: string, allowedServers: string[]): string {
-  if (!fs.existsSync(sourceYamlPath)) return 'mcp_servers: {}\n';
-  const yamlText = fs.readFileSync(sourceYamlPath, 'utf8');
-  const lines = yamlText.split(/\r?\n/);
-  
-  let inMcpServers = false;
-  let currentServerName = '';
-  const serverBlocks: Record<string, string[]> = {};
-  const headerLines: string[] = [];
-  
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (line.match(/^mcp_servers:\s*$/) || line.match(/^mcp_servers:\s*#.*$/)) {
-      inMcpServers = true;
-      headerLines.push(line);
-      continue;
-    }
+  try {
+    if (!fs.existsSync(sourceYamlPath)) return 'mcp_servers: {}\n';
+    const yamlText = fs.readFileSync(sourceYamlPath, 'utf8');
+    const lines = yamlText.split(/\r?\n/);
     
-    if (inMcpServers) {
-      const indentMatch = line.match(/^(\s+)/);
-      if (!indentMatch) {
-        inMcpServers = false;
+    let inMcpServers = false;
+    let currentServerName = '';
+    const serverBlocks: Record<string, string[]> = {};
+    const headerLines: string[] = [];
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (line.match(/^mcp_servers:\s*$/) || line.match(/^mcp_servers:\s*#.*$/)) {
+        inMcpServers = true;
         headerLines.push(line);
         continue;
       }
       
-      const indent = indentMatch[1].length;
-      const keyMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
-      if (keyMatch && indent === 2) {
-        currentServerName = keyMatch[1];
-        serverBlocks[currentServerName] = [line];
-      } else if (currentServerName) {
-        serverBlocks[currentServerName].push(line);
+      if (inMcpServers) {
+        const indentMatch = line.match(/^(\s+)/);
+        if (!indentMatch) {
+          inMcpServers = false;
+          headerLines.push(line);
+          continue;
+        }
+        
+        const indent = indentMatch[1].length;
+        const keyMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
+        if (keyMatch && indent === 2) {
+          currentServerName = keyMatch[1];
+          serverBlocks[currentServerName] = [line];
+        } else if (currentServerName) {
+          serverBlocks[currentServerName].push(line);
+        }
+      } else {
+        headerLines.push(line);
       }
-    } else {
-      headerLines.push(line);
     }
-  }
-  
-  let result = '';
-  for (const line of headerLines) {
-    result += line + '\n';
-    if (line.match(/^mcp_servers:\s*$/) || line.match(/^mcp_servers:\s*#.*$/)) {
-      for (const srv of allowedServers) {
-        if (serverBlocks[srv]) {
-          result += serverBlocks[srv].join('\n') + '\n';
+    
+    let result = '';
+    for (const line of headerLines) {
+      result += line + '\n';
+      if (line.match(/^mcp_servers:\s*$/) || line.match(/^mcp_servers:\s*#.*$/)) {
+        for (const srv of allowedServers) {
+          if (serverBlocks[srv]) {
+            result += serverBlocks[srv].join('\n') + '\n';
+          }
         }
       }
     }
+    return result;
+  } catch (err) {
+    logger.error({ sourceYamlPath, error: err }, '[YAML_FILTER] Unexpected failure while filtering config.yaml.');
+    return 'mcp_servers: {}\n';
   }
-  return result;
 }
 
 export class NousHermesRunner {
@@ -281,20 +310,22 @@ export class NousHermesRunner {
   }
 
   cleanupTempFiles(): void {
+    logger.debug({ count: this.tempFiles.length }, '[CLEANUP] Cleaning up temporary run files.');
     for (const tempFile of this.tempFiles) {
       try {
         if (fs.existsSync(tempFile)) {
           fs.unlinkSync(tempFile);
-          logger.debug({ tempFile }, 'Cleaned up temp file');
+          logger.debug({ tempFile }, '[CLEANUP] Cleaned up temp file');
         }
       } catch (err) {
-        logger.warn({ tempFile, error: err }, 'Failed to cleanup temp file');
+        logger.warn({ tempFile, error: err }, '[CLEANUP] Failed to cleanup temp file');
       }
     }
     this.tempFiles = [];
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
+    logger.info({ agentName: options.agentName, model: options.model, sessionId: options.sessionId }, '[RUN_AGENT] Initiating runAgent entrypoint.');
     try {
       const result = await withSpan(
         'hermes.runAgent',
@@ -314,6 +345,7 @@ export class NousHermesRunner {
       this.cleanupTempFiles();
 
       if (options.agentName && result.sessionId) {
+        logger.info({ agentName: options.agentName, sessionId: result.sessionId }, '[RUN_AGENT] Saving completed session ID.');
         await saveSessionId(options.agentName, result.sessionId, options.configPath, 'hermes');
       }
 
@@ -322,7 +354,7 @@ export class NousHermesRunner {
       this.cleanupTempFiles();
       logger.error(
         { error: error instanceof Error ? error.message : String(error), agentName: options.agentName },
-        'Hermes runner failed',
+        '[RUN_AGENT] Hermes runner execution flow threw an error.',
       );
       throw error;
     }
@@ -334,16 +366,29 @@ export class NousHermesRunner {
     const cwd = options.cwd || process.cwd();
     const configPath = options.configPath || getWorkspaceDir();
 
+    logger.info({ agentName, autoResume, cwd, configPath, silent }, '[RUN_AGENT_INTERNAL] Starting internal agent runner workflow.');
+
     // Load .env files FIRST
-    loadEnvQuietly(path.join(cwd, '.env'));
-    loadEnvQuietly(path.join(cwd, '../Workflow/.env'));
+    const envPaths = [path.join(cwd, '.env'), path.join(cwd, '../Workflow/.env')];
+    for (const envPath of envPaths) {
+      if (fs.existsSync(envPath)) {
+        logger.debug({ envPath }, '[RUN_AGENT_INTERNAL] Loading quiet environment file.');
+        loadEnvQuietly(envPath);
+      } else {
+        logger.debug({ envPath }, '[RUN_AGENT_INTERNAL] Environment file not found, skipping.');
+      }
+    }
 
     // Auto Resume
     if (autoResume && agentName && !sessionId) {
+      logger.info({ agentName }, '[RUN_AGENT_INTERNAL] Auto-resume enabled. Querying last session ID.');
       const lastId = await getLastSessionId(agentName, configPath, 'hermes');
       if (lastId) {
         sessionId = lastId;
         if (!silent) console.error(`[NousHermesRunner] Auto-resume session: ${sessionId}`);
+        logger.info({ sessionId }, '[RUN_AGENT_INTERNAL] Resolved last session ID for resume.');
+      } else {
+        logger.info('[RUN_AGENT_INTERNAL] No previous session ID found for auto-resume.');
       }
     }
 
@@ -372,7 +417,7 @@ export class NousHermesRunner {
     let resolvedProvider: string | undefined;
     const agentCustomEnv: Record<string, string | undefined> = {
       ...process.env,
-      PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1', PYTHONUNBUFFERED: '1',
+      PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1',
       PYTHONLEGACYWINDOWSSTDIO: '1', TERM: 'emacs',
       PROMPT_TOOLKIT_NO_INTERACTIVE: '1', ANSICON: '1',
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
@@ -450,12 +495,12 @@ export class NousHermesRunner {
         `${agentName}.md`,
       );
       
-      const agentPromptPath = fs.existsSync(canonicalSoul)
+      const agentPromptPath = fs.existsSync(claudeSoul)
+        ? claudeSoul
+        : fs.existsSync(canonicalSoul)
         ? canonicalSoul
         : fs.existsSync(legacySoul)
         ? legacySoul
-        : fs.existsSync(claudeSoul)
-        ? claudeSoul
         : null;
 
       if (agentPromptPath && fs.existsSync(agentPromptPath)) {
@@ -783,9 +828,12 @@ export class NousHermesRunner {
       }
     }
     if (toolsetList.length > 0) {
-      cleanArgs.push('--toolsets', toolsetList.join(','));
+      const formattedToolsets = toolsetList.map((name) =>
+        name.startsWith('mcp-') ? name : `mcp-${name}`
+      );
+      cleanArgs.push('--toolsets', formattedToolsets.join(','));
       logger.info(
-        { agentName, toolsets: toolsetList },
+        { agentName, toolsets: formattedToolsets },
         '[HERMES_ARGS] Passing --toolsets (2.8.36: activates MCP servers as callable tools in this session).',
       );
     }
@@ -887,13 +935,13 @@ export class NousHermesRunner {
           resolvedValue = fromEnv;
           logger.info(
             { agentName, sourceKey: t.key, referencedVar: varName, resolvedLen: resolvedValue.length },
-            '[SUBTILISATION] Resolved $VAR reference from settings_<agent>.json against process.env.',
+            '[TOKEN_RESOLVER] Resolved $VAR reference from settings_<agent>.json against process.env.',
           );
         }
         const detected = detectTokenProvider(resolvedValue);
         logger.info(
           { agentName, tokenKey: t.key, detectedProvider: detected.provider, mappedTo: detected.envKey },
-          '[SUBTILISATION] Using explicit settings_<agent>.json token, re-mapping to detected provider env var.',
+          '[TOKEN_RESOLVER] Using explicit settings_<agent>.json token, re-mapping to detected provider env var.',
         );
         return { tokenEnvKey: t.key, tokenValue: resolvedValue, detectedProvider: detected.provider, source: 'settings-explicit' };
       }
@@ -942,7 +990,7 @@ export class NousHermesRunner {
       if (first.detected.provider !== 'unknown' && first.detected.envKey !== first.key) {
         logger.info(
           { agentName, sourceKey: first.key, detectedProvider: first.detected.provider, remappedTo: first.detected.envKey },
-          '[SUBTILISATION] Token prefix detected provider mismatch — re-mapping env var.',
+          '[TOKEN_RESOLVER] Token prefix detected provider mismatch — re-mapping env var.',
         );
         return {
           tokenEnvKey: first.detected.envKey,
@@ -1223,27 +1271,40 @@ export class NousHermesRunner {
           fs.copyFileSync(sharedAuth, runAuth);
         }
         
+        // Robust directory junction/symlink helper
+        const linkDirRobust = (target: string, source: string) => {
+          let exists = false;
+          let stats: fs.Stats | null = null;
+          try {
+            stats = fs.lstatSync(target);
+            exists = true;
+          } catch {
+            // target does not exist
+          }
+          if (exists) {
+            logger.debug(
+              { target, isJunction: stats ? (stats.isSymbolicLink() || stats.isDirectory()) : false },
+              '[HERMES_HOME] Target directory/link already exists. Skipping link creation.'
+            );
+          } else {
+            logger.info({ target, source }, '[HERMES_HOME] Creating junction/symbolic link.');
+            if (process.platform === 'win32') {
+              execSync(`cmd /c mklink /J "${target}" "${source}"`);
+            } else {
+              fs.symlinkSync(source, target);
+            }
+          }
+        };
+
         // Link agents directory
         const sharedAgents = path.join(sharedHome, 'agents');
         const runAgents = path.join(runHome, 'agents');
-        if (!fs.existsSync(runAgents)) {
-          if (process.platform === 'win32') {
-            execSync(`cmd /c mklink /J "${runAgents}" "${sharedAgents}"`);
-          } else {
-            fs.symlinkSync(sharedAgents, runAgents);
-          }
-        }
+        linkDirRobust(runAgents, sharedAgents);
         
         // Link sessions directory
         const sharedSessions = path.join(sharedHome, 'sessions');
         const runSessions = path.join(runHome, 'sessions');
-        if (!fs.existsSync(runSessions)) {
-          if (process.platform === 'win32') {
-            execSync(`cmd /c mklink /J "${runSessions}" "${sharedSessions}"`);
-          } else {
-            fs.symlinkSync(sharedSessions, runSessions);
-          }
-        }
+        linkDirRobust(runSessions, sharedSessions);
         
         // Generate filtered config.yaml
         const sharedConfig = path.join(sharedHome, 'config.yaml');
@@ -1271,7 +1332,27 @@ export class NousHermesRunner {
       const maxRetries = getAvailableFallbacks().length + 1;
       let currentSessionId: string | undefined = sessionId;
 
-      const safeResolve = (v: RunAgentResult) => { if (!resolved) { resolved = true; resolve(v); } };
+      const abortListener = () => {
+        if (currentChildRef) {
+          killProcessTree(currentChildRef).then(() => {
+            cleanupTmpFiles();
+            safeResolve({ result: '', error: 'ABORTED', rawOutput: '' });
+          });
+        } else {
+          cleanupTmpFiles();
+          safeResolve({ result: '', error: 'ABORTED', rawOutput: '' });
+        }
+      };
+
+      const safeResolve = (v: RunAgentResult) => {
+        if (!resolved) {
+          resolved = true;
+          if (options.signal) {
+            options.signal.removeEventListener('abort', abortListener);
+          }
+          resolve(v);
+        }
+      };
 
       const cleanupTmpFiles = () => {
         for (const f of [tmpSettingsPath, tmpMcpPath]) {
@@ -1396,12 +1477,12 @@ export class NousHermesRunner {
         child.stdout?.on('data', (d: Buffer) => {
           const chunk = d.toString();
           if (child.pid) { void appendOutput(child.pid, chunk, configPath); void appendLiveOutput(child.pid, chunk); }
-          if (stdout.length + chunk.length > MAX_BUF) stdout = stdout.slice(-MAX_BUF); else stdout += chunk;
+          if (stdout.length + chunk.length > this.MAX_BUF) stdout = stdout.slice(-this.MAX_BUF); else stdout += chunk;
           if (!silent && agentName) process.stderr.write(`[Hermes:${agentName}] ${chunk}`);
         });
         child.stderr?.on('data', (d: Buffer) => {
           const chunk = d.toString();
-          if (stderr.length + chunk.length > MAX_BUF) stderr = stderr.slice(-MAX_BUF); else stderr += chunk;
+          if (stderr.length + chunk.length > this.MAX_BUF) stderr = stderr.slice(-this.MAX_BUF); else stderr += chunk;
           if (!silent && agentName) process.stderr.write(`[Hermes:${agentName}:ERR] ${chunk}`);
         });
 
@@ -1459,12 +1540,9 @@ export class NousHermesRunner {
         });
       };
 
-      options.signal?.addEventListener('abort', () => {
-        if (currentChildRef) killProcessTree(currentChildRef).then(() => {
-          cleanupTmpFiles();
-          safeResolve({ result: '', error: 'ABORTED', rawOutput: '' });
-        });
-      });
+      if (options.signal) {
+        options.signal.addEventListener('abort', abortListener);
+      }
 
       let firstToken: { tokenEnvKey: string; tokenValue: string } | null;
       try {

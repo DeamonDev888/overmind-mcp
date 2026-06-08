@@ -12,6 +12,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.44] - 2026-06-08
+
+### Improved
+- **[Services] `NousHermesRunner.ts`** — Comprehensive logging, robustness and kill-chain improvements:
+  - **`killProcessTree()`**: Split into 3 guard checks with structured `[KILL]` log prefix at each phase (no-ref / already-dead / initiating). Logs `taskkill` stdout/stderr on Windows and SIGTERM/SIGKILL dispatch outcomes.
+  - **`filterConfigYaml()`**: Wrapped entire body in `try/catch` — unexpected YAML parse failures now log `[YAML_FILTER]` error and return safe `mcp_servers: {}` instead of throwing.
+  - **`cleanupTempFiles()` / `runAgent()`**: Added `[CLEANUP]` and `[RUN_AGENT]` structured log prefixes for entry, session-save and error paths.
+  - **`runAgentInternal()`**: `[RUN_AGENT_INTERNAL]` log on entry; `.env` loading is now guarded with `fs.existsSync` before calling `loadEnvQuietly` (avoids spurious warnings); auto-resume logic logs found/not-found session ID.
+  - **`abortListener`**: Extracted into a named function so it can be properly removed from `AbortSignal` via `removeEventListener` after resolution, preventing double-fire.
+  - **SOUL.md resolution order**: `claudeSoul` (`.claude/agents/<name>.md`) is now checked **first**, before canonical then legacy paths. Allows `.claude/` overrides to win without touching the shared home.
+  - **`--toolsets` prefix**: MCP server names are now automatically prefixed with `mcp-` when the prefix is absent (Hermes upstream expects `mcp-<name>` format).
+  - **`[TOKEN_RESOLVER]`**: Renamed internal log prefix from `[SUBTILISATION]` to `[TOKEN_RESOLVER]` for English-friendly log filtering.
+  - **`PYTHONUTF8`**: Removed from spawn env (redundant with `PYTHONIOENCODING=utf-8` and caused warnings on some Python builds).
+  - **`this.MAX_BUF`**: Fixed `MAX_BUF` reference from module-level to `this.MAX_BUF` (class property) in stdout/stderr accumulators.
+  - **`linkDirRobust()`**: Replaced ad-hoc `if (!fs.existsSync(...))` junction/symlink creation with a safe helper that uses `lstatSync` (survives broken symlinks), logs skip/create decisions.
+
+### Tests
+- 64/64 tests pass. TSC clean. ESLint 0 errors.
+
 ## [2.8.43] - 2026-06-07
 
 ### Fixed
