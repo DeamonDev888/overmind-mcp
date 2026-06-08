@@ -24,11 +24,19 @@ const __dirname = path.dirname(__filename);
 const envPath = path.resolve(__dirname, '../../.env');
 if (fs.existsSync(envPath)) {
   const { config } = await import('dotenv');
-  config({ path: envPath });
+  config({ path: envPath, override: true });
 }
 
+// Force the local workspace directory to prevent global fallbacks from overwriting it
+process.env.OVERMIND_WORKSPACE = path.resolve(__dirname, '../..');
+
 // ─── Imports métier ─────────────────────────────────────────────────────────
+import { resetWorkspaceCache } from '../lib/config.js';
+// Clear the cached workspace dir since static imports executed before env was loaded
+resetWorkspaceCache();
+
 import { runAgent } from './run_agent.js';
+
 
 // ─── Parsing des arguments ───────────────────────────────────────────────────
 const argv = process.argv.slice(2);
@@ -45,21 +53,23 @@ if (argv.length < 3) {
 const [runner, agentName, prompt, model] = argv;
 
 async function run() {
-  console.error(
-    `\n[CLI] 🤖 runner="${runner}"  agent="${agentName}"${model ? `  modèle="${model}"` : ''}`,
-  );
+    console.error(`\n[CLI] 🤖 runner="${runner}"  agent="${agentName}"${model ? `  modèle="${model}"` : ''}`);
+    
+    import('../lib/config.js').then(({ getWorkspaceDir, getAgentHermesHome }) => {
+      console.log('CLI run getWorkspaceDir():', getWorkspaceDir());
+      console.log('CLI run getAgentHermesHome():', getAgentHermesHome(agentName));
+    });
 
-  const result = await runAgent({
-    runner: runner as Parameters<typeof runAgent>[0]['runner'],
-    agentName,
-    prompt,
-    model,
-    autoResume: true,
-    silent: false,
-  });
-
-  console.log('\n── Résultat ──────────────────────────────────────────────');
-  console.log(JSON.stringify(result, null, 2));
+    const result = await runAgent({
+        runner: runner as Parameters<typeof runAgent>[0]['runner'],
+        agentName,
+        prompt,
+        model,
+        autoResume: true,
+        silent: false,
+    });
+    console.log('\n── Résultat ──────────────────────────────────────────────');
+    console.log(JSON.stringify(result, null, 2));
 }
 
 try {

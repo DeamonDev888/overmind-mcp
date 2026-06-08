@@ -11,6 +11,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.43] - 2026-06-07
+
+### Fixed
+- **sniperbot_analyst SOUL.md minimal rewrite** - Replaced 8133-byte prescriptive persona with 1187-byte factual one. The LLM was over-prioritizing the "no greeting" rule and refusing to act even on explicit user requests.
+
+### Test results
+- prompt "pong" → "pong" ✅
+- prompt "list tools" → 17 tools listed correctly ✅
+- prompt "create embed" → Sniperbot created embed on Discord ✅
+
+### Lesson
+For Hermes system prompts: keep SHORT (under 50 lines), state tools factually, avoid prescriptive rule lists.
+
 ## [2.8.40] - 2026-06-07
 
 ### Updated

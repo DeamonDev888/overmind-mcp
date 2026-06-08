@@ -125,6 +125,31 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
   const manager = new AgentManager();
   const { name, model, mcpServers, env, runner, mode, cliPath, file, content } = args;
 
+  // (a) Avertissement explicite quand 'runner' est omis alors qu'une mise à jour unitaire
+  // est demandée : sans runner explicite, run_agent ne peut pas dispatcher de façon fiable.
+  const isUnitUpdate = !!(model || mcpServers || env || mode || cliPath);
+  const isFileRewrite = !!(file && content);
+  if (isUnitUpdate && !isFileRewrite && !runner) {
+    const detected = manager.peekRunner(name); // (b) lecture du runner déjà en place
+    const detectedTxt = detected ? `**${detected}**` : '**non défini** (sera initialisé à `claude`)';
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text:
+            `⚠️ **Runner non spécifié** pour l'agent '${name}'.\n\n` +
+            `Le paramètre \`runner\` est omis : \`update_agent_config\` ne le modifiera pas, et ` +
+            `la valeur existante dans \`settings_${name}.json\` restera en place.\n\n` +
+            `🔎 Runner actuellement détecté : ${detectedTxt}\n\n` +
+            `💡 **Recommandation** : passer explicitement \`runner\` à l'appel pour éviter tout ` +
+            `dispatch ambigu vers run_agent. Valeurs valides : ` +
+            `claude | gemini | kilo | qwencli | openclaw | cline | opencode | hermes.\n\n` +
+            `➡️ Relance avec : \`update_agent_config(name: "${name}", runner: "le_bon_runner", ...)\``,
+        },
+      ],
+    };
+  }
+
   try {
     const changes = await manager.updateAgentConfig(name, {
       model,
@@ -137,12 +162,18 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
       content,
     });
 
+    // (b) Validation runtime : on confirme le runner effectif après update
+    const effectiveRunner = manager.peekRunner(name);
+    const runnerNotice = effectiveRunner
+      ? `\n\n🏃 Runner effectif (lu dans settings_${name}.json) : **${effectiveRunner}**`
+      : `\n\n⚠️ Aucun runner détectable dans settings_${name}.json — un futur run_agent risque d'échouer.`;
+
     if (changes.length === 0) {
       return {
         content: [
           {
             type: 'text' as const,
-            text: `⚠️ Aucune modification demandée pour l'agent '${name}'.`,
+            text: `⚠️ Aucune modification demandée pour l'agent '${name}'.${runnerNotice}`,
           },
         ],
       };
@@ -152,7 +183,7 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
       content: [
         {
           type: 'text' as const,
-          text: `✅ Configuration de l'agent '${name}' mise à jour :\n${changes.join('\n')}`,
+          text: `✅ Configuration de l'agent '${name}' mise à jour :\n${changes.join('\n')}${runnerNotice}`,
         },
       ],
     };

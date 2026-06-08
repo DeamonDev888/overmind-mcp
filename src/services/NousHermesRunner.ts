@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
-import { exec } from 'child_process';
+import { exec, execSync } from 'child_process';
 import { promisify } from 'util';
 import { CONFIG, resolveConfigPath, getWorkspaceDir, getAgentHermesHome, getAgentOvermindHome, getSharedHermesHome } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
@@ -128,30 +128,49 @@ async function findHermesBinary(): Promise<string> {
   }
 
   // 3. Platform-specific paths
-  const platformPaths = isWin
-    ? [
-        // Hermes venv (Nous Research install) — PRIORITÉ haute (v0.13.0, supporte -z)
-        path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent', 'venv', 'Scripts', 'hermes.exe'),
-        // Officiel installer Windows (install.ps1) — chemin natif
-        path.join(process.env.LOCALAPPDATA || '', 'hermes', 'bin', 'hermes.exe'),
-        path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes.exe'),
-        // Fallback installations via pip (legacy)
-        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'Scripts', 'hermes.exe'),
-        path.join(process.env.APPDATA || '', 'Python', 'Python312', 'Scripts', 'hermes.exe'),
-        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'Scripts', 'hermes.exe'),
-        path.join(process.env.APPDATA || '', 'Python', 'Python311', 'Scripts', 'hermes.exe'),
-        'C:\\Python312\\Scripts\\hermes.exe',
-        'C:\\Python311\\Scripts\\hermes.exe',
-        'C:\\Program Files\\Hermes\\hermes.exe',
-      ]
-    : [
-        path.join(process.env.HOME || '', '.local', 'bin', 'hermes'),
-        path.join(process.env.HOME || '', 'miniconda3', 'bin', 'hermes'),
-        path.join(process.env.HOME || '', 'anaconda3', 'bin', 'hermes'),
-        '/usr/local/bin/hermes',
-        '/usr/bin/hermes',
-        '/opt/homebrew/bin/hermes',
-      ];
+  const platformPaths: string[] = [];
+  if (isWin) {
+    platformPaths.push(
+      // Hermes venv (Nous Research install) — PRIORITÉ haute (v0.13.0, supporte -z)
+      path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent', 'venv', 'Scripts', 'hermes.exe'),
+      // Officiel installer Windows (install.ps1) — chemin natif
+      path.join(process.env.LOCALAPPDATA || '', 'hermes', 'bin', 'hermes.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes.exe')
+    );
+
+    // Dynamically scan for Python versions in LOCALAPPDATA
+    const programsPython = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python');
+    if (fs.existsSync(programsPython)) {
+      try {
+        const dirs = fs.readdirSync(programsPython);
+        for (const dir of dirs) {
+          if (dir.toLowerCase().startsWith('python')) {
+            platformPaths.push(path.join(programsPython, dir, 'Scripts', 'hermes.exe'));
+          }
+        }
+      } catch { /* ignored */ }
+    }
+
+    platformPaths.push(
+      // Fallback installations via pip (legacy)
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'Scripts', 'hermes.exe'),
+      path.join(process.env.APPDATA || '', 'Python', 'Python312', 'Scripts', 'hermes.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'Scripts', 'hermes.exe'),
+      path.join(process.env.APPDATA || '', 'Python', 'Python311', 'Scripts', 'hermes.exe'),
+      'C:\\Python312\\Scripts\\hermes.exe',
+      'C:\\Python311\\Scripts\\hermes.exe',
+      'C:\\Program Files\\Hermes\\hermes.exe'
+    );
+  } else {
+    platformPaths.push(
+      path.join(process.env.HOME || '', '.local', 'bin', 'hermes'),
+      path.join(process.env.HOME || '', 'miniconda3', 'bin', 'hermes'),
+      path.join(process.env.HOME || '', 'anaconda3', 'bin', 'hermes'),
+      '/usr/local/bin/hermes',
+      '/usr/bin/hermes',
+      '/opt/homebrew/bin/hermes'
+    );
+  }
 
   for (const p of platformPaths) {
     if (fs.existsSync(p)) {
@@ -199,6 +218,59 @@ async function findHermesBinary(): Promise<string> {
  *    to prevent Hermes from picking an exhausted bucket from a previous provider config
  *  • HOME/USERPROFILE propagated to spawned Hermes so ~/.hermes lookups resolve canonically
  */
+function filterConfigYaml(sourceYamlPath: string, allowedServers: string[]): string {
+  if (!fs.existsSync(sourceYamlPath)) return 'mcp_servers: {}\n';
+  const yamlText = fs.readFileSync(sourceYamlPath, 'utf8');
+  const lines = yamlText.split(/\r?\n/);
+  
+  let inMcpServers = false;
+  let currentServerName = '';
+  const serverBlocks: Record<string, string[]> = {};
+  const headerLines: string[] = [];
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (line.match(/^mcp_servers:\s*$/) || line.match(/^mcp_servers:\s*#.*$/)) {
+      inMcpServers = true;
+      headerLines.push(line);
+      continue;
+    }
+    
+    if (inMcpServers) {
+      const indentMatch = line.match(/^(\s+)/);
+      if (!indentMatch) {
+        inMcpServers = false;
+        headerLines.push(line);
+        continue;
+      }
+      
+      const indent = indentMatch[1].length;
+      const keyMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
+      if (keyMatch && indent === 2) {
+        currentServerName = keyMatch[1];
+        serverBlocks[currentServerName] = [line];
+      } else if (currentServerName) {
+        serverBlocks[currentServerName].push(line);
+      }
+    } else {
+      headerLines.push(line);
+    }
+  }
+  
+  let result = '';
+  for (const line of headerLines) {
+    result += line + '\n';
+    if (line.match(/^mcp_servers:\s*$/) || line.match(/^mcp_servers:\s*#.*$/)) {
+      for (const srv of allowedServers) {
+        if (serverBlocks[srv]) {
+          result += serverBlocks[srv].join('\n') + '\n';
+        }
+      }
+    }
+  }
+  return result;
+}
+
 export class NousHermesRunner {
   private timeoutMs: number;
   private tempFiles: string[] = [];
@@ -285,7 +357,12 @@ export class NousHermesRunner {
     const overmindHermesPath = getAgentOvermindHome(agentName);
     const overmindHermesSubPath = getAgentHermesHome(agentName);
 
-    if (agentName && !fs.existsSync(overmindHermesPath)) {
+    const agentSettingsPath = agentName ? resolveConfigPath(
+      path.join(path.dirname(CONFIG.CLAUDE.PATHS.SETTINGS), `settings_${agentName}.json`),
+      configPath,
+    ) : '';
+
+    if (agentName && !fs.existsSync(overmindHermesPath) && !fs.existsSync(agentSettingsPath)) {
       return { result: '', error: `INVALID_AGENT: Agent Hermes "${agentName}" non trouvé (HERMES_HOME=${overmindHermesSubPath}).` };
     }
 
@@ -315,6 +392,7 @@ export class NousHermesRunner {
 
     let tmpSettingsPath: string | null = null;
     let tmpMcpPath: string | null = null;
+    let loadedSettings: any = null;
     // Capture the RAW (pre-interpolation) settings tokens so getTokenForIndex can
     // fail-loud on unresolved $VAR references and report which one is missing.
     // (Once interpolateEnvVars() runs, $VAR has been replaced with its value, and
@@ -365,9 +443,36 @@ export class NousHermesRunner {
         '.hermes',
         'SOUL.md',
       );
-      const agentPromptPath = fs.existsSync(canonicalSoul) ? canonicalSoul : legacySoul;
-      if (fs.existsSync(agentPromptPath)) {
+      const claudeSoul = path.join(
+        configPath,
+        '.claude',
+        'agents',
+        `${agentName}.md`,
+      );
+      
+      const agentPromptPath = fs.existsSync(canonicalSoul)
+        ? canonicalSoul
+        : fs.existsSync(legacySoul)
+        ? legacySoul
+        : fs.existsSync(claudeSoul)
+        ? claudeSoul
+        : null;
+
+      if (agentPromptPath && fs.existsSync(agentPromptPath)) {
         systemPrompt = fs.readFileSync(agentPromptPath, 'utf8');
+        
+        // Sync system prompt to canonical layout if loaded from legacy or Claude paths
+        if (agentPromptPath !== canonicalSoul) {
+          try {
+            if (!fs.existsSync(overmindHermesSubPath)) {
+              fs.mkdirSync(overmindHermesSubPath, { recursive: true });
+            }
+            fs.writeFileSync(canonicalSoul, systemPrompt, 'utf8');
+            logger.info({ agentName, source: agentPromptPath, target: canonicalSoul }, 'Synced SOUL.md to canonical Hermes path.');
+          } catch (e) {
+            logger.warn({ error: e }, 'Failed to sync SOUL.md to canonical Hermes path');
+          }
+        }
       }
 
       // Load environment variables from .claude/settings_<agentName>.json
@@ -411,6 +516,7 @@ export class NousHermesRunner {
           }
           let settings = rawSettings;
           settings = interpolateEnvVars(settings);
+          loadedSettings = settings;
 
           // Create temporary settings file
           const tempSettings = path.join(
@@ -527,7 +633,7 @@ export class NousHermesRunner {
 
     const finalModel = options.model || resolvedModel || CONFIG.HERMES.DEFAULT_MODEL;
     const finalPrompt = systemPrompt ? `${systemPrompt}\n\n[USER QUERY]:\n${prompt}` : prompt;
-    const cliPrompt = finalPrompt.length > 7000 ? finalPrompt.substring(0, 7000) : finalPrompt;
+    const cliPrompt = finalPrompt;
 
     // Build CLI args: chat -q (persistent session, NOT -z oneshot)
     // -z + --resume doesn't work — resume is ignored in oneshot mode
@@ -584,18 +690,27 @@ export class NousHermesRunner {
     const effectiveSettings: { enabledMcpjsonServers?: string[]; enableAllProjectMcpServers?: boolean } = {};
     if (agentName) {
       try {
-        const canonicalPath = path.join(overmindHermesSubPath, 'settings.json');
-        if (fs.existsSync(canonicalPath)) {
-          const raw = JSON.parse(fs.readFileSync(canonicalPath, 'utf8'));
-          if (Array.isArray(raw.enabledMcpjsonServers)) {
-            effectiveSettings.enabledMcpjsonServers = raw.enabledMcpjsonServers.filter(Boolean);
+        if (loadedSettings) {
+          if (Array.isArray(loadedSettings.enabledMcpjsonServers)) {
+            effectiveSettings.enabledMcpjsonServers = loadedSettings.enabledMcpjsonServers.filter(Boolean);
           }
-          if (raw.enableAllProjectMcpServers !== undefined) {
-            effectiveSettings.enableAllProjectMcpServers = raw.enableAllProjectMcpServers === true;
+          if (loadedSettings.enableAllProjectMcpServers !== undefined) {
+            effectiveSettings.enableAllProjectMcpServers = loadedSettings.enableAllProjectMcpServers === true;
+          }
+        } else {
+          const canonicalPath = path.join(overmindHermesSubPath, 'settings.json');
+          if (fs.existsSync(canonicalPath)) {
+            const raw = JSON.parse(fs.readFileSync(canonicalPath, 'utf8'));
+            if (Array.isArray(raw.enabledMcpjsonServers)) {
+              effectiveSettings.enabledMcpjsonServers = raw.enabledMcpjsonServers.filter(Boolean);
+            }
+            if (raw.enableAllProjectMcpServers !== undefined) {
+              effectiveSettings.enableAllProjectMcpServers = raw.enableAllProjectMcpServers === true;
+            }
           }
         }
       } catch (e) {
-        logger.warn({ error: e }, '[HERMES_ARGS] Failed to read canonical settings.json for toolset hints.');
+        logger.warn({ error: e }, '[HERMES_ARGS] Failed to read settings for toolset hints.');
       }
     }
     const enabledInSettings = effectiveSettings.enabledMcpjsonServers || [];
@@ -622,18 +737,34 @@ export class NousHermesRunner {
         const hermesConfigPath = path.join(getSharedHermesHome(), 'config.yaml');
         if (fs.existsSync(hermesConfigPath)) {
           const yamlText = fs.readFileSync(hermesConfigPath, 'utf8');
-          // Tiny ad-hoc YAML parser for `mcp_servers:` block: capture the
-          // top-level keys under that section. This is intentionally
-          // dependency-free — we don't want to pull in a YAML lib for a
-          // single field. Hermes' config.yaml uses simple `key: value` lines
-          // and 2-space indent for the mcp_servers block.
-          const mcpBlockMatch = yamlText.match(/^mcp_servers:\s*\n((?: {2}[^\n]+\n?)+)/m);
-          if (mcpBlockMatch) {
-            const block = mcpBlockMatch[1];
-            const serverNames = [...block.matchAll(/^ {2}([a-zA-Z0-9_-]+):/gm)].map((m) => m[1]);
-            if (serverNames.length > 0) {
-              toolsetList.push(...serverNames);
+          
+          // Line-by-line YAML parser for the `mcp_servers` section (handles comments, varying indentation, and exits correctly)
+          const lines = yamlText.split(/\r?\n/);
+          let inMcpServers = false;
+          const serverNames: string[] = [];
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            
+            if (line.match(/^mcp_servers:\s*$/) || line.match(/^mcp_servers:\s*#.*$/)) {
+              inMcpServers = true;
+              continue;
             }
+            
+            if (inMcpServers) {
+              const indentMatch = line.match(/^(\s+)/);
+              if (!indentMatch) {
+                inMcpServers = false;
+                continue;
+              }
+              const keyMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
+              if (keyMatch) {
+                serverNames.push(keyMatch[1]);
+              }
+            }
+          }
+          if (serverNames.length > 0) {
+            toolsetList.push(...serverNames);
           }
         }
         if (toolsetList.length === 0) {
@@ -1076,6 +1207,60 @@ export class NousHermesRunner {
       );
     }
 
+    let effectiveHermesHome = sharedHome;
+    if (agentName && enabledInSettings.length > 0) {
+      try {
+        const runsDir = path.join(sharedHome, 'runs');
+        if (!fs.existsSync(runsDir)) fs.mkdirSync(runsDir, { recursive: true });
+        
+        const runHome = path.join(runsDir, agentName);
+        if (!fs.existsSync(runHome)) fs.mkdirSync(runHome, { recursive: true });
+        
+        // Copy auth.json if exists
+        const sharedAuth = path.join(sharedHome, 'auth.json');
+        const runAuth = path.join(runHome, 'auth.json');
+        if (fs.existsSync(sharedAuth)) {
+          fs.copyFileSync(sharedAuth, runAuth);
+        }
+        
+        // Link agents directory
+        const sharedAgents = path.join(sharedHome, 'agents');
+        const runAgents = path.join(runHome, 'agents');
+        if (!fs.existsSync(runAgents)) {
+          if (process.platform === 'win32') {
+            execSync(`cmd /c mklink /J "${runAgents}" "${sharedAgents}"`);
+          } else {
+            fs.symlinkSync(sharedAgents, runAgents);
+          }
+        }
+        
+        // Link sessions directory
+        const sharedSessions = path.join(sharedHome, 'sessions');
+        const runSessions = path.join(runHome, 'sessions');
+        if (!fs.existsSync(runSessions)) {
+          if (process.platform === 'win32') {
+            execSync(`cmd /c mklink /J "${runSessions}" "${sharedSessions}"`);
+          } else {
+            fs.symlinkSync(sharedSessions, runSessions);
+          }
+        }
+        
+        // Generate filtered config.yaml
+        const sharedConfig = path.join(sharedHome, 'config.yaml');
+        const runConfig = path.join(runHome, 'config.yaml');
+        const filteredConfig = filterConfigYaml(sharedConfig, enabledInSettings);
+        fs.writeFileSync(runConfig, filteredConfig, 'utf8');
+        
+        effectiveHermesHome = runHome;
+        logger.info(
+          { agentName, runHome, enabledMcp: enabledInSettings },
+          '[HERMES_HOME] Isolated agent Hermes Home and filtered config.yaml successfully.',
+        );
+      } catch (e) {
+        logger.warn({ error: e }, 'Failed to setup isolated run home; falling back to sharedHome');
+      }
+    }
+
     // AbortSignal
     if (options.signal?.aborted) return Promise.reject(new Error('ABORTED'));
     let currentChildRef: ChildProcess | null = null;
@@ -1178,12 +1363,11 @@ export class NousHermesRunner {
         // etc. relative to HERMES_HOME. Setting it to the per-agent home would
         // tell Hermes "this IS the Hermes root" and make it look for config.yaml
         // IN the agent dir — wrong layout.
-        const sharedHermesHome = getSharedHermesHome();
         const child: ChildProcess = spawn(hermesBin, cleanArgs, {
           cwd, shell: false, windowsHide: true,
           env: {
             ...spawnEnv,
-            HERMES_HOME: sharedHermesHome,
+            HERMES_HOME: effectiveHermesHome,
             ...(isVenvInstall
               ? {
                   VIRTUAL_ENV: venvRoot,

@@ -67,7 +67,7 @@ export const DEFAULT_CONFIG: ConfigType = {
   },
   HERMES: {
     CORE: 'chat -q',
-    DEFAULT_MODEL: 'MiniMax-M2.7',
+    DEFAULT_MODEL: 'MiniMax-M3',
     PATHS: {
       SETTINGS: './.claude/settings.json',
     },

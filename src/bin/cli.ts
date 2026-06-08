@@ -8,6 +8,9 @@ import { PassThrough } from 'stream';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Initialize OVERMIND_WORKSPACE to project directory to prevent global .env overrides
+process.env.OVERMIND_WORKSPACE = process.env.OVERMIND_WORKSPACE || path.resolve(__dirname, '../..');
+
 function loadEnvQuietly(envPath: string) {
   try {
     if (fs.existsSync(envPath)) {

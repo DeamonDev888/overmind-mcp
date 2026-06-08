@@ -1,4 +1,5 @@
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
 import { getMemoryProvider } from '../memory/MemoryFactory.js';
@@ -260,6 +261,39 @@ export class AgentManager {
     }
 
     return outputLines;
+  }
+
+  /**
+   * (b) Lecture non-destructive du runner effectif d'un agent.
+   *   - Pour un agent Hermes (.overmind/hermes/agent_<name>) : renvoie 'hermes'
+   *   - Pour un agent Claude (settings_<name>.json) : renvoie settings.runner || 'claude'
+   *   - Sinon : undefined
+   * Utilisé par update_agent_config pour produire un warning/actionnable
+   * quand l'appelant omet le paramètre 'runner'.
+   */
+  peekRunner(name: string): string | undefined {
+    const workspaceDir = getWorkspaceDir();
+    const hermesAgentDir = path.join(workspaceDir, '.overmind', 'hermes', `agent_${name}`);
+    try {
+      // fs synchrone pour rester léger (peek = lecture seule best-effort)
+      // fallback : on évite de throw si le dossier n'existe pas
+      // (la résolution async est faite par les appelants si besoin)
+      // Ici on accepte une lecture bloquante très courte : c'est un warning, pas un hot-path.
+      if (fsSync.existsSync(hermesAgentDir)) return 'hermes';
+      const settingsPath = path.join(this.claudeDir, `settings_${name}.json`);
+      if (fsSync.existsSync(settingsPath)) {
+        const raw = fsSync.readFileSync(settingsPath, 'utf-8');
+        try {
+          const parsed = JSON.parse(raw);
+          return (parsed && typeof parsed.runner === 'string' && parsed.runner) || 'claude';
+        } catch {
+          return undefined;
+        }
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   async deleteAgent(name: string): Promise<{ deletedFiles: string[]; errors: string[] }> {
