@@ -227,20 +227,54 @@ async function findHermesBinary(): Promise<string> {
 }
 
 /**
- * NousHermesRunner — Runner polyglotte pour Hermes Agent (Overmind 2.8.27+).
+ * NousHermesRunner — Runner Hermes Agent pour Overmind (v2.8.45+).
  *
- *  • Providers : OpenAI, MiniMax GLOBAL/CN, Zhipu/GLM, Mistral, NVIDIA NIM, OpenRouter (embeddings only)
- *  • Lit settings_<agent>.json + .mcp.<agent>.json depuis .claude/ comme les autres runners
- *  • Interpolation $VAR et ${VAR} sur tout settings + mcp config (via envUtils, regex fix 2.8.25)
- *  • Sélection/Emprunt de jeton 3-pass (Pass 1: settings-explicit, Pass A: prefer provider-specific,
- *    Pass B: re-map generic key, Pass C: rare fallback) — see hermesTokenResolver.ts
- *  • CN/GLOBAL disambiguation for sk-cp-* via ANTHROPIC_BASE_URL (URL wins)
- *  • OVERMIND_MINIMAX_DEFAULT=cn|global|auto for setups where all MiniMax tokens are CN
- *  • HERMES_HOME resolved via getAgentHermesHome() — deterministic across cwd (2.8.27+)
- *    Priority: OVERMIND_AGENT_HOME > legacy workspace > $HOME/.overmind/hermes/agent_<name>/
- *  • auth.json credential_pool is PRUNED every run (keep version+oauth, drop stale creds)
- *    to prevent Hermes from picking an exhausted bucket from a previous provider config
- *  • HOME/USERPROFILE propagated to spawned Hermes so ~/.hermes lookups resolve canonically
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║  ⭐ ARCHITECTURE CREDENTIALS HERMES — LIRE CECI EN PREMIER                 ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║                                                                              ║
+ * ║  Les credentials Hermes sont dans LE DOSSIER NATIF HERMES UNIQUEMENT :      ║
+ * ║                                                                              ║
+ * ║    <HERMES_HOME>/agents/<name>/settings.json                                 ║
+ * ║                                                                              ║
+ * ║  Sur Linux (npm -g) :  /home/demon/.overmind/hermes/agents/<name>/           ║
+ * ║  Sur Windows (dev)  :  Workflow/.overmind/hermes/agents/<name>/              ║
+ * ║                                                                              ║
+ * ║  ❌ .claude/settings_<name>.json → CLAUDE CODE / KILO SEULEMENT             ║
+ * ║  ❌ NousHermesRunner NE LIT JAMAIS depuis .claude/                          ║
+ * ║  ❌ Ne pas éditer hermes/agents/<name>/settings.json manuellement           ║
+ * ║     entre les runs — le runner le met à jour automatiquement.               ║
+ * ║                                                                              ║
+ * ║  FORMAT du settings.json Hermes :                                            ║
+ * ║  {                                                                           ║
+ * ║    "env": {                                                                  ║
+ * ║      "ANTHROPIC_AUTH_TOKEN":  "sk-cp-...",   ← token MiniMax / Z.AI        ║
+ * ║      "ANTHROPIC_BASE_URL":    "https://api.minimaxi.com/anthropic",          ║
+ * ║      "ANTHROPIC_MODEL":       "MiniMax-M3",                                  ║
+ * ║      "ANTHROPIC_PROVIDER":    "minimax-cn",                                  ║
+ * ║      "MINIMAX_CN_API_KEY":    "sk-cp-...",   ← injecté auto par le runner   ║
+ * ║      "MINIMAX_CN_BASE_URL":   "https://api.minimaxi.com/anthropic"           ║
+ * ║    },                                                                        ║
+ * ║    "enableAllProjectMcpServers": false,                                      ║
+ * ║    "enabledMcpjsonServers": ["memory", "discord", "postgres"],               ║
+ * ║    "agent": "<name>",                                                        ║
+ * ║    "runner": "hermes"                                                        ║
+ * ║  }                                                                           ║
+ * ║                                                                              ║
+ * ║  Supporte l'interpolation $VAR (ex: "$ANTHROPIC_AUTH_TOKEN_1")              ║
+ * ║  résolue depuis process.env au moment du spawn.                             ║
+ * ║                                                                              ║
+ * ║  HERMES_HOME résolu dans l'ordre :                                           ║
+ * ║    1. OVERMIND_HERMES_HOME (env var explicite, ex: systemd EnvironmentFile) ║
+ * ║    2. <OVERMIND_WORKSPACE>/.overmind/hermes/ (dev local)                    ║
+ * ║    3. ~/.overmind/hermes/ (Linux) / %LOCALAPPDATA%/overmind/hermes/ (Win)   ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
+ *
+ *  • Providers supportés : MiniMax CN/GLOBAL, Z.AI/GLM, Mistral, OpenAI, NVIDIA NIM
+ *  • OpenRouter = embeddings UNIQUEMENT (bloqué pour LLM inference)
+ *  • auth.json purgé à chaque run (évite les credentials stale de l'ancien provider)
+ *  • HOME/USERPROFILE propagé au process Hermes pour résolution ~/.hermes canonique
+ *  • Voir hermesTokenResolver.ts pour le 3-pass token detection (sk-cp-/32hex/sk-ant-)
  */
 function filterConfigYaml(sourceYamlPath: string, allowedServers: string[]): string {
   try {
@@ -396,19 +430,34 @@ export class NousHermesRunner {
     const timeoutMs = this.timeoutMs;
     const HARD_TIMEOUT_MS = 60000;
 
-    // HERMES_HOME setup — use the canonical helper (multi-OS, multi-install safe).
-    // This replaces the previous cwd-relative resolution that caused HERMES_HOME
-    // drift between dev/prod installs and between different spawn cwd's.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HERMES_HOME — résolu via getAgentHermesHome() (multi-OS, multi-install).
+    //   Priorité : OVERMIND_HERMES_HOME > <workspace>/.overmind/hermes/ > ~/.overmind/hermes/
+    // ═══════════════════════════════════════════════════════════════════════════
     const overmindHermesPath = getAgentOvermindHome(agentName);
     const overmindHermesSubPath = getAgentHermesHome(agentName);
 
-    const agentSettingsPath = agentName ? resolveConfigPath(
-      path.join(path.dirname(CONFIG.CLAUDE.PATHS.SETTINGS), `settings_${agentName}.json`),
-      configPath,
-    ) : '';
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ⭐ CHEMIN CREDENTIALS HERMES — SOURCE DE VÉRITÉ UNIQUE
+    //
+    //   <HERMES_HOME>/agents/<name>/settings.json
+    //
+    // ❌ NE PAS utiliser .claude/settings_<name>.json — c'est pour Claude/Kilo.
+    // ❌ Ce fichier EST le fichier natif Hermes. Le runner le lit ET le met à jour.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const agentSettingsPath = agentName ? path.join(overmindHermesSubPath, 'settings.json') : '';
 
-    if (agentName && !fs.existsSync(overmindHermesPath) && !fs.existsSync(agentSettingsPath)) {
-      return { result: '', error: `INVALID_AGENT: Agent Hermes "${agentName}" non trouvé (HERMES_HOME=${overmindHermesSubPath}).` };
+    if (agentName && !fs.existsSync(overmindHermesSubPath)) {
+      return {
+        result: '',
+        error:
+          `INVALID_AGENT: Dossier Hermes manquant pour l'agent "${agentName}". ` +
+          `Créez le dossier et le fichier : ${agentSettingsPath} ` +
+          `avec { "env": { "ANTHROPIC_AUTH_TOKEN": "sk-cp-...", ` +
+          `"ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic", ` +
+          `"ANTHROPIC_MODEL": "MiniMax-M3", "ANTHROPIC_PROVIDER": "minimax-cn" }, ` +
+          `"agent": "${agentName}", "runner": "hermes" }`,
+      };
     }
 
     // Load agent settings + MCP config (same pattern as ClaudeRunner)
@@ -520,29 +569,32 @@ export class NousHermesRunner {
         }
       }
 
-      // Load environment variables from .claude/settings_<agentName>.json
+      // ─────────────────────────────────────────────────────────────────────────
+      // LECTURE CREDENTIALS HERMES — <HERMES_HOME>/agents/<name>/settings.json
+      //
+      // Ce chemin est résolu UNE SEULE FOIS en haut de la fonction (agentSettingsPath).
+      // Il pointe vers le dossier natif Hermes, PAS vers .claude/.
+      // Si le fichier est absent, l'agent tourne sans LLM (erreur claire dans les logs).
+      // ─────────────────────────────────────────────────────────────────────────
       try {
-        const agentSettingsPath = resolveConfigPath(
-          path.join(path.dirname(CONFIG.CLAUDE.PATHS.SETTINGS), `settings_${agentName}.json`),
-          configPath,
-        );
-        // Diagnostic: if settings_<agent>.json is missing at the expected path, log it
-        // explicitly along with the alternative paths that DO exist. Without this log,
-        // a user putting the file under .claude/agents/ (or just `agents/`) will see a
-        // cryptic 401 ten minutes later with no breadcrumb back to the misplacement.
+        // agentSettingsPath = <HERMES_HOME>/agents/<name>/settings.json (défini ligne ~405)
+        // ❌ NE PAS changer ceci pour pointer vers .claude/ — c'est intentionnel.
         if (!fs.existsSync(agentSettingsPath)) {
-          const altPaths = [
-            path.join(configPath, '.claude', 'agents', `settings_${agentName}.json`),
-            path.join(configPath, `settings_${agentName}.json`),
-            path.join(configPath, 'agents', `settings_${agentName}.json`),
-          ];
-          logger.warn(
+          logger.error(
             {
               agentName,
-              searched: agentSettingsPath,
-              alsoChecked: altPaths.filter((p) => fs.existsSync(p)),
+              expected: agentSettingsPath,
+              hermesHome: overmindHermesSubPath,
+              action:
+                `Créer ${agentSettingsPath} avec les credentials. ` +
+                `Format minimal : { "env": { "ANTHROPIC_AUTH_TOKEN": "sk-cp-...", ` +
+                `"ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic", ` +
+                `"ANTHROPIC_MODEL": "MiniMax-M3", "ANTHROPIC_PROVIDER": "minimax-cn" }, ` +
+                `"agent": "${agentName}", "runner": "hermes" }`,
             },
-            'settings_<agent>.json not found at expected path. The agent will run with no LLM credentials unless ~/.hermes/.env or process.env provides them.',
+            '[HERMES] ❌ settings.json introuvable dans le dossier Hermes natif. ' +
+            'Hermes NE cherche PAS dans .claude/ — uniquement dans .overmind/hermes/agents/<name>/settings.json. ' +
+            'Voir la documentation dans le commentaire du constructeur NousHermesRunner.',
           );
         }
         if (fs.existsSync(agentSettingsPath)) {
@@ -563,10 +615,11 @@ export class NousHermesRunner {
           settings = interpolateEnvVars(settings);
           loadedSettings = settings;
 
-          // Create temporary settings file
+          // Fichier temporaire interpolé (valeurs $VAR résolues) — nettoyé après le spawn.
+          // Situé dans le même dossier que settings.json : <HERMES_HOME>/agents/<name>/
           const tempSettings = path.join(
             path.dirname(agentSettingsPath),
-            `settings_${agentName}_tmp.json`,
+            `settings_tmp.json`,
           );
           fs.writeFileSync(tempSettings, JSON.stringify(settings, null, 2));
           tmpSettingsPath = tempSettings;
@@ -579,17 +632,18 @@ export class NousHermesRunner {
             }
           }
 
-          // MCP configurations
-          const agentMcpPath = resolveConfigPath(
-            path.join(path.dirname(CONFIG.CLAUDE.PATHS.SETTINGS), `.mcp.${agentName}.json`),
-            configPath,
-          );
+          // ─────────────────────────────────────────────────────────────────────
+          // CONFIG MCP — Résolution dans l'ordre suivant :
+          //   1. <HERMES_HOME>/agents/<name>/.mcp.json  (override par agent)
+          //   2. <OVERMIND_WORKSPACE>/.mcp.json filtré par enabledMcpjsonServers
+          // ─────────────────────────────────────────────────────────────────────
+          const agentMcpPath = path.join(overmindHermesSubPath, '.mcp.json');
 
           if (fs.existsSync(agentMcpPath)) {
-            // Write temporary mcp path
+            // Override MCP par agent : <HERMES_HOME>/agents/<name>/.mcp.json
             const tempMcp = path.join(
               path.dirname(agentSettingsPath),
-              `mcp_${agentName}_tmp.json`,
+              `mcp_tmp.json`,
             );
             fs.writeFileSync(tempMcp, fs.readFileSync(agentMcpPath, 'utf8'));
             tmpMcpPath = tempMcp;
@@ -598,6 +652,7 @@ export class NousHermesRunner {
             settings.enableAllProjectMcpServers === false &&
             Array.isArray(settings.enabledMcpjsonServers)
           ) {
+            // Filtre le .mcp.json du workspace selon enabledMcpjsonServers
             const projectMcpPath = resolveConfigPath(CONFIG.CLAUDE.PATHS.MCP, configPath);
             if (fs.existsSync(projectMcpPath)) {
               const fullMcp = JSON.parse(fs.readFileSync(projectMcpPath, 'utf8'));
@@ -611,7 +666,7 @@ export class NousHermesRunner {
 
               const tempMcp = path.join(
                 path.dirname(agentSettingsPath),
-                `mcp_${agentName}_tmp.json`,
+                `mcp_tmp.json`,
               );
               fs.writeFileSync(tempMcp, JSON.stringify(filteredMcp, null, 2));
               tmpMcpPath = tempMcp;
@@ -623,8 +678,8 @@ export class NousHermesRunner {
         logger.warn({ error: e }, `Failed to process settings/mcp configurations for Hermes agent ${agentName}`);
       }
 
-      // Load environment from the agent's isolated .hermes/.env file, BUT only as a
-      // fallback for keys that the explicit settings_<agent>.json did NOT set.
+      // Charge le .env de l'agent (dans <HERMES_HOME>/agents/<name>/.env) en FALLBACK UNIQUEMENT.
+      // Les clés déjà définies dans settings.json ne sont PAS écrasées.
       //
       // CRITICAL (2.8.29): The .hermes/.env file is a STALE WRITE of the previous
       // spawn — it gets re-written by the runner itself at line ~1013, but if a
@@ -708,25 +763,26 @@ export class NousHermesRunner {
     }
 
     // ============================================================
-    // 2.8.36 — PASS --toolsets TO ACTIVATE MCP SERVERS
+    // 2.8.36 — TOOLSET DISCOVERY (LOG ONLY — NOT PASSED TO CLI)
     // ============================================================
-    // Hermes upstream ONLY loads MCP servers that are explicitly listed via
-    // -t/--toolsets (or registered in the agent's per-agent settings.json
-    // under a `toolsets` key — but the field is `enabledMcpjsonServers`,
-    // which we already write). Looking at Hermes upstream's CLI: the
-    // `enabledMcpjsonServers` field in settings.json is a *Hermes-side*
-    // filter, but it requires the toolset to be discovered first via
-    // `mcp.json` AND the runtime toolset registry to mark it enabled.
+    // Previously we passed MCP server names via `--toolsets` to Hermes.
+    // This caused `Warning: Unknown toolsets: mcp-memory, mcp-discord, ...`
+    // because Hermes's toolset registry does NOT use the `mcp-<name>` format.
     //
-    // The simplest, most reliable cross-version trick: pass the MCP server
-    // names as a comma-separated list via `--toolsets`. Hermes upstream
-    // will then ensure those toolsets are loaded AND exposed to the
-    // conversation as `mcp__<server>__<tool>` callable tools.
+    // The MCP servers load correctly WITHOUT `--toolsets` because:
+    //   1. `HERMES_HOME` is overridden to the per-agent isolated run home.
+    //   2. `filterConfigYaml` writes a filtered `config.yaml` that lists only
+    //      the allowed MCP servers under `mcp_servers:`.
+    //   3. Hermes reads `config.yaml` at startup and connects to every server
+    //      listed there — no `--toolsets` flag needed.
+    //
+    // We still build `toolsetList` for diagnostic logging so that the log
+    // shows which MCP servers are expected for this agent run.
     //
     // Source of truth for the list:
     //   - If settings has `enabledMcpjsonServers: [...non-empty...]`, use that.
     //   - Else, if `enableAllProjectMcpServers: true`, use ALL server names
-    //     from Workflow/.mcp.json.
+    //     from the Hermes config.yaml.
     //   - Else, skip — no toolset hint.
     const toolsetList: string[] = [];
     // Read the canonical settings.json we just wrote to find the MCP server hints.
@@ -828,13 +884,12 @@ export class NousHermesRunner {
       }
     }
     if (toolsetList.length > 0) {
-      const formattedToolsets = toolsetList.map((name) =>
-        name.startsWith('mcp-') ? name : `mcp-${name}`
-      );
-      cleanArgs.push('--toolsets', formattedToolsets.join(','));
+      // Log which MCP servers are expected for this run — do NOT pass to CLI.
+      // Hermes loads them via the isolated config.yaml; passing --toolsets
+      // would produce `Warning: Unknown toolsets: mcp-<name>` noise with no benefit.
       logger.info(
-        { agentName, toolsets: formattedToolsets },
-        '[HERMES_ARGS] Passing --toolsets (2.8.36: activates MCP servers as callable tools in this session).',
+        { agentName, expectedMcpServers: toolsetList },
+        '[HERMES_ARGS] Expected MCP servers for this run (loaded via config.yaml, NOT via --toolsets).',
       );
     }
     if (sessionId) cleanArgs.push('--resume', sessionId);
@@ -1121,25 +1176,27 @@ export class NousHermesRunner {
     // AbortSignal
     if (options.signal?.aborted) return Promise.reject(new Error('ABORTED'));
 
-    // =============================================================
-    // 2.8.30 — WRITE CANONICAL Hermes SETTINGS
-    // =============================================================
-    // Hermes upstream uses the standard appdirs-style layout:
-    //   <HERMES_HOME>/agents/<name>/settings.json   ← per-agent env, mcp, persona
-    //   <HERMES_HOME>/agents/<name>/SOUL.md         ← per-agent system prompt
-    //   <HERMES_HOME>/config.yaml                   ← global, Hermes manages
-    //   <HERMES_HOME>/auth.json                     ← global, Hermes manages
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MISE À JOUR settings.json Hermes natif (2.8.45)
+    // ═══════════════════════════════════════════════════════════════════════════
     //
-    // Overmind's only job here is to:
-    //   1. Convert Workflow/.claude/settings_<name>.json (Overmind runner format)
-    //      into the canonical Hermes format and write it to <HERMES_HOME>/agents/<name>/settings.json
-    //   2. Make sure <HERMES_HOME>/agents/<name>/SOUL.md exists (canonical path)
-    //   3. Let Hermes upstream manage config.yaml, auth.json, sessions/, etc.
+    // Le runner LIT et ÉCRIT dans le MÊME fichier :
+    //   <HERMES_HOME>/agents/<name>/settings.json
     //
-    // This replaces the previous "polylgot" hack where Overmind wrote
-    // `<HERMES_HOME>/agent_<name>/.hermes/.env`, `.hermes/config.yaml`, and
-    // `.hermes/auth.json` — files that don't match Hermes's expected layout
-    // and caused credential drift + silent 401s.
+    // Cycle complet :
+    //   1. LECTURE  : settings.json → interpolation $VAR → agentCustomEnv
+    //   2. DÉTECTION: token prefix (sk-cp-* → MiniMax, 32hex → Z.AI, etc.)
+    //   3. INJECTION: MINIMAX_CN_API_KEY, MINIMAX_CN_BASE_URL, etc. auto-injectés
+    //   4. ÉCRITURE : settings.json mis à jour avec les clés injectées
+    //   5. SPAWN    : hermes chat -q avec HERMES_HOME = runs/<name>/
+    //
+    // ❌ Overmind NE convertit PAS depuis .claude/ — c'est le chemin Claude/Kilo.
+    // ✅ settings.json est géré par l'utilisateur ET mis à jour par Overmind.
+    //    Les $VAR restent en tant que littéraux après la première résolution.
+    //    Pour changer un credential, éditer directement settings.json.
+    //
+    // Autres fichiers gérés par Hermes upstream (ne pas toucher) :
+    //   config.yaml, auth.json, sessions/, logs/
     if (agentName) {
       const agentHome = overmindHermesSubPath; // = <HERMES_HOME>/agents/<name>/
       if (!fs.existsSync(agentHome)) fs.mkdirSync(agentHome, { recursive: true });
@@ -1273,6 +1330,13 @@ export class NousHermesRunner {
         
         // Robust directory junction/symlink helper
         const linkDirRobust = (target: string, source: string) => {
+          if (!fs.existsSync(source)) {
+            try {
+              fs.mkdirSync(source, { recursive: true });
+            } catch (e) {
+              logger.warn({ source, error: e }, '[HERMES_HOME] Failed to create link source directory');
+            }
+          }
           let exists = false;
           let stats: fs.Stats | null = null;
           try {

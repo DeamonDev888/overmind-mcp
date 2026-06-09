@@ -13,6 +13,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.45] - 2026-06-09
+
+### Fixed
+- **[Services] `NousHermesRunner.ts`**:
+  - Removed `--toolsets` flag passed to the Hermes CLI to prevent `Warning: Unknown toolsets` warnings (MCP servers are already loaded via `config.yaml`).
+  - Added auto-creation of directories in `linkDirRobust` to prevent link creation failure when sources don't exist yet.
+  - Refactored native settings handling cycle to avoid `.claude/` setting conversions and instead read/write in native format.
+  - Updated logs and internal comment documentation to french.
+
 ## [2.8.44] - 2026-06-08
 
 ### Improved
