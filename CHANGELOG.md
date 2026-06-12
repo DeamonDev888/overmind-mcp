@@ -14,6 +14,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.46] - 2026-06-12
+
+### Fixed
+- **[Services] `AgentManager.ts`**:
+  - Refactored Hermes agent creation and retrieval logic to comply with the native `settings.json` layout (`<HERMES_HOME>/agents/<name>/settings.json` instead of deprecated `.hermes/` nested folder).
+  - Fixed configuration retrieval to directly read from the native layout.
+- **[Documentation]**: Updated README and SETUP guides to reflect the latest native Hermes agent configuration setup.
+
 ## [2.8.45] - 2026-06-09
 
 ### Fixed

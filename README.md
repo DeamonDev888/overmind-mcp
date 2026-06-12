@@ -37,6 +37,12 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 npm install -g overmind-mcp@latest
 ```
 
+> [!IMPORTANT]
+> **Configuration du Workspace (`OVERMIND_WORKSPACE`)**
+> Pour éviter les erreurs de résolution (notamment si vous lancez Overmind hors du dossier du projet), déclarez le chemin du workspace au niveau du système ou de la configuration de votre service, et non dans le `.env` de projet :
+> * **Via Systemd** : Ajoutez `WorkingDirectory=/chemin/du/projet` ou `Environment=OVERMIND_WORKSPACE=/chemin/du/projet` dans la directive `[Service]`.
+> * **Via le Shell** : Exécutez `export OVERMIND_WORKSPACE="/chemin/du/projet"` (dans `.bashrc` ou `.profile`).
+
 ### Configuration MCP (HTTP)
 
 Après installation, configurez votre client MCP avec le模式下 :

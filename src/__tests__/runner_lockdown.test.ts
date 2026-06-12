@@ -24,10 +24,10 @@ vi.mock('fs', async (importOriginal) => {
         if (p.includes('.json') || p.includes('.md')) return true;
         return actual.default.existsSync(p);
       }),
-      readFileSync: vi.fn((p) => {
+      readFileSync: vi.fn((p, options) => {
         if (p.includes('.json')) return JSON.stringify({ env: { ANTHROPIC_MODEL: 'test-model' } });
         if (p.includes('.md')) return 'test-prompt';
-        return actual.default.readFileSync(p);
+        return actual.default.readFileSync(p, options);
       }),
       readdirSync: vi.fn((_p) => {
         return ['settings_mainteneur_agent_divers.json'];

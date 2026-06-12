@@ -1,9 +1,26 @@
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
-import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
+import { CONFIG, resolveConfigPath, getWorkspaceDir, getSharedHermesHome } from '../lib/config.js';
 import { getMemoryProvider } from '../memory/MemoryFactory.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⭐ LAYOUT DES FICHIERS — RÈGLE ABSOLUE
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+//  HERMES agents  →  <HERMES_HOME>/agents/<name>/settings.json
+//                    <HERMES_HOME>/agents/<name>/SOUL.md
+//                    <HERMES_HOME>/agents/<name>/.mcp.json  (optionnel)
+//
+//  CLAUDE/KILO    →  <WORKSPACE>/.claude/settings_<name>.json
+//                    <WORKSPACE>/.claude/agents/<name>.md
+//
+//  ❌ INTERDIT : agent_<name>/.hermes/.env  (ancien layout pré-2.8.30 — SUPPRIMÉ)
+//  ❌ INTERDIT : .claude/settings_<name>.json pour les agents Hermes
+//
+//  getSharedHermesHome() = OVERMIND_HERMES_HOME || <workspace>/.overmind/hermes/
+// ═══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Validate agent name to prevent path traversal attacks.
@@ -52,20 +69,26 @@ export class AgentManager {
   }
 
   async listAgents(details: boolean = false): Promise<string[]> {
-    const workspaceDir = getWorkspaceDir();
     const claudeAgentsDir = path.join(this.claudeDir, 'agents');
     await fs.mkdir(claudeAgentsDir, { recursive: true });
 
-    // 1. Scan .claude/agents/*.md
+    // 1. Scan .claude/agents/*.md (agents Claude/Kilo/Gemini)
     const claudeFiles = await fs.readdir(claudeAgentsDir).catch(() => [] as string[]);
     const claudeAgentNames = claudeFiles.filter((f) => f.endsWith('.md')).map((f) => f.replace('.md', ''));
 
-    // 2. Scan .overmind/hermes/agent_*
-    const hermesDir = path.join(workspaceDir, '.overmind', 'hermes');
-    const hermesDirs = await fs.readdir(hermesDir).catch(() => [] as string[]);
-    const hermesAgentNames = hermesDirs
-      .filter((d) => d.startsWith('agent_'))
-      .map((d) => d.replace('agent_', ''));
+    // 2. Scan <HERMES_HOME>/agents/*/ (agents Hermes — layout natif 2.8.30+)
+    //    ❌ NE PAS scanner agent_* (ancien layout pré-2.8.30 supprimé)
+    const hermesHome = getSharedHermesHome();
+    const hermesAgentsDir = path.join(hermesHome, 'agents');
+    const hermesAgentDirs = await fs.readdir(hermesAgentsDir).catch(() => [] as string[]);
+    const hermesAgentNames = (await Promise.all(
+      hermesAgentDirs.map(async (d) => {
+        try {
+          const stat = await fs.stat(path.join(hermesAgentsDir, d));
+          return stat.isDirectory() ? d : null;
+        } catch { return null; }
+      })
+    )).filter((d): d is string => d !== null);
 
     // Collect info
     interface AgentInfo {
@@ -133,61 +156,33 @@ export class AgentManager {
         promptSize,
       });
     }
-    // Process Hermes agents
+    // Process Hermes agents — lit depuis <HERMES_HOME>/agents/<name>/settings.json
     for (const name of hermesAgentNames) {
-      let model = 'MiniMax-M2.7';
+      let model = 'MiniMax-M3';
       let provider = 'minimax-cn';
-      let mcpServers: string[] = ['memory-server', 'postgresql-server', 'twilio-mcp'];
+      let mcpServers: string[] = [];
       let promptSize = 0;
+      let missingConfig = false;
 
-      const agentHermesDir = path.join(hermesDir, `agent_${name}`, '.hermes');
+      const agentDir = path.join(hermesAgentsDir, name);
+
+      // SOUL.md → system prompt
       try {
-        const soulStat = await fs.stat(path.join(agentHermesDir, 'SOUL.md'));
+        const soulStat = await fs.stat(path.join(agentDir, 'SOUL.md'));
         promptSize = soulStat.size;
-      } catch {
-        // Ignored
-      }
+      } catch { /* Ignored */ }
 
-      // Try reading .env to get actual model and provider
-      const envPath = path.join(agentHermesDir, '.env');
+      // settings.json → credentials + MCP config (source de vérité unique)
+      const settingsPath = path.join(agentDir, 'settings.json');
       try {
-        const content = await fs.readFile(envPath, 'utf-8');
-        content.split('\n').forEach((line) => {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) return;
-          const eqIdx = trimmed.indexOf('=');
-          if (eqIdx === -1) return;
-          const k = trimmed.slice(0, eqIdx).trim();
-          let v = trimmed.slice(eqIdx + 1).trim();
-          if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
-          else if (v.startsWith("'") && v.endsWith("'")) v = v.slice(1, -1);
-          
-          if (k === 'MODEL' || k === 'ANTHROPIC_MODEL') {
-            model = v;
-          } else if (k === 'PROVIDER' || k === 'ANTHROPIC_PROVIDER') {
-            provider = v;
-          }
-        });
+        const raw = await fs.readFile(settingsPath, 'utf-8');
+        let settings = JSON.parse(raw);
+        settings = interpolateEnvVars(settings);
+        model = settings.env?.ANTHROPIC_MODEL || settings.env?.MODEL || model;
+        provider = settings.env?.ANTHROPIC_PROVIDER || settings.env?.PROVIDER || provider;
+        mcpServers = settings.enabledMcpjsonServers || [];
       } catch {
-        // Ignored
-      }
-
-      // Try reading config.yaml to get actual MCP servers
-      const yamlPath = path.join(agentHermesDir, 'config.yaml');
-      try {
-        const yamlContent = await fs.readFile(yamlPath, 'utf-8');
-        const parsedMcp: string[] = [];
-        const serverBlocks = yamlContent.split('\n  ');
-        serverBlocks.forEach((block) => {
-          const lines = block.split('\n');
-          const header = lines[0].trim();
-          if (header && header.endsWith(':') && header !== 'mcp_servers:') {
-            parsedMcp.push(header.slice(0, -1).trim());
-          }
-        });
-        if (parsedMcp.length > 0) mcpServers = parsedMcp;
-      } catch {
-        // Ignored
+        missingConfig = true;
       }
 
       if (!agentsMap.has(name)) {
@@ -198,7 +193,7 @@ export class AgentManager {
           provider,
           mcpServers,
           origin: 'hermes',
-          missingConfig: false,
+          missingConfig,
           promptSize,
         });
       } else {
@@ -208,7 +203,9 @@ export class AgentManager {
           existing.missingConfig = false;
         }
       }
-    }    // Group by runner
+    }
+
+    // Group by runner
     const runners = ['hermes', 'claude', 'kilo', 'gemini', 'qwencli', 'openclaw', 'cline', 'opencode'];
     const grouped = new Map<string, AgentInfo[]>();
     for (const r of runners) {
@@ -264,50 +261,47 @@ export class AgentManager {
   }
 
   /**
-   * (b) Lecture non-destructive du runner effectif d'un agent.
-   *   - Pour un agent Hermes (.overmind/hermes/agent_<name>) : renvoie 'hermes'
-   *   - Pour un agent Claude (settings_<name>.json) : renvoie settings.runner || 'claude'
+   * Lecture non-destructive du runner effectif d'un agent.
+   *   - Hermes : <HERMES_HOME>/agents/<name>/settings.json existe → 'hermes'
+   *   - Claude/Kilo : .claude/settings_<name>.json → settings.runner || 'claude'
    *   - Sinon : undefined
-   * Utilisé par update_agent_config pour produire un warning/actionnable
-   * quand l'appelant omet le paramètre 'runner'.
+   *
+   * ❌ NE PAS utiliser agent_<name> (ancien layout pré-2.8.30 supprimé)
    */
   peekRunner(name: string): string | undefined {
-    const workspaceDir = getWorkspaceDir();
-    const hermesAgentDir = path.join(workspaceDir, '.overmind', 'hermes', `agent_${name}`);
+    const hermesHome = getSharedHermesHome();
+    const hermesSettingsPath = path.join(hermesHome, 'agents', name, 'settings.json');
     try {
-      // fs synchrone pour rester léger (peek = lecture seule best-effort)
-      // fallback : on évite de throw si le dossier n'existe pas
-      // (la résolution async est faite par les appelants si besoin)
-      // Ici on accepte une lecture bloquante très courte : c'est un warning, pas un hot-path.
-      if (fsSync.existsSync(hermesAgentDir)) return 'hermes';
-      const settingsPath = path.join(this.claudeDir, `settings_${name}.json`);
-      if (fsSync.existsSync(settingsPath)) {
-        const raw = fsSync.readFileSync(settingsPath, 'utf-8');
+      if (fsSync.existsSync(hermesSettingsPath)) {
         try {
+          const raw = fsSync.readFileSync(hermesSettingsPath, 'utf-8');
+          const parsed = JSON.parse(raw);
+          return parsed?.runner || 'hermes';
+        } catch { return 'hermes'; }
+      }
+      const claudeSettingsPath = path.join(this.claudeDir, `settings_${name}.json`);
+      if (fsSync.existsSync(claudeSettingsPath)) {
+        try {
+          const raw = fsSync.readFileSync(claudeSettingsPath, 'utf-8');
           const parsed = JSON.parse(raw);
           return (parsed && typeof parsed.runner === 'string' && parsed.runner) || 'claude';
-        } catch {
-          return undefined;
-        }
+        } catch { return undefined; }
       }
       return undefined;
-    } catch {
-      return undefined;
-    }
+    } catch { return undefined; }
   }
 
   async deleteAgent(name: string): Promise<{ deletedFiles: string[]; errors: string[] }> {
     validateAgentName(name);
-    const workspaceDir = getWorkspaceDir();
-    const hermesAgentDir = path.join(workspaceDir, '.overmind', 'hermes', `agent_${name}`);
+    const hermesHome = getSharedHermesHome();
+    // Layout natif Hermes 2.8.30+ : <HERMES_HOME>/agents/<name>/
+    const hermesAgentDir = path.join(hermesHome, 'agents', name);
 
     let isHermes = false;
     try {
       const stat = await fs.stat(hermesAgentDir);
       isHermes = stat.isDirectory();
-    } catch {
-      // Ignored
-    }
+    } catch { /* Ignored */ }
 
     const deletedFiles: string[] = [];
     const errors: string[] = [];
@@ -322,10 +316,11 @@ export class AgentManager {
       return { deletedFiles, errors };
     }
 
+    // Claude/Kilo agent
     const agentsDir = path.join(this.claudeDir, 'agents');
     const promptPath = path.join(agentsDir, `${name}.md`);
     const settingsPath = path.join(this.claudeDir, `settings_${name}.json`);
-    const tmpMcpPath = path.join(this.claudeDir, `mcp_${name}_tmp.json`);
+    const tmpMcpPath = path.join(this.claudeDir, `mcp_tmp.json`);
 
     for (const file of [promptPath, settingsPath, tmpMcpPath]) {
       try {
@@ -346,70 +341,43 @@ export class AgentManager {
     const changes: string[] = [];
     const claudeDir = this.claudeDir;
 
-    const workspaceDir = getWorkspaceDir();
-    const hermesAgentDir = path.join(workspaceDir, '.overmind', 'hermes', `agent_${name}`);
-    const hermesSubDir = path.join(hermesAgentDir, '.hermes');
+    // Layout natif Hermes : <HERMES_HOME>/agents/<name>/
+    const hermesHome = getSharedHermesHome();
+    const hermesAgentDir = path.join(hermesHome, 'agents', name);
 
     let isHermes = false;
     try {
       const stat = await fs.stat(hermesAgentDir);
       isHermes = stat.isDirectory();
-    } catch {
-      // Ignored
-    }
+    } catch { /* Ignored */ }
 
     // --- MODE RÉÉCRITURE DE FICHIER COMPLET ---
     if (updates.file && updates.content) {
       if (isHermes) {
+        // Layout natif Hermes : <HERMES_HOME>/agents/<name>/
         let filePath: string;
         switch (updates.file) {
           case 'prompt.md':
-            filePath = path.join(hermesSubDir, 'SOUL.md');
+            filePath = path.join(hermesAgentDir, 'SOUL.md');
             await fs.writeFile(filePath, updates.content, 'utf-8');
-            changes.push(`✅ Fichier **SOUL.md** réécrit pour l'agent Hermes **${name}**.`);
+            changes.push(`✅ **SOUL.md** réécrit → ${filePath}`);
             break;
-          case 'settings.json': {
-            let envStr = '';
-            try {
-              const s = JSON.parse(updates.content);
-              if (s.env) {
-                for (const [k, v] of Object.entries(s.env)) {
-                  if (typeof v === 'string') envStr += `${k}=${v}\n`;
-                }
-              }
-              if (s.model && !envStr.includes('MODEL=')) envStr += `MODEL=${s.model}\n`;
-              if (s.runner && !envStr.includes('RUNNER=')) envStr += `RUNNER=${s.runner}\n`;
-            } catch {
-              envStr = updates.content;
-            }
-            filePath = path.join(hermesSubDir, '.env');
-            await fs.writeFile(filePath, envStr, 'utf-8');
-            changes.push(`✅ Fichier **.env** réécrit pour l'agent Hermes **${name}**.`);
+          case 'settings.json':
+            // Écrit directement le JSON Hermes natif (pas de conversion .env)
+            filePath = path.join(hermesAgentDir, 'settings.json');
+            await fs.writeFile(filePath, updates.content, 'utf-8');
+            changes.push(`✅ **settings.json** réécrit → ${filePath}`);
             break;
-          }
-          case '.mcp.json': {
-            let yamlContent = 'mcp_servers:\n';
-            try {
-              const mc = JSON.parse(updates.content);
-              for (const [sName, srv] of Object.entries(mc.mcpServers || {})) {
-                const s = srv as Record<string, unknown>;
-                yamlContent += `  ${sName}:\n`;
-                if (s.url) yamlContent += `    url: "${s.url}"\n`;
-                if (s.command) yamlContent += `    command: "${s.command}"\n`;
-              }
-            } catch {
-              yamlContent = updates.content;
-            }
-            filePath = path.join(hermesSubDir, 'config.yaml');
-            await fs.writeFile(filePath, yamlContent, 'utf-8');
-            changes.push(`✅ Fichier **config.yaml** réécrit pour l'agent Hermes **${name}**.`);
+          case '.mcp.json':
+            filePath = path.join(hermesAgentDir, '.mcp.json');
+            await fs.writeFile(filePath, updates.content, 'utf-8');
+            changes.push(`✅ **.mcp.json** réécrit → ${filePath}`);
             break;
-          }
           case 'skill.md':
-            filePath = path.join(hermesSubDir, 'skills', 'skill.md');
+            filePath = path.join(hermesAgentDir, 'skills', 'skill.md');
             await fs.mkdir(path.dirname(filePath), { recursive: true });
             await fs.writeFile(filePath, updates.content, 'utf-8');
-            changes.push(`✅ Fichier **skill.md** réécrit pour l'agent Hermes **${name}**.`);
+            changes.push(`✅ **skill.md** réécrit → ${filePath}`);
             break;
           default:
             throw new Error(`Fichier non supporté: ${updates.file}`);
@@ -442,44 +410,42 @@ export class AgentManager {
     }
 
     if (isHermes) {
-      const envVars: Record<string, string> = {};
-      const envPath = path.join(hermesSubDir, '.env');
+      // Lit et écrit dans <HERMES_HOME>/agents/<name>/settings.json (format JSON natif)
+      const settingsPath = path.join(hermesAgentDir, 'settings.json');
+      let settings: Record<string, unknown> & { env?: Record<string, string>; enabledMcpjsonServers?: string[] } = {};
       try {
-        const content = await fs.readFile(envPath, 'utf-8');
-        content.split('\n').forEach((line) => {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) return;
-          const eqIdx = trimmed.indexOf('=');
-          if (eqIdx === -1) return;
-          const k = trimmed.slice(0, eqIdx).trim();
-          let v = trimmed.slice(eqIdx + 1).trim();
-          if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
-          else if (v.startsWith("'") && v.endsWith("'")) v = v.slice(1, -1);
-          if (k) envVars[k] = v;
-        });
-      } catch {
-        // Ignored
-      }
+        const raw = await fs.readFile(settingsPath, 'utf-8');
+        settings = JSON.parse(raw);
+      } catch { /* fichier absent ou invalide — on repart d'un objet vide */ }
 
       if (updates.model) {
-        const oldModel = envVars.MODEL || envVars.ANTHROPIC_MODEL;
-        envVars.MODEL = updates.model;
-        changes.push(`- Modèle : ${oldModel} -> ${updates.model}`);
+        settings.env = settings.env || {};
+        const old = settings.env.ANTHROPIC_MODEL || settings.env.MODEL || '(none)';
+        settings.env.ANTHROPIC_MODEL = updates.model;
+        changes.push(`- Modèle : ${old} → ${updates.model}`);
       }
       if (updates.env) {
+        settings.env = settings.env || {};
         for (const [key, value] of Object.entries(updates.env)) {
-          const oldVal = envVars[key] ? '***' : '(undefined)';
-          envVars[key] = value;
-          changes.push(`- Env Var '${key}' : ${oldVal} -> ${value ? '***' : '(vide)'}`);
+          const oldVal = settings.env[key] ? '***' : '(undefined)';
+          settings.env[key] = value;
+          changes.push(`- Env '${key}' : ${oldVal} → ${value ? '***' : '(vide)'}`);
         }
+      }
+      if (updates.mcpServers) {
+        const old = settings.enabledMcpjsonServers || [];
+        settings.enabledMcpjsonServers = updates.mcpServers;
+        changes.push(`- MCPs : [${old.join(', ')}] → [${updates.mcpServers.join(', ')}]`);
+      }
+      if (updates.runner) {
+        const old = settings.runner || 'hermes';
+        settings.runner = updates.runner;
+        changes.push(`- Runner : ${old} → ${updates.runner}`);
       }
 
       if (changes.length > 0) {
-        let newEnvContent = '';
-        for (const [k, v] of Object.entries(envVars)) {
-          newEnvContent += `${k}=${v}\n`;
-        }
-        await fs.writeFile(envPath, newEnvContent, 'utf-8');
+        await fs.mkdir(hermesAgentDir, { recursive: true });
+        await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
       }
       return changes;
     }
@@ -713,57 +679,49 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
     envVars.ANTHROPIC_MODEL = model; // Ensure model is correctly set
 
     if (runner === 'hermes') {
-      const workspaceDir = getWorkspaceDir();
-      const hermesAgentDir = path.join(workspaceDir, '.overmind', 'hermes', `agent_${name}`);
-      const hermesSubDir = path.join(hermesAgentDir, '.hermes');
-      const hermesSkillsDir = path.join(hermesSubDir, 'skills');
-      await fs.mkdir(hermesSubDir, { recursive: true });
+      // Layout natif Hermes 2.8.30+ : <HERMES_HOME>/agents/<name>/
+      // ❌ NE PAS créer agent_<name>/.hermes/ (ancien layout supprimé)
+      const hermesHome = getSharedHermesHome();
+      const hermesAgentDir = path.join(hermesHome, 'agents', name);
+      const hermesSkillsDir = path.join(hermesAgentDir, 'skills');
+      await fs.mkdir(hermesAgentDir, { recursive: true });
       await fs.mkdir(hermesSkillsDir, { recursive: true });
 
-      const promptPath = path.join(hermesSubDir, 'SOUL.md');
+      // SOUL.md — system prompt
+      const promptPath = path.join(hermesAgentDir, 'SOUL.md');
       await fs.writeFile(promptPath, finalPrompt, 'utf-8');
 
-      // Write .env
-      const envPath = path.join(hermesSubDir, '.env');
-      let envContent = '';
-      for (const [k, v] of Object.entries(envVars)) {
-        envContent += `${k}=${v}\n`;
-      }
-      await fs.writeFile(envPath, envContent, 'utf-8');
-
-      // Write config.yaml (MCP config)
-      const yamlPath = path.join(hermesSubDir, 'config.yaml');
-      let yamlContent = 'mcp_servers:\n';
-      const globalMcpPath = resolveConfigPath(CONFIG.CLAUDE.PATHS.MCP);
-      try {
-        const globalMcpContent = await fs.readFile(globalMcpPath, 'utf-8');
-        const globalMcp = JSON.parse(globalMcpContent);
-        mcpServers.forEach((serverName) => {
-          if (globalMcp.mcpServers && globalMcp.mcpServers[serverName]) {
-            const s = globalMcp.mcpServers[serverName];
-            yamlContent += `  ${serverName}:\n`;
-            if (s.url) yamlContent += `    url: "${s.url}"\n`;
-            if (s.command) yamlContent += `    command: "${s.command}"\n`;
-          }
-        });
-      } catch {
-        // Ignored
-      }
-      await fs.writeFile(yamlPath, yamlContent, 'utf-8');
+      // settings.json — credentials + MCP (format JSON natif Hermes)
+      // ❌ NE PAS écrire .env ou config.yaml — Hermes lit settings.json
+      const settingsPath = path.join(hermesAgentDir, 'settings.json');
+      const hermesSettings: Record<string, unknown> = {
+        env: {
+          ANTHROPIC_AUTH_TOKEN: envVars.ANTHROPIC_AUTH_TOKEN || '',
+          ANTHROPIC_BASE_URL: envVars.ANTHROPIC_BASE_URL || 'https://api.minimaxi.com/anthropic',
+          ANTHROPIC_MODEL: envVars.ANTHROPIC_MODEL || model,
+          ANTHROPIC_PROVIDER: 'minimax-cn',
+          // Provider-specific (injecté aussi par NousHermesRunner au spawn)
+          MINIMAX_CN_API_KEY: envVars.ANTHROPIC_AUTH_TOKEN || '',
+          MINIMAX_CN_BASE_URL: 'https://api.minimaxi.com/anthropic',
+        },
+        enableAllProjectMcpServers: false,
+        enabledMcpjsonServers: mcpServers,
+        agent: name,
+        runner: 'hermes',
+      };
+      await fs.writeFile(settingsPath, JSON.stringify(hermesSettings, null, 2), 'utf-8');
 
       // Mémoriser la création de l'agent
       try {
         const memory = getMemoryProvider();
         await memory.storeKnowledge({
-          text: `Nouvel agent IA créé : '${name}'. Runner : hermes.`,
+          text: `Nouvel agent Hermes créé : '${name}'. Credentials : ${settingsPath}.`,
           source: 'agent',
           agentName: name,
         });
-      } catch {
-        // Ignored
-      }
+      } catch { /* Ignored */ }
 
-      return { promptPath, settingsPath: envPath };
+      return { promptPath, settingsPath };
     }
 
     const agentsDir = path.join(this.claudeDir, 'agents');
@@ -826,81 +784,39 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
 
   async getDetailedConfigs(name: string): Promise<Record<string, string>> {
     validateAgentName(name);
-    const workspaceDir = getWorkspaceDir();
-    const hermesAgentDir = path.join(workspaceDir, '.overmind', 'hermes', `agent_${name}`);
-    const hermesSubDir = path.join(hermesAgentDir, '.hermes');
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // DÉTECTION DU TYPE D'AGENT — LAYOUT NATIF 2.8.45+
+    //   Hermes  → <HERMES_HOME>/agents/<name>/settings.json
+    //   Claude  → <WORKSPACE>/.claude/settings_<name>.json
+    // ❌ NE PAS chercher dans agent_<name>/.hermes/ (ancien layout supprimé)
+    // ═══════════════════════════════════════════════════════════════════════
+    const hermesHome = getSharedHermesHome();
+    const hermesAgentDir = path.join(hermesHome, 'agents', name);
 
     let isHermes = false;
     try {
       const stat = await fs.stat(hermesAgentDir);
       isHermes = stat.isDirectory();
-    } catch {
-      // Ignored
-    }
+    } catch { /* Ignored */ }
 
     const result: Record<string, string> = {};
-
     const readFileSafe = async (filePath: string) => {
-      try {
-        return await fs.readFile(filePath, 'utf-8');
-      } catch (_e) {
-        return 'MISSING';
-      }
+      try { return await fs.readFile(filePath, 'utf-8'); }
+      catch { return 'MISSING'; }
     };
 
     if (isHermes) {
-      result['prompt.md'] = await readFileSafe(path.join(hermesSubDir, 'SOUL.md'));
-
-      const envVars: Record<string, string> = {};
-      const envContent = await readFileSafe(path.join(hermesSubDir, '.env'));
-      if (envContent !== 'MISSING') {
-        envContent.split('\n').forEach((line) => {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) return;
-          const eqIdx = trimmed.indexOf('=');
-          if (eqIdx === -1) return;
-          const k = trimmed.slice(0, eqIdx).trim();
-          let v = trimmed.slice(eqIdx + 1).trim();
-          if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
-          else if (v.startsWith("'") && v.endsWith("'")) v = v.slice(1, -1);
-          if (k) envVars[k] = v;
-        });
-      }
-
-      result['settings.json'] = JSON.stringify({
-        env: envVars,
-        model: envVars.MODEL || envVars.ANTHROPIC_MODEL || 'MiniMax-M2.7',
-        runner: 'hermes'
-      }, null, 2);
-
-      const mcpServers: Record<string, unknown> = {};
-      const yamlContent = await readFileSafe(path.join(hermesSubDir, 'config.yaml'));
-      if (yamlContent !== 'MISSING') {
-        const serverBlocks = yamlContent.split('\n  ');
-        serverBlocks.forEach((block) => {
-          const lines = block.split('\n');
-          const header = lines[0].trim();
-          if (header && header.endsWith(':') && header !== 'mcp_servers:') {
-            const srvName = header.slice(0, -1).trim();
-            const srvObj: Record<string, string> = {};
-            lines.slice(1).forEach((l) => {
-              const parts = l.trim().split(':');
-              if (parts.length >= 2) {
-                const key = parts[0].trim();
-                let val = parts.slice(1).join(':').trim();
-                if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
-                srvObj[key] = val;
-              }
-            });
-            mcpServers[srvName] = srvObj;
-          }
-        });
-      }
-      result['.mcp.json'] = JSON.stringify({ mcpServers }, null, 2);
-
-      const skillPath = path.join(hermesSubDir, 'skills', 'skill.md');
-      result['skill.md'] = await readFileSafe(skillPath);
-
+      // ───────────────────────────────────────────────────────────────────────
+      // HERMES AGENT — lit directement depuis <HERMES_HOME>/agents/<name>/
+      // settings.json = credentials + MCP + provider (source de vérité unique)
+      // SOUL.md      = system prompt
+      // .mcp.json    = MCP override (optionnel)
+      // ───────────────────────────────────────────────────────────────────────
+      result['settings.json'] = await readFileSafe(path.join(hermesAgentDir, 'settings.json'));
+      result['prompt.md']     = await readFileSafe(path.join(hermesAgentDir, 'SOUL.md'));
+      result['.mcp.json']     = await readFileSafe(path.join(hermesAgentDir, '.mcp.json'));
+      result['skill.md']      = await readFileSafe(path.join(hermesAgentDir, 'skills', 'skill.md'));
       return result;
     }
 
@@ -911,7 +827,8 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
     const skillPath = path.join(this.claudeDir, `agents/${name}_skill.md`);
     const alternativeSkillPath = path.join(this.claudeDir, `skills/${name}.md`);
 
-    // Fallback paths using workspace from OVERMIND_WORKSPACE env var
+    // Fallback paths for Claude/Kilo agents
+    const workspaceDir = getWorkspaceDir();
     const fallbackAgentsDir = path.join(workspaceDir, '.overmind', 'agents');
     const fallbackPromptPath = path.join(fallbackAgentsDir, `${name}.md`);
     const fallbackSettingsDir = path.join(workspaceDir, '.overmind', 'agents', name);

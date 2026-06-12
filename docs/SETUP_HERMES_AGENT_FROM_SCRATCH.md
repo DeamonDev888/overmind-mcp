@@ -97,6 +97,12 @@ EOF
 chmod 600 .env
 ```
 
+> [!IMPORTANT]
+> **Déclaration du Workspace (`OVERMIND_WORKSPACE`)**
+> Pour éviter les erreurs de résolution (notamment le problème de la poule et de l'œuf où le `.env` de projet n'est pas lu car le chemin du workspace n'est pas encore identifié), il est fortement conseillé de déclarer le chemin du workspace au niveau du système ou de la configuration de service, et non dans le `.env` du projet :
+> * **Via Systemd** : Ajoutez `WorkingDirectory=/chemin/du/projet` ou `Environment=OVERMIND_WORKSPACE=/chemin/du/projet` dans la section `[Service]` de votre fichier d'unité.
+> * **Via le Shell** : Exécutez `export OVERMIND_WORKSPACE="/chemin/du/projet"` (et ajoutez-le dans `.bashrc` ou `.profile` pour persister).
+
 ---
 
 ## 4. Configuration des agents Hermes — La subtilisation expliquée
