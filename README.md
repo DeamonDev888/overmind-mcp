@@ -45,7 +45,7 @@ npm install -g overmind-mcp@latest
 
 ### Configuration MCP (HTTP)
 
-Après installation, configurez votre client MCP avec le模式下 :
+Après installation, configurez votre client MCP en mode HTTP :
 
 ```json
 {
@@ -111,18 +111,20 @@ if (!isError) {
 
 ```
 Workflow/
-├── 📦 bin/                    # Scripts d'installation
-├── 🐳 docker/                 # Configuration Docker
-├── 🗄️ db/                     # Scripts base de données
-├── ⚙️ config/                 # Configurations MCP
-├── 📚 docs/                   # Documentation
-├── 💻 src/                    # Code source
-│   ├── bin/                   # Points d'entrée CLI
-│   ├── lib/                   # Bibliothèques partagées
-│   ├── services/              # Services métier
-│   └── tools/                # Outils MCP
-├── 🧪 tests/                  # Tests unitaires
-└── 🔧 scripts/               # Scripts de maintenance
+├── bin/                    # Scripts d'installation et launchers
+├── docker/                 # Configuration Docker (PostgreSQL, pgvector)
+├── docs/                   # Documentation
+├── scripts/                # Scripts de maintenance (setup, postgres, etc.)
+├── src/                    # Code source TypeScript
+│   ├── bin/                # Points d'entrée CLI (cli.ts, overmind-bridge.ts)
+│   ├── bridge/             # Bridge HTTP JSON-RPC (OverBridgeServer, SessionStore)
+│   ├── lib/                # Bibliothèques partagées (config, logger, telemetry)
+│   ├── memory/             # Provider mémoire PostgreSQL + pgvector
+│   ├── services/           # Runners d'agents (Claude, Hermes, Gemini, Kilo, etc.)
+│   │   └── hermes/         # Modules extraits du NousHermesRunner
+│   ├── tools/              # 14 outils MCP (run_agent, memory_search, etc.)
+│   └── __tests__/          # Tests unitaires (vitest)
+└── assets/                 # Images et ressources
 ```
 
 ---
@@ -145,6 +147,6 @@ Plus de node.exe par agent = plus de zombies.
 
 ---
 
-![Aperçu du Terminal](https://cdn.jsdelivr.net/npm/overmind-mcp@1.0.8/assets/terminal_preview.png)
+![Aperçu du Terminal](https://cdn.jsdelivr.net/npm/overmind-mcp@latest/assets/terminal_preview.png)
 
 _Projet propulsé par DeaMoN888 - 2026_

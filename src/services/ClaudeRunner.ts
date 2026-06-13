@@ -101,6 +101,12 @@ export class ClaudeRunner {
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
+    if (options.agentName) {
+      // Inline validation — prevents path traversal on settings_${agentName}.json
+      if (!/^[a-zA-Z0-9_-]+$/.test(options.agentName)) {
+        return { result: '', error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.` };
+      }
+    }
     const { prompt, agentName, autoResume } = options;
     let { sessionId } = options;
     const { CORE, PERMISSIONS, PATHS } = this.config;
@@ -113,14 +119,6 @@ export class ClaudeRunner {
     // Also load from Workflow directory as fallback
     const workflowEnvPath = path.resolve(__dirname, '../../.env');
     loadEnvQuietly(workflowEnvPath);
-
-    // Debug: check if variables are loaded
-    if (!options.silent) {
-      console.error(`[ClaudeRunner] Env check - ANTHROPIC_MODEL_Z present: ${!!process.env.ANTHROPIC_MODEL_Z}`);
-      console.error(`[ClaudeRunner] Auth tokens present: ${!!process.env.ANTHROPIC_AUTH_TOKEN_Y || !!process.env.ANTHROPIC_AUTH_TOKEN_E}`);
-      console.error(`[ClaudeRunner] workspaceEnvPath: ${workspaceEnvPath}`);
-      console.error(`[ClaudeRunner] workflowEnvPath: ${workflowEnvPath}`);
-    }
 
     if (agentName) {
       agentCustomEnv.OVERMIND_AGENT_NAME = agentName;
@@ -169,21 +167,8 @@ export class ClaudeRunner {
         if (fs.existsSync(agentSettingsPath)) {
           let settings = JSON.parse(fs.readFileSync(agentSettingsPath, 'utf8'));
 
-          // Debug: log environment variables
-          if (!options.silent) {
-            console.error(`[ClaudeRunner] ANTHROPIC_MODEL_Z present: ${!!process.env.ANTHROPIC_MODEL_Z}`);
-            console.error(`[ClaudeRunner] Auth tokens present: ${!!process.env.ANTHROPIC_AUTH_TOKEN_Y || !!process.env.ANTHROPIC_AUTH_TOKEN_E}`);
-            console.error(`[ClaudeRunner] ANTHROPIC_BASE_URL_Z present: ${!!process.env.ANTHROPIC_BASE_URL_Z}`);
-          }
-
           // --- New interpolation logic ---
           settings = interpolateEnvVars(settings);
-
-          // Debug: log interpolated values
-          if (!options.silent) {
-            console.error(`[ClaudeRunner] Interpolated ANTHROPIC_MODEL = ${settings.env?.ANTHROPIC_MODEL}`);
-            console.error(`[ClaudeRunner] Interpolated ANTHROPIC_BASE_URL = ${settings.env?.ANTHROPIC_BASE_URL}`);
-          }
 
           // 1. Create a temporary settings file with interpolated values
           const tmpSettingsPath = path.join(

@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
-import { execSync } from 'child_process';
 import { CONFIG, resolveConfigPath, getWorkspaceDir, getAgentHermesHome, getAgentOvermindHome, getSharedHermesHome } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { linkSessionToPid } from '../lib/processRegistry.js';
@@ -127,6 +126,12 @@ export class NousHermesRunner {
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
+    if (options.agentName) {
+      // Inline validation — prevents path traversal on settings_${agentName}.json
+      if (!/^[a-zA-Z0-9_-]+$/.test(options.agentName)) {
+        return { result: '', error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.` };
+      }
+    }
     logger.info({ agentName: options.agentName, model: options.model, sessionId: options.sessionId }, '[RUN_AGENT] Initiating runAgent entrypoint.');
     try {
       const result = await withSpan(
@@ -1092,7 +1097,11 @@ export class NousHermesRunner {
           } else {
             logger.info({ target, source }, '[HERMES_HOME] Creating junction/symbolic link.');
             if (process.platform === 'win32') {
-              execSync(`cmd /c mklink /J "${target}" "${source}"`);
+              try {
+                fs.symlinkSync(source, target, 'junction');
+              } catch {
+                // Junction may already exist — ignore
+              }
             } else {
               fs.symlinkSync(source, target);
             }

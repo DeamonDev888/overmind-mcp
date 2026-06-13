@@ -18,6 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.50] - 2026-06-13
+
+### Security
+- **[Git/CI]**: Hardened project safety by removing PAT credentials from the git config, configuring Windows credential manager integration, introducing a pre-commit anti-secrets check hook, and strictly expanding the `.gitignore` to shield backup, auth, and session dump files.
+- **[Clean/Refactor]**: Cleared legacy prompts and old verification files.
+
 ## [2.8.49] - 2026-06-13
 
 ### Added & Improved

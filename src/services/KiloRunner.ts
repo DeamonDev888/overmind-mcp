@@ -72,6 +72,12 @@ export class KiloRunner {
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
+    if (options.agentName) {
+      // Inline validation — prevents path traversal on settings_${agentName}.json
+      if (!/^[a-zA-Z0-9_-]+$/.test(options.agentName)) {
+        return { result: '', error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.` };
+      }
+    }
     // Load .env files first (before anything else) — same as ClaudeRunner/Hermes
     const cwd = options.cwd || process.cwd();
     loadEnvQuietly(path.join(cwd, '.env'));
@@ -539,7 +545,9 @@ export class KiloRunner {
             }
 
             if (code !== 0 && !finalResult && !currentStdout) {
-              process.stderr.write(`\x1b[31m[Kilo] ❌ Échec avec Code: ${code}\x1b[0m\n`);
+              if (!options.silent) {
+                process.stderr.write(`\x1b[31m[Kilo] ❌ Échec avec Code: ${code}\x1b[0m\n`);
+              }
               return safeResolve({
                 result: '',
                 error: `EXIT_CODE_${code}`,
@@ -547,9 +555,11 @@ export class KiloRunner {
               });
             }
 
-            process.stderr.write(
-              `\x1b[32m[Kilo] ✅ Mission terminée (${((Date.now() - startTime) / 1000).toFixed(1)}s)\x1b[0m\n`,
-            );
+            if (!options.silent) {
+              process.stderr.write(
+                `\x1b[32m[Kilo] ✅ Mission terminée (${((Date.now() - startTime) / 1000).toFixed(1)}s)\x1b[0m\n`,
+              );
+            }
 
             if (currentChild && currentChild.pid) {
               void updateProcessStatus(

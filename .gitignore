@@ -114,3 +114,18 @@ coverage/
 
 *.txt
 notes/
+
+# ─── Backup files (peuvent contenir des secrets accidentellement) ──────────────
+
+*.bak
+*.bak-*
+*.backup
+*.old
+*.orig
+
+# ─── Session dumps & auth files ────────────────────────────────────────────────
+
+**/request_dump_*.json
+**/sessions.json
+auth.json
+**/auth.json

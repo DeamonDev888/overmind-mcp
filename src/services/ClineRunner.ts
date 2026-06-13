@@ -36,7 +36,6 @@ export interface RunAgentResult {
 export class ClineRunner {
   private config: typeof CONFIG.CLAUDE;
   private timeoutMs: number;
-  private tempFiles: string[] = [];
   private MAX_BUF = 10 * 1024 * 1024; // 10MB
 
   constructor() {
@@ -44,28 +43,19 @@ export class ClineRunner {
     this.timeoutMs = CONFIG.TIMEOUT_MS || 900000;
   }
 
-  private cleanupTempFiles(): void {
-    for (const tempFile of this.tempFiles) {
-      try {
-        if (fs.existsSync(tempFile)) {
-          fs.unlinkSync(tempFile);
-          logger.debug({ tempFile }, 'Cleaned up temp file');
-        }
-      } catch (err) {
-        logger.warn({ tempFile, error: err }, 'Failed to cleanup temp file');
+  async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
+    if (options.agentName) {
+      // Inline validation — prevents path traversal on settings_${agentName}.json
+      if (!/^[a-zA-Z0-9_-]+$/.test(options.agentName)) {
+        return { result: '', error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.` };
       }
     }
-    this.tempFiles = [];
-  }
-
-  async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
     return withSpan('cline.runAgent', async (span) => {
       span.setAttribute('agentName', options.agentName || '');
       span.setAttribute('runner', 'cline');
       span.setAttribute('mode', options.mode || '');
 
       const result = await this.runAgentInternal(options);
-      this.cleanupTempFiles();
 
       if (options.agentName && result.sessionId) {
         await saveSessionId(options.agentName, result.sessionId, options.configPath, 'cline');
@@ -183,10 +173,6 @@ export class ClineRunner {
 
         if (code !== 0 && !stdout) {
           return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr });
-        }
-
-        if (agentName && sessionId) {
-          await saveSessionId(agentName, sessionId, options.configPath, 'cline');
         }
 
         resolve({

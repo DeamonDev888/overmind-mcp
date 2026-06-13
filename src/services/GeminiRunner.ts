@@ -109,6 +109,12 @@ export class GeminiRunner {
   }
 
   async runAgent(options: RunAgentOptions): Promise<RunAgentResult> {
+    if (options.agentName) {
+      // Inline validation — prevents path traversal on settings_${agentName}.json
+      if (!/^[a-zA-Z0-9_-]+$/.test(options.agentName)) {
+        return { result: '', error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.` };
+      }
+    }
     const cwd = options.cwd || process.cwd();
     loadEnvQuietly(path.join(cwd, '.env'));
     loadEnvQuietly(path.join(cwd, '../Workflow/.env'));
@@ -287,7 +293,7 @@ export class GeminiRunner {
 
         const child: ChildProcess = spawn(GEMINI_CLI, argsSpawn, {
           cwd,
-          shell: true,
+          shell: false,
           windowsHide: true,
           env: agentCustomEnv as NodeJS.ProcessEnv,
         });
