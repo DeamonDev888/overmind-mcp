@@ -616,13 +616,28 @@ for (let i = 0; i < cliArgs.length; i++) {
   }
 }
 
+// ─── SECURITÉ: refuser bind réseau non-localhost sans SSL ───────────────────
+// Un serveur HTTP sans chiffrement sur 0.0.0.0 expose les 14 tools MCP
+// (run_agent = exécution de code arbitraire) à n'importe qui sur le LAN.
+if (transportType === 'httpStream' && !(sslCert && sslKey)) {
+  const isLoopback = httpHost === 'localhost' || httpHost === '127.0.0.1' || httpHost === '::1';
+  if (!isLoopback) {
+    rootLogger.error(
+      `[SECURITÉ] Refus de démarrer en HTTP (sans SSL) sur ${httpHost}.` +
+      ` Utilisez --ssl-cert / --ssl-key ou bind sur localhost.`,
+    );
+    process.exit(1);
+  }
+  rootLogger.warn(
+    `[SECURITÉ] Serveur HTTP sans SSL sur ${httpHost}.` +
+    ` Acceptable en local, MAIS ne pas exposer sur le réseau sans --ssl-cert/--ssl-key.`,
+  );
+}
+
 if (settingsPath || mcpPath) {
   updateConfig(settingsPath, mcpPath);
   // Do NOT log to stderr during MCP initialization as it can cause EOF errors in some clients
 }
-
-const server = createServer('OverMind-MCP', memoryOnly, memoryToolsOnly);
-rootLogger.info(memoryOnly ? '[Overmind] [START] Démarrage du serveur mémoire...' : (memoryToolsOnly ? '[Overmind] [START] Démarrage serveur (memory tools only)...' : '[Overmind] [START] Démarrage du serveur...'));
 
 // HTTP Singleton mode (OVERMIND_HTTP_MODE=true in .env)
 // Les serveurs memory et postgresql tournent deja en singleton sur leurs ports,
@@ -635,6 +650,9 @@ if (process.env.OVERMIND_HTTP_MODE === 'true') {
   // Les agents se connectent directement aux endpoints HTTP des serveurs distants
   process.exit(0);
 }
+
+const server = createServer('OverMind-MCP', memoryOnly, memoryToolsOnly);
+rootLogger.info(memoryOnly ? '[Overmind] [START] Démarrage du serveur mémoire...' : (memoryToolsOnly ? '[Overmind] [START] Démarrage serveur (memory tools only)...' : '[Overmind] [START] Démarrage du serveur...'));
 
 if (transportType === 'httpStream') {
   const httpStreamConfig: {
@@ -656,8 +674,10 @@ if (transportType === 'httpStream') {
   if (sslCa) httpStreamConfig.sslCa = sslCa;
   const protocol = sslCert && sslKey ? 'https' : 'http';
 
-  // PATCH: Monkey-patch http.createServer to disable Node.js default 5min requestTimeout
-  // Without this, SSE streams from long-running agent calls get killed after 300s
+  // PATCH: Monkey-patch http.createServer pour désactiver le requestTimeout de 5 min.
+  // Sans ça, Node tue les SSE streams des agents long-running après 300s.
+  // SCOPE: on restore l'original après la PREMIÈRE création de serveur,
+  // pour ne pas affecter les autres serveurs HTTP du process (bridge, etc.).
   const origCreateServer = http.createServer.bind(http);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (http as any).createServer = function (requestListener?: any) {
@@ -665,13 +685,31 @@ if (transportType === 'httpStream') {
     hServer.requestTimeout = 0;
     hServer.headersTimeout = 0;
     hServer.keepAliveTimeout = 0;
-    // Keep patch active to ensure all HTTP/S servers in this process have no timeouts
+    // Restaurer immédiatement — seul le serveur FastMCP doit être patché.
+    (http as any).createServer = origCreateServer;
     return hServer;
   };
 
-  server.start({ transportType: 'httpStream', httpStream: httpStreamConfig });
-  rootLogger.info(`[Overmind] [READY] Serveur HTTP${sslCert ? 'S' : ''} sur ${protocol}://${httpHost}:${httpPort}${httpEndpoint}`);
+  try {
+    await server.start({ transportType: 'httpStream', httpStream: httpStreamConfig });
+    rootLogger.info(`[Overmind] [READY] Serveur HTTP${sslCert ? 'S' : ''} sur ${protocol}://${httpHost}:${httpPort}${httpEndpoint}`);
+  } catch (err) {
+    rootLogger.error(
+      { error: err instanceof Error ? err.message : String(err), port: httpPort, host: httpHost },
+      `[Overmind] [ERREUR] Échec du démarrage HTTP sur ${httpHost}:${httpPort}.` +
+      ` Port déjà pris ? (EADDRINUSE)`,
+    );
+    process.exit(1);
+  }
 } else {
-  server.start({ transportType: 'stdio' });
-  rootLogger.info(memoryOnly ? '[Overmind] [READY] Serveur mémoire prêt sur STDIO.' : '[Overmind] [READY] Serveur prêt sur STDIO.');
+  try {
+    await server.start({ transportType: 'stdio' });
+    rootLogger.info(memoryOnly ? '[Overmind] [READY] Serveur mémoire prêt sur STDIO.' : '[Overmind] [READY] Serveur prêt sur STDIO.');
+  } catch (err) {
+    rootLogger.error(
+      { error: err instanceof Error ? err.message : String(err) },
+      '[Overmind] [ERREUR] Échec du démarrage STDIO.',
+    );
+    process.exit(1);
+  }
 }

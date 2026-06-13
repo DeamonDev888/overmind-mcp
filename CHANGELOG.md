@@ -16,6 +16,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.48] - 2026-06-13
+
+### Security & Robustness
+- **[CLI] `cli.ts`**:
+  - Implemented network security policy: refuses non-loopback network bindings without SSL certificates (prevents exposing sensitive MCP tools over local networks).
+  - Fixed Node.js `http.createServer` monkey patch: scope is now restricted to the main FastMCP server initialization by restoring the original handler immediately.
+  - Added try-catch handler around server start to log errors properly (e.g. `EADDRINUSE` port collision) instead of throwing.
+
 ## [2.8.47] - 2026-06-13
 
 ### Fixed & Cleaned
