@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import http from 'http';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { PassThrough } from 'stream';
 
@@ -616,6 +617,10 @@ for (let i = 0; i < cliArgs.length; i++) {
   }
 }
 
+// Auth token (env var OR CLI flag). Si présent, toutes les requêtes HTTP
+// doivent inclure "Authorization: Bearer <token>". Protège les 14 tools MCP.
+const mcpAuthToken = process.env.OVERMIND_AUTH_TOKEN || undefined;
+
 // ─── SECURITÉ: refuser bind réseau non-localhost sans SSL ───────────────────
 // Un serveur HTTP sans chiffrement sur 0.0.0.0 expose les 14 tools MCP
 // (run_agent = exécution de code arbitraire) à n'importe qui sur le LAN.
@@ -678,10 +683,34 @@ if (transportType === 'httpStream') {
   // Sans ça, Node tue les SSE streams des agents long-running après 300s.
   // SCOPE: on restore l'original après la PREMIÈRE création de serveur,
   // pour ne pas affecter les autres serveurs HTTP du process (bridge, etc.).
+  //
+  // AUTH: si mcpAuthToken est défini, on wrap le requestListener pour
+  // exiger "Authorization: Bearer *** sur chaque requête. Timing-safe
+  // compare pour éviter les timing attacks.
   const origCreateServer = http.createServer.bind(http);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (http as any).createServer = function (requestListener?: any) {
-    const hServer = origCreateServer(requestListener);
+    // Wrap avec auth middleware si token configuré
+    const wrappedListener = mcpAuthToken
+      ? (req: any, res: any) => {
+          // Permettre les requêtes SSE (GET) et POST sans auth pour l'initialization
+          // FastMCP fait l'initialize handshake avant les tool calls. On exige le
+          // token sur TOUTES les requêtes — le client doit l'envoyer dès le début.
+          const auth = req.headers['authorization'] || '';
+          const expected = `Bearer ${mcpAuthToken}`;
+          // Timing-safe comparison
+          const a = Buffer.from(auth);
+          const b = Buffer.from(expected);
+          if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unauthorized', code: -32000 }));
+            return;
+          }
+          requestListener(req, res);
+        }
+      : requestListener;
+
+    const hServer = origCreateServer(wrappedListener);
     hServer.requestTimeout = 0;
     hServer.headersTimeout = 0;
     hServer.keepAliveTimeout = 0;

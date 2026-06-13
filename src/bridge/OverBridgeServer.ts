@@ -20,6 +20,7 @@
  */
 
 import http from 'node:http';
+import crypto from 'node:crypto';
 import { URL } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -147,6 +148,10 @@ export interface OverBridgeServerConfig {
   jsonBodyLimit?: string;
   /** Active la sanitization JSON (Windows paths) */
   sanitizeJson?: boolean;
+  /** Origins CORS autorisées (default: ['http://localhost:3000', 'http://localhost:5173']). Mettre ['*'] pour ouvert. */
+  allowedOrigins?: string[];
+  /** Rate limiting: max requêtes /rpc par IP par fenêtre de 60s (default: 100, 0 = illimité) */
+  rateLimitMax?: number;
 }
 
 // ─── OverBridgeServer ─────────────────────────────────────────────────────
@@ -163,6 +168,7 @@ export class OverBridgeServer {
   private server: http.Server | undefined;
   private startTime = 0;
   private pruneTimer: ReturnType<typeof setInterval> | undefined;
+  private rateLimiter = new Map<string, { count: number; windowStart: number }>();
 
   constructor(
     service: OverBridgeService,
@@ -311,14 +317,15 @@ export class OverBridgeServer {
     res.setHeader('X-Request-Id', reqId);
 
     // CORS preflight
+    const reqOrigin = (req.headers.origin as string) || undefined;
     if (req.method === 'OPTIONS') {
-      this.writeCors(res);
+      this.writeCors(res, reqOrigin);
       res.writeHead(204);
       res.end();
       return;
     }
 
-    this.writeCors(res);
+    this.writeCors(res, reqOrigin);
 
     try {
       // Health check simple
@@ -329,6 +336,26 @@ export class OverBridgeServer {
 
       // JSON-RPC endpoint
       if (req.method === 'POST' && url.pathname === '/rpc') {
+        // Rate limiting (sliding window par IP)
+        const maxReqs = this.config.rateLimitMax ?? 100;
+        if (maxReqs > 0) {
+          const ip = (req.socket.remoteAddress || 'unknown').replace(/^::ffff:/, '');
+          const now = Date.now();
+          let entry = this.rateLimiter.get(ip);
+          if (!entry || now - entry.windowStart > 60_000) {
+            entry = { count: 0, windowStart: now };
+            this.rateLimiter.set(ip, entry);
+          }
+          entry.count++;
+          if (entry.count > maxReqs) {
+            this.writeJson(res, 429, {
+              jsonrpc: '2.0', id: null,
+              error: { code: -32000, message: 'Rate limit exceeded', data: { reqId, limit: maxReqs } },
+            });
+            return;
+          }
+        }
+
         await this.handleRpc(req, res, reqId);
         return;
       }
@@ -353,8 +380,16 @@ export class OverBridgeServer {
     }
   }
 
-  private writeCors(res: http.ServerResponse): void {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+  private writeCors(res: http.ServerResponse, reqOrigin?: string): void {
+    const allowed = this.config.allowedOrigins ?? ['http://localhost:3000', 'http://localhost:5173'];
+    const origin = reqOrigin || '';
+    if (allowed.includes('*')) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    } else if (allowed.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+      // Origin pas dans la allowlist — on ne set pas ACAO (navigateur bloquera)
+    }
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   }
@@ -499,10 +534,13 @@ export class OverBridgeServer {
   // ─── /rpc Endpoint (JSON-RPC 2.0 Dispatcher) ────────────────────────────
 
   private async handleRpc(req: http.IncomingMessage, res: http.ServerResponse, reqId: string): Promise<void> {
-    // Auth check
+    // Auth check — timing-safe comparison pour éviter les timing attacks
     if (this.config.authToken) {
-      const auth = req.headers.authorization;
-      if (auth !== `Bearer ${this.config.authToken}`) {
+      const auth = req.headers.authorization || '';
+      const expected = `Bearer ${this.config.authToken}`;
+      const a = Buffer.from(auth);
+      const b = Buffer.from(expected);
+      if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
         this.writeJson(res, 401, {
           jsonrpc: '2.0',
           id: null,

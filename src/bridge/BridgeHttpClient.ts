@@ -63,6 +63,7 @@ export class BridgeHttpClient {
 
   /**
    * Appelle une méthode JSON-RPC et retourne le résultat (ou throw).
+   * Retry automatique sur erreurs transitoires (ECONNRESET, ETIMEDOUT, 5xx).
    */
   async call<T = unknown>(
     method: string,
@@ -75,16 +76,33 @@ export class BridgeHttpClient {
       method,
       params,
     };
-    const res = await this._post('/rpc', req, timeoutMs ?? this.config.timeoutMs);
-    if (Array.isArray(res)) {
-      throw new Error('Unexpected batch response to single call');
+    const maxRetries = 2;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await this._post('/rpc', req, timeoutMs ?? this.config.timeoutMs);
+        if (Array.isArray(res)) {
+          throw new Error('Unexpected batch response to single call');
+        }
+        if (res.error) {
+          const err = new Error(`JSON-RPC error ${res.error.code}: ${res.error.message}`);
+          Object.assign(err, { code: res.error.code, data: res.error.data });
+          throw err;
+        }
+        return res.result as T;
+      } catch (e) {
+        lastErr = e;
+        // Ne pas retry sur les erreurs JSON-RPC (codes -32xxx) — ce sont des erreurs applicatives
+        const rpcErr = e as Error & { code?: number };
+        if (rpcErr.code && rpcErr.code >= -32600 && rpcErr.code <= -32000) throw e;
+        // Retry sur erreurs réseau ou 5xx HTTP
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 500 * (attempt + 1))); // backoff 500ms, 1s
+          continue;
+        }
+      }
     }
-    if (res.error) {
-      const err = new Error(`JSON-RPC error ${res.error.code}: ${res.error.message}`);
-      Object.assign(err, { code: res.error.code, data: res.error.data });
-      throw err;
-    }
-    return res.result as T;
+    throw lastErr;
   }
 
   /**

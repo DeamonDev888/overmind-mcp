@@ -17,6 +17,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.49] - 2026-06-13
+
+### Added & Improved
+- **[Bridge] `OverBridgeServer.ts`**:
+  - Implemented client IP rate limiting (defaults to 100 requests per 60 seconds on the `/rpc` endpoint, configurable via `rateLimitMax`).
+  - Added configurable CORS allowlist (`allowedOrigins` parameter) to control which origins can query the bridge.
+  - Hardened authorization check using timing-safe buffer comparison (`crypto.timingSafeEqual`) to prevent timing side-channel attacks on authorization headers.
+- **[Bridge] `BridgeHttpClient.ts`**: Implemented automatic retry with backoff for transient network issues or HTTP 5xx errors (up to 2 retries, skipping standard application-level JSON-RPC errors).
+- **[Session] `SessionStore.ts`**: Added lightweight base64 obfuscation for stored `sessionId` values to prevent accidental exposure (e.g. via logs or screens).
+
 ## [2.8.48] - 2026-06-13
 
 ### Security & Robustness

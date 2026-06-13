@@ -84,12 +84,17 @@ export class SessionStore {
     if (this.config.persistPath) {
       try {
         const raw = await fs.readFile(this.config.persistPath, 'utf-8');
-        const parsed = JSON.parse(raw) as { sessions: SessionEntry[] };
+        const parsed = JSON.parse(raw) as { sessions: SessionEntry[]; _obfuscated?: boolean };
         const now = Date.now();
         let loaded = 0;
         for (const entry of parsed.sessions ?? []) {
           // Skip les sessions expirées au load
           if (now - entry.lastActivityAt > this.config.ttlMs) continue;
+          // Déobfusquer le sessionId si le fichier est marqué _obfuscated
+          if (parsed._obfuscated && entry.sessionId) {
+            try { entry.sessionId = Buffer.from(entry.sessionId, 'base64').toString('utf-8'); }
+            catch { /* skip — valeur non-base64, utiliser tel quel */ }
+          }
           this.map.set(this.makeKey(entry.externalKey, entry.agentName), entry);
           loaded++;
         }
@@ -250,7 +255,14 @@ export class SessionStore {
 
   private async persist(): Promise<void> {
     if (!this.config.persistPath) return;
-    const data = { sessions: Array.from(this.map.values()) };
+    // Obfuscation basique: base64-encode les sessionIds pour qu'un cat du fichier
+    // ne révèle pas les IDs en clair. C'est pas du chiffrement — c'est pour éviter
+    // le leak accidentel (logs, screenshots, etc.).
+    const sessions = Array.from(this.map.values()).map((s) => ({
+      ...s,
+      sessionId: Buffer.from(s.sessionId).toString('base64'),
+    }));
+    const data = { sessions, _obfuscated: true };
     const tmp = this.config.persistPath + '.tmp';
     try {
       await fs.mkdir(path.dirname(this.config.persistPath), { recursive: true });
