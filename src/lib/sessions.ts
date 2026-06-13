@@ -2,6 +2,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import { Mutex } from 'async-mutex';
 import { getWorkspaceDir } from './config.js';
+import pino from 'pino';
+
+const logger = pino({ name: 'sessions' });
+
 
 const sessionMutex = new Mutex();
 
@@ -96,7 +100,7 @@ export async function saveSessionId(
       sessions[key] = { id: sessionId, ts: Date.now() };
       await fs.writeFile(filePath, JSON.stringify(sessions, null, 2), 'utf-8');
     } catch (error) {
-      console.error(`Failed to save session ID for ${agentName}:`, error);
+      logger.error({ agentName, error }, 'Failed to save session ID.');
     }
   });
 }

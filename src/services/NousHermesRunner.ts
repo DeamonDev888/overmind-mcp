@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
-import { exec, execSync } from 'child_process';
-import { promisify } from 'util';
+import { execSync } from 'child_process';
 import { CONFIG, resolveConfigPath, getWorkspaceDir, getAgentHermesHome, getAgentOvermindHome, getSharedHermesHome } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { linkSessionToPid } from '../lib/processRegistry.js';
@@ -21,65 +20,12 @@ import {
   setLiveStatus,
   unregisterLiveAgent,
 } from '../lib/agent_lifecycle.js';
-
-const execAsync = promisify(exec);
+import { killProcessTree } from './hermes/processUtils.js';
+import { findHermesBinary } from './hermes/binaryFinder.js';
+import { defaultBaseUrlFor, TOKEN_KEYS } from './hermes/providerConfig.js';
+import { filterConfigYaml } from './hermes/configYamlFilter.js';
 
 const logger = pino({ name: 'NousHermesRunner' });
-
-// Sur Windows, child.kill() ne tue que le wrapper cmd.exe — le child réel devient
-// orphelin. On utilise taskkill /F /T pour propager le kill au sous-arbre complet.
-const killProcessTree = (child: ChildProcess): Promise<void> => {
-  return new Promise((resolve) => {
-    if (!child) {
-      logger.debug('[KILL] No child process reference provided.');
-      resolve();
-      return;
-    }
-    if (child.exitCode !== null || child.killed) {
-      logger.debug({ pid: child.pid, exitCode: child.exitCode, killed: child.killed }, '[KILL] Process is already dead or marked killed.');
-      resolve();
-      return;
-    }
-    logger.info({ pid: child.pid }, '[KILL] Initiating process tree termination...');
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      logger.debug({ pid: child.pid }, '[KILL] Process tree termination sequence completed.');
-      resolve();
-    };
-    child.once('exit', finish);
-    if (process.platform === 'win32' && child.pid && typeof child.pid === 'number' && child.pid > 0) {
-      const cmd = `taskkill /F /T /PID ${child.pid}`;
-      logger.debug({ cmd }, '[KILL] Executing Windows taskkill...');
-      exec(cmd, (err, stdout, stderr) => {
-        if (err) {
-          logger.debug({ err, stderr }, '[KILL] taskkill failed or process was already dead.');
-        } else {
-          logger.debug({ stdout }, '[KILL] taskkill completed successfully.');
-        }
-      });
-    } else {
-      try { 
-        logger.debug({ pid: child.pid }, '[KILL] Dispatched SIGTERM signal.');
-        child.kill('SIGTERM'); 
-      } catch (e) {
-        logger.debug({ pid: child.pid, error: e }, '[KILL] SIGTERM dispatch failed.');
-      }
-      setTimeout(() => {
-        if (child.exitCode === null && !child.killed) {
-          try { 
-            logger.warn({ pid: child.pid }, '[KILL] SIGTERM ignored. Escalating to SIGKILL...');
-            child.kill('SIGKILL'); 
-          } catch (e) {
-            logger.debug({ pid: child.pid, error: e }, '[KILL] SIGKILL dispatch failed.');
-          }
-        }
-      }, 2000);
-    }
-    setTimeout(finish, 5000);
-  });
-};
 
 export interface RunAgentOptions {
   prompt: string;
@@ -104,126 +50,6 @@ export interface RunAgentResult {
   model?: string; // resolved real model ID
   nickname?: string; // original value from config (if different)
   fallbackUsed?: string; // which fallback token was used (e.g. 'AUTH_FALLBACK_1')
-}
-
-/**
- * Default base URL for a given provider. Used when settings_<agent>.json
- * doesn't specify ANTHROPIC_BASE_URL. Each provider has its canonical
- * endpoint baked in here so the runner doesn't need an external config.
- */
-function defaultBaseUrlFor(provider: string): string {
-  switch (provider) {
-    case 'minimax-cn': return 'https://api.minimaxi.com/anthropic';
-    case 'minimax':    return 'https://api.minimax.com/anthropic';
-    case 'zai':
-    case 'z-ai':       return 'https://api.z.ai/api/coding/paas/v4';
-    case 'anthropic':  return 'https://api.anthropic.com';
-    case 'openai':     return 'https://api.openai.com/v1';
-    default:           return 'https://api.z.ai/api/coding/paas/v4';
-  }
-}
-
-/**
- * Find hermes binary across platforms (Windows, Linux, macOS)
- * Priority: HERMES_BIN_PATH env > PATH > platform-specific paths > pip show
- */
-async function findHermesBinary(): Promise<string> {
-  const isWin = process.platform === 'win32';
-
-  // 1. Check environment variable first (allows users to override)
-  if (process.env.HERMES_BIN_PATH) {
-    if (fs.existsSync(process.env.HERMES_BIN_PATH)) {
-      logger.info({ path: process.env.HERMES_BIN_PATH }, 'Using HERMES_BIN_PATH');
-      return process.env.HERMES_BIN_PATH;
-    }
-  }
-
-  // 2. Try to find via PATH
-  try {
-    const command = isWin ? 'where hermes' : 'which hermes';
-    const { stdout } = await execAsync(command);
-    const hermesPath = stdout.trim().split('\n')[0];
-    if (hermesPath && fs.existsSync(hermesPath)) {
-      logger.info({ path: hermesPath }, 'Found hermes in PATH');
-      return hermesPath;
-    }
-  } catch {
-    // Not found in PATH
-  }
-
-  // 3. Platform-specific paths
-  const platformPaths: string[] = [];
-  if (isWin) {
-    platformPaths.push(
-      // Hermes venv (Nous Research install) — PRIORITÉ haute (v0.13.0, supporte -z)
-      path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes-agent', 'venv', 'Scripts', 'hermes.exe'),
-      // Officiel installer Windows (install.ps1) — chemin natif
-      path.join(process.env.LOCALAPPDATA || '', 'hermes', 'bin', 'hermes.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'hermes', 'hermes.exe')
-    );
-
-    // Dynamically scan for Python versions in LOCALAPPDATA
-    const programsPython = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python');
-    if (fs.existsSync(programsPython)) {
-      try {
-        const dirs = fs.readdirSync(programsPython);
-        for (const dir of dirs) {
-          if (dir.toLowerCase().startsWith('python')) {
-            platformPaths.push(path.join(programsPython, dir, 'Scripts', 'hermes.exe'));
-          }
-        }
-      } catch { /* ignored */ }
-    }
-
-    platformPaths.push(
-      // Fallback installations via pip (legacy)
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'Scripts', 'hermes.exe'),
-      path.join(process.env.APPDATA || '', 'Python', 'Python312', 'Scripts', 'hermes.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'Scripts', 'hermes.exe'),
-      path.join(process.env.APPDATA || '', 'Python', 'Python311', 'Scripts', 'hermes.exe'),
-      'C:\\Python312\\Scripts\\hermes.exe',
-      'C:\\Python311\\Scripts\\hermes.exe',
-      'C:\\Program Files\\Hermes\\hermes.exe'
-    );
-  } else {
-    platformPaths.push(
-      path.join(process.env.HOME || '', '.local', 'bin', 'hermes'),
-      path.join(process.env.HOME || '', 'miniconda3', 'bin', 'hermes'),
-      path.join(process.env.HOME || '', 'anaconda3', 'bin', 'hermes'),
-      '/usr/local/bin/hermes',
-      '/usr/bin/hermes',
-      '/opt/homebrew/bin/hermes'
-    );
-  }
-
-  for (const p of platformPaths) {
-    if (fs.existsSync(p)) {
-      logger.info({ path: p }, 'Found hermes at platform path');
-      return p;
-    }
-  }
-
-  // 4. Try pip show to find installation
-  try {
-    const { stdout } = await execAsync('pip show hermes-agent 2>/dev/null || pip3 show hermes-agent');
-    const match = stdout.match(/Location:\s*(.+)/);
-    if (match) {
-      const sitePackages = match[1].trim();
-      const hermesPath = isWin
-        ? path.join(sitePackages, 'Scripts', 'hermes.exe')
-        : path.join(sitePackages, 'bin', 'hermes');
-      if (fs.existsSync(hermesPath)) {
-        logger.info({ path: hermesPath }, 'Found hermes via pip show');
-        return hermesPath;
-      }
-    }
-  } catch {
-    // pip show failed
-  }
-
-  // 5. Fallback to 'hermes' and let spawn fail with proper error
-  logger.warn('hermes binary not found, using "hermes" command');
-  return 'hermes';
 }
 
 /**
@@ -276,64 +102,6 @@ async function findHermesBinary(): Promise<string> {
  *  • HOME/USERPROFILE propagé au process Hermes pour résolution ~/.hermes canonique
  *  • Voir hermesTokenResolver.ts pour le 3-pass token detection (sk-cp-/32hex/sk-ant-)
  */
-function filterConfigYaml(sourceYamlPath: string, allowedServers: string[]): string {
-  try {
-    if (!fs.existsSync(sourceYamlPath)) return 'mcp_servers: {}\n';
-    const yamlText = fs.readFileSync(sourceYamlPath, 'utf8');
-    const lines = yamlText.split(/\r?\n/);
-    
-    let inMcpServers = false;
-    let currentServerName = '';
-    const serverBlocks: Record<string, string[]> = {};
-    const headerLines: string[] = [];
-    
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (line.match(/^mcp_servers:\s*$/) || line.match(/^mcp_servers:\s*#.*$/)) {
-        inMcpServers = true;
-        headerLines.push(line);
-        continue;
-      }
-      
-      if (inMcpServers) {
-        const indentMatch = line.match(/^(\s+)/);
-        if (!indentMatch) {
-          inMcpServers = false;
-          headerLines.push(line);
-          continue;
-        }
-        
-        const indent = indentMatch[1].length;
-        const keyMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
-        if (keyMatch && indent === 2) {
-          currentServerName = keyMatch[1];
-          serverBlocks[currentServerName] = [line];
-        } else if (currentServerName) {
-          serverBlocks[currentServerName].push(line);
-        }
-      } else {
-        headerLines.push(line);
-      }
-    }
-    
-    let result = '';
-    for (const line of headerLines) {
-      result += line + '\n';
-      if (line.match(/^mcp_servers:\s*$/) || line.match(/^mcp_servers:\s*#.*$/)) {
-        for (const srv of allowedServers) {
-          if (serverBlocks[srv]) {
-            result += serverBlocks[srv].join('\n') + '\n';
-          }
-        }
-      }
-    }
-    return result;
-  } catch (err) {
-    logger.error({ sourceYamlPath, error: err }, '[YAML_FILTER] Unexpected failure while filtering config.yaml.');
-    return 'mcp_servers: {}\n';
-  }
-}
-
 export class NousHermesRunner {
   private timeoutMs: number;
   private tempFiles: string[] = [];
@@ -419,7 +187,7 @@ export class NousHermesRunner {
       const lastId = await getLastSessionId(agentName, configPath, 'hermes');
       if (lastId) {
         sessionId = lastId;
-        if (!silent) console.error(`[NousHermesRunner] Auto-resume session: ${sessionId}`);
+        if (!silent) logger.info({ sessionId }, '[NousHermesRunner] Auto-resume session.');
         logger.info({ sessionId }, '[RUN_AGENT_INTERNAL] Resolved last session ID for resume.');
       } else {
         logger.info('[RUN_AGENT_INTERNAL] No previous session ID found for auto-resume.');
@@ -493,36 +261,7 @@ export class NousHermesRunner {
     //  we lose the information that the user explicitly asked for THAT var.)
     const rawExplicitSettingsTokens: Array<{ key: string; value: string }> = [];
 
-    // ============================================================
-    // TOKEN_KEYS — declared at top of scope so it's available for the RAW
-    // pre-interpolation capture in the settings-load block above. This is
-    // 100% exhaustive — every env-var name the runner knows about.
-    // ============================================================
-    const TOKEN_KEYS = [
-      // Generic Anthropic-compatible (Hermes v0.16.0)
-      'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN_E', 'ANTHROPIC_AUTH_TOKEN_F', 'ANTHROPIC_AUTH_TOKEN_Y',
-      // Suffixes numériques 1..9 (convention observée dans les .env prod)
-      'ANTHROPIC_AUTH_TOKEN_1', 'ANTHROPIC_AUTH_TOKEN_2', 'ANTHROPIC_AUTH_TOKEN_3', 'ANTHROPIC_AUTH_TOKEN_4', 'ANTHROPIC_AUTH_TOKEN_5',
-      'ANTHROPIC_AUTH_TOKEN_6', 'ANTHROPIC_AUTH_TOKEN_7', 'ANTHROPIC_AUTH_TOKEN_8', 'ANTHROPIC_AUTH_TOKEN_9',
-      'ANTHROPIC_AUTH_TOKEN_0',
-      // Z.AI / GLM
-      'GLM_API_KEY', 'GLM_API_KEY_E', 'GLM_API_KEY_Y',
-      'Z_AI_API_KEY', 'ZAI_ANTHROPIC_FALLBACK_KEY',
-      'ZAI_API_KEY_E', 'ZAI_API_KEY_Y',
-      'ZAI_API_KEY_1', 'ZAI_API_KEY_2', 'ZAI_API_KEY_3', 'ZAI_API_KEY_4', 'ZAI_API_KEY_5',
-      'ZAI_API_KEY_6', 'ZAI_API_KEY_7', 'ZAI_API_KEY_8', 'ZAI_API_KEY_9', 'ZAI_API_KEY_0',
-      // MiniMax
-      'MINIMAX_API_KEY', 'MINIMAX_CN_API_KEY',
-      'MINIMAX_API_KEY_E', 'MINIMAX_API_KEY_Y',
-      'MINIMAX_API_KEY_1', 'MINIMAX_API_KEY_2', 'MINIMAX_API_KEY_3', 'MINIMAX_API_KEY_4', 'MINIMAX_API_KEY_5',
-      'MINIMAX_CN_API_KEY_E', 'MINIMAX_CN_API_KEY_Y',
-      'MINIMAX_CN_API_KEY_1', 'MINIMAX_CN_API_KEY_2', 'MINIMAX_CN_API_KEY_3', 'MINIMAX_CN_API_KEY_4', 'MINIMAX_CN_API_KEY_5',
-      // OpenAI fallback
-      'OPENAI_API_KEY', 'OPENAI_AUTH_TOKEN',
-      // Mistral
-      'MISTRAL_API_KEY', 'MISTRAL_API_KEY_1', 'MISTRAL_API_KEY_2', 'MISTRAL_API_KEY_3', 'MISTRAL_API_KEY_4', 'MISTRAL_API_KEY_5',
-      'MISTRAL_API_KEY_6', 'MISTRAL_API_KEY_7', 'MISTRAL_API_KEY_E', 'MISTRAL_API_KEY_Y',
-    ];
+    // TOKEN_KEYS is now imported from ./hermes/providerConfig.ts (extracted module).
 
     if (agentName) {
       // Locate the per-agent SOUL.md (system prompt). We support the canonical

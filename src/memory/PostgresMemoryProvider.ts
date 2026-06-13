@@ -185,7 +185,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
   private async ensureDatabaseExists(dbName: string): Promise<void> {
     // Prevent race conditions: if this DB is already being created, wait a bit and check again
     if (this.dbCreationInProgress.has(dbName)) {
-      console.error(
+      logger.error(
         `[PostgresMemory] ⏳ Database ${dbName} creation already in progress, waiting...`,
       );
       // Wait up to 5 seconds for the other process to finish
@@ -201,7 +201,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
           });
           await testClient.connect();
           await testClient.end();
-          console.error(
+          logger.error(
             `[PostgresMemory] ✅ Database ${dbName} is now ready (was being created by another process).`,
           );
           return;
@@ -209,7 +209,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
           // DB not ready yet, continue waiting
         }
       }
-      console.error(`[PostgresMemory] ⚠️  Waited too long for ${dbName}, proceeding anyway...`);
+      logger.error(`[PostgresMemory] ⚠️  Waited too long for ${dbName}, proceeding anyway...`);
     }
 
     // Mark this DB as being created
@@ -238,7 +238,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
       ssl: poolOptions.ssl as boolean | undefined,
     };
 
-    console.error(
+    logger.error(
       `[PostgresMemory] Attempting to ensure DB ${dbName} exists via postgres maintenance DB...`,
     );
     const client = new Client(maintenanceClientConfig);
@@ -246,33 +246,33 @@ export class PostgresMemoryProvider implements MemoryProvider {
       await client.connect();
       const res = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName]);
       if (res.rows.length === 0) {
-        console.error(`[PostgresMemory] 🏗️  Creating new physical database: ${dbName}`);
+        logger.error(`[PostgresMemory] 🏗️  Creating new physical database: ${dbName}`);
         // Validate dbName is a safe PostgreSQL identifier (alphanumeric + underscore only)
         if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(dbName)) {
           throw new Error(`Invalid database name: ${dbName}. Only alphanumeric and underscore characters allowed.`);
         }
         // Double quote database name to handle reserved words
         await client.query(`CREATE DATABASE "${dbName}"`);
-        console.error(`[PostgresMemory] ✅ Database ${dbName} created.`);
+        logger.error(`[PostgresMemory] ✅ Database ${dbName} created.`);
       } else {
-        console.error(`[PostgresMemory] ℹ️  Database ${dbName} already exists.`);
+        logger.error(`[PostgresMemory] ℹ️  Database ${dbName} already exists.`);
       }
     } catch (err: unknown) {
       // Handle duplicate database error (code 42P04)
       if (err instanceof Error && (err as { code?: string }).code === '42P04') {
-        console.error(
+        logger.error(
           `[PostgresMemory] ℹ️  Database ${dbName} already exists (duplicate creation attempted).`,
         );
         return;
       }
       // Handle authentication errors more gracefully
       if (err instanceof Error && err.message.includes('password authentication failed')) {
-        console.error(
+        logger.error(
           `[PostgresMemory] ⚠️  Authentication failed for ${dbName}, but database may already exist. Continuing...`,
         );
         return;
       }
-      console.error(`[PostgresMemory] ❌ Critical: Failed to create database ${dbName}:`, err);
+      logger.error({ dbName, error: err }, '[PostgresMemory] Critical: Failed to create database.');
       throw err;
     } finally {
       await client.end().catch(() => {});
@@ -350,14 +350,14 @@ export class PostgresMemoryProvider implements MemoryProvider {
               WITH (m = 16, ef_construction = 64)
             `);
           } catch (e) {
-            console.warn(
+            logger.warn(
               `[PostgresMemory] ⚠️ Could not create HNSW index: ${e instanceof Error ? e.message : String(e)}`,
             );
           }
         } else {
           // > 2000D Optimization: Fast Exact K-NN Search
           try {
-            console.error(
+            logger.error(
               `[PostgresMemory] ⚡ Opting for Optimized Exact K-NN Search (High Dimensionality: ${dimensions}D).`,
             );
             // Boost parallelization for SeqScans on heavy high-dimensional vectors
@@ -369,12 +369,12 @@ export class PostgresMemoryProvider implements MemoryProvider {
       }
 
       this.initializedDbs.add(dbName);
-      console.error(
+      logger.error(
         `[PostgresMemory] ✅ Physical vault ${dbName} initialized (Vector: STRICTLY ENFORCED).`,
       );
     } catch (e) {
       await client.query('ROLLBACK').catch(() => {});
-      console.error(`[PostgresMemory] Failed to initialize tables in ${dbName}:`, e);
+      logger.error({ dbName, error: e }, '[PostgresMemory] Failed to initialize tables.');
       throw e;
     } finally {
       client.release();
@@ -522,9 +522,9 @@ export class PostgresMemoryProvider implements MemoryProvider {
             }
           }
         } catch (e) {
-          console.error(
-            `[PostgresMemory] CRITICAL: Native vector search error in ${dbName} (Fail Loudly):`,
-            e,
+          logger.error(
+            { dbName, error: e },
+            '[PostgresMemory] CRITICAL: Native vector search error (Fail Loudly).',
           );
           throw e; // Fail loudly instead of fallback
         }

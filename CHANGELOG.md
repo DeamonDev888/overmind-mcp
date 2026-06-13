@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.47] - 2026-06-13
+
+### Fixed & Cleaned
+- **[Services] `NousHermesRunner.ts`**: Cleaned up deprecated `filterConfigYaml` helper and local binary scanners since path resolution has been refactored into modular subdirectories.
+- **[Database/Memory] `PostgresMemoryProvider.ts` / Sessions & Process Registry**: Cleaned up legacy maintenance jobs and sessions mapping.
+
 ## [2.8.46] - 2026-06-12
 
 ### Fixed

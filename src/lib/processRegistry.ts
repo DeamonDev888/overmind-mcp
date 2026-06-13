@@ -13,6 +13,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import { spawn } from 'child_process';
 import { getWorkspaceDir } from './config.js';
+import pino from 'pino';
+
+const logger = pino({ name: 'processRegistry' });
+
 
 const REGISTRY_FILE = '.claude/process-registry.json';
 const PROCESS_TTL_MS = 60 * 60 * 1000;
@@ -88,7 +92,7 @@ async function writeStore(store: RegistryStore, filePath: string): Promise<void>
               await fs.writeFile(tmp, JSON.stringify(s, null, 2), 'utf-8');
               await fs.rename(tmp, fPath);
             } catch (e) {
-              console.error(`[ProcessRegistry] Write failed for ${fPath}:`, e);
+              logger.error({ fPath, error: e }, '[ProcessRegistry] Write failed.');
             }
           }
           resolve();
