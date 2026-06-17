@@ -40,7 +40,7 @@ docker --version
 
 # 1.5 PostgreSQL + pgvector via Docker
 docker run -d --name overmind-postgres \
-  -e POSTGRES_PASSWORD=psu6044 \
+  -e POSTGRES_PASSWORD=<your-pg-password> \
   -e POSTGRES_DB=overmind \
   -p 5433:5432 \
   pgvector/pgvector:pg16
@@ -56,7 +56,7 @@ docker exec overmind-postgres psql -U postgres -c "CREATE DATABASE bt_clients;"
 ```bash
 # 2.1 Overmind MCP (l'orchestrateur multi-runner)
 sudo npm i -g overmind-mcp
-overmind-mcp --version    # doit afficher 2.8.40+
+overmind --version    # doit afficher 2.8.40+
 
 # 2.2 Hermes Agent (le moteur LLM)
 pip install hermes-agent
@@ -75,7 +75,7 @@ hermes setup
 ```bash
 # 3.1 Créer le workspace
 mkdir -p ~/overmind-workflow && cd ~/overmind-workflow
-overmind-mcp init
+overmind init
 # → crée .overmind/, .mcp.json, .claude/, etc.
 
 # 3.2 Variables d'environnement minimales
@@ -85,7 +85,7 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5433
 POSTGRES_DB=overmind
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=psu6044
+POSTGRES_PASSWORD=<your-pg-password>
 
 # MiniMax CN (vos tokens — voir §5)
 ANTHROPIC_AUTH_TOKEN_1=***votre_token_CN_valide***
@@ -302,13 +302,13 @@ mcp_servers:
 
 ```bash
 # 7.1 Démarrer le serveur MCP Overmind (qui sert run_agent)
-overmind-mcp start --port 3099
+overmind start --port 3099
 
 # 7.2 Invoquer l'agent depuis n'importe quel client MCP
 # (Claude Code, Continue.dev, ou directement via curl + JSON-RPC 2.0)
 
 # Exemple: test direct
-mcp-client call overmind-mcp run_agent \
+mcp-client call overmind run_agent \
   --agentName "sniperbot_analyst" \
   --runner "hermes" \
   --prompt "ping - réponds juste OK"
@@ -330,7 +330,7 @@ mcp-client call overmind-mcp run_agent \
 # → Copier le token
 
 # 8.1.2 Cloner discord_llm (le wrapper Overmind+Discord)
-git clone https://github.com/your-org/discord_llm.git ~/discord_llm
+git clone https://github.com/DeamonDev888/discord_llm.git ~/discord_llm
 cd ~/discord_llm
 npm install
 
@@ -379,7 +379,7 @@ Le bot Discord :
 ```bash
 # 9.1 Update Overmind MCP
 sudo npm update -g overmind-mcp
-overmind-mcp --version  # doit afficher la nouvelle version
+overmind --version  # doit afficher la nouvelle version
 
 # 9.2 Update Hermes
 pip install --upgrade hermes-agent
@@ -395,8 +395,8 @@ docker restart x-mcp
 docker restart voipms-mcp
 
 # 3. Overmind MCP server
-pkill -f "overmind-mcp start"
-overmind-mcp start --port 3099 &
+pkill -f "overmind start"
+overmind start --port 3099 &
 
 # 4. Discord bot + bridge
 pkill -f "discord_llm"
@@ -420,7 +420,7 @@ curl http://localhost:3001/status  # bridge
 | `Warning: Unknown toolsets` | Noms de toolsets mismatch `.mcp.json` vs `config.yaml` | Standardiser les noms (kebab-case) |
 | Sniperbot dit "j'ai pas de MCP" mais log montre 69 tools registered | SOUL.md désaligné | Réécrire le SOUL.md pour lister les vrais tools |
 | "Provider: openrouter" au lieu de "minimax-cn" | `--provider` flag pas passé | Vérifier que le runner a `--provider` dans cleanArgs |
-| `EXIT_CODE_1` sur le bridge | MCP server tourne l'ancien build | `pkill -f overmind-mcp && overmind-mcp start &` |
+| `EXIT_CODE_1` sur le bridge | MCP server tourne l'ancien build | `pkill -f overmind && overmind start &` |
 | "Erreur inconnue" générique | Stale state dans `.overmind/hermes/agents/<name>/.hermes/` | Migrer vers `agents/<name>/` (le helper `getAgentHermesHome` 2.8.30 le fait auto) |
 | `cleanupTempFiles` efface le settings.json canonique | settings.json pushé dans `tempFiles` | Bug fixé en 2.8.32 — ne pas push |
 
@@ -543,10 +543,10 @@ cat > .mcp.json <<EOF
 EOF
 
 # 5. Start
-overmind-mcp start --port 3099 &
+overmind start --port 3099 &
 
 # 6. Test
-mcp-client call overmind-mcp run_agent \
+mcp-client call overmind run_agent \
   --agentName sniper --runner hermes --prompt "ping"
 # → "OK"
 ```
@@ -577,14 +577,14 @@ auto-généré par le runner. Si tu as besoin de Discord, ajoute discord_llm
 
 ## 15. Crédits & références
 
-- **Overmind MCP** : https://github.com/your-org/overmind-mcp
+- **Overmind MCP** : https://github.com/DeamonDev888/overmind-mcp
 - **Hermes Agent** : https://hermes-agent.nousresearch.com/docs
 - **MiniMax API** : https://api.minimaxi.com (CN) / https://api.minimax.io (GLOBAL)
-- **MCP Discord server** : https://github.com/your-org/discord-mcp-server (v2.1.3)
-- **discord_llm** : https://github.com/your-org/discord_llm
-- **Exemple vivant** : sniperbot_analyst sur VIBE DEV (serveur Discord 804393160092024832)
+- **MCP Discord server** : https://github.com/DeamonDev888/discord-mcp-server (v2.1.3)
+- **discord_llm** : https://github.com/DeamonDev888/discord_llm
+- **Exemple vivant** : sniperbot_analyst sur VIBE DEV (serveur Discord <discord-server-id>)
 - **CHANGELOG** : voir `Workflow/CHANGELOG.md` pour l'historique complet
-- **SUBTILISATION** : voir `C:\Users\Deamon\Desktop\SUBTILISATION_EXPLAINED.txt` (doc originale)
+- **SUBTILISATION** : voir `~/SUBTILISATION_EXPLAINED.txt` (doc originale)
 - **Flow diagram** : voir `Workflow/docs/OVERMIND_HERMES_SNIPERBOT_FLOW.md`
 
 ---

@@ -3,9 +3,9 @@ import {
   PostgresMemoryProvider,
   registerMemoryAlertCallback,
 } from './PostgresMemoryProvider.js';
-import pino from 'pino';
+import { rootLogger } from '../lib/logger.js';
 
-const logger = pino({ name: 'MemoryFactory' });
+const logger = rootLogger.child({ module: 'MemoryFactory' });
 
 let _provider: MemoryProvider | null = null;
 let _isDbAvailable = true;

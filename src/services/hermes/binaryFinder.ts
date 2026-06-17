@@ -2,10 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import pino from 'pino';
+import { rootLogger } from '../../lib/logger.js';
 
 const execAsync = promisify(exec);
-const logger = pino({ name: 'NousHermesRunner' });
+const logger = rootLogger.child({ module: 'Hermes-binaryFinder' });
 
 /**
  * Find the hermes binary across platforms (Windows, Linux, macOS).

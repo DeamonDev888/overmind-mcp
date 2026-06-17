@@ -5,7 +5,7 @@ import { CONFIG, resolveConfigPath } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { withSpan } from '../lib/telemetry.js';
-import pino from 'pino';
+import { rootLogger } from '../lib/logger.js';
 import {
   registerProcess,
   appendOutput,
@@ -13,7 +13,7 @@ import {
   killProcessTree,
 } from '../lib/processRegistry.js';
 
-const logger = pino({ name: 'OpenCodeRunner' });
+const logger = rootLogger.child({ module: 'OpenCodeRunner' });
 
 export interface RunAgentOptions {
   prompt: string;

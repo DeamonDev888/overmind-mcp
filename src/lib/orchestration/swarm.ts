@@ -1,6 +1,6 @@
-import pino from 'pino';
+import { rootLogger } from '../logger.js';
 
-const logger = pino({ name: 'SwarmOrchestrator' });
+const logger = rootLogger.child({ module: 'SwarmOrchestrator' });
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 

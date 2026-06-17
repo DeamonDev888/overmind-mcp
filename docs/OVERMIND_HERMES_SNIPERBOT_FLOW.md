@@ -13,7 +13,7 @@ canonique + 1 format config globale. Pas le choix si on veut supporter
 ## Le flow complet
 
 ```
-[1] Discord channel 1442317829998383235
+[1] Discord channel <discord-channel-id>
    user écrit "!sniper quel est ton model"
    ↓
 [2] discord_llm/src/discord-bot.ts  (bot Node.js Discord.js)

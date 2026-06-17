@@ -24,7 +24,7 @@ import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { withSpan, type Span } from '../lib/telemetry.js';
 import { loadEnvQuietly } from '../lib/loadEnv.js';
-import pino from 'pino';
+import { rootLogger } from '../lib/logger.js';
 import {
   registerProcess,
   linkSessionToPid,
@@ -33,7 +33,7 @@ import {
   killProcessTree,
 } from '../lib/processRegistry.js';
 
-const logger = pino({ name: 'GeminiRunner' });
+const logger = rootLogger.child({ module: 'GeminiRunner' });
 
 // ============================================================================
 // CHEMINS — @google/gemini-cli npm

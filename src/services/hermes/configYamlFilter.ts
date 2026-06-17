@@ -1,7 +1,7 @@
 import fs from 'fs';
-import pino from 'pino';
+import { rootLogger } from '../../lib/logger.js';
 
-const logger = pino({ name: 'NousHermesRunner' });
+const logger = rootLogger.child({ module: 'Hermes-configYamlFilter' });
 
 /**
  * Filter a Hermes config.yaml to only include the allowed MCP servers.

@@ -2,9 +2,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import { Mutex } from 'async-mutex';
 import { getWorkspaceDir } from './config.js';
-import pino from 'pino';
+import { rootLogger } from './logger.js';
 
-const logger = pino({ name: 'sessions' });
+const logger = rootLogger.child({ module: 'sessions' });
 
 
 const sessionMutex = new Mutex();

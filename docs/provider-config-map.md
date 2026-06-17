@@ -7,11 +7,11 @@ Chaque variable suit cette priorite (la premiere gagne):
 ```
 process.env  (env du parent, herite par le spawn)
       ↓
-Workflow/.env  (C:\Users\Deamon\Desktop\Backup\Serveur MCP\Workflow\.env)
+Workflow/.env  (~/.env)
       ↓
 settings_[agent].json  →  env  (apres interpolation $VAR par process.env)
       ↓
-HERMES_HOME/.env  (C:\Users\Deamon\AppData\Local\hermes\.env)  ← DERNIER MOT
+HERMES_HOME/.env  (~/.hermes/.env)  ← DERNIER MOT
 ```
 
 **Detail du code** (`NousHermesRunner.ts` l.268-456):
@@ -73,7 +73,7 @@ Le premier entry (priority 0) est utilise en premier. C'est celui qui est seed p
 | Provider ID | `zai` | config.yaml ou settings |
 | API Key | `ZAI_ANTHROPIC_FALLBACK_KEY` (cle primaire) ou `Z_AI_API_KEY` (fallback ancien) | `HERMES_HOME/.env` → `os.environ` |
 | Base URL | `https://api.z.ai/api/coding/paas/v4` | credential pool (seed par writeAuthJson) |
-| Model | `glm-5.1` | settings `env.ANTHROPIC_MODEL` |
+| Model | `glm-5.2` | settings `env.ANTHROPIC_MODEL` |
 
 ```json
 // settings_[agent].json — Z.AI correct
@@ -81,14 +81,14 @@ Le premier entry (priority 0) est utilise en premier. C'est celui qui est seed p
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "$ZAI_ANTHROPIC_FALLBACK_KEY",
     "ANTHROPIC_BASE_URL": "https://api.z.ai/api/coding/paas/v4",
-    "ANTHROPIC_MODEL": "glm-5.1"
+    "ANTHROPIC_MODEL": "glm-5.2"
   }
 }
 ```
 
 ```bash
 # .env minimal pour Z.AI
-ZAI_ANTHROPIC_FALLBACK_KEY=5f650035e5a845549e4765184d8179b1.GdehlMpHT0dKq3m3
+ZAI_ANTHROPIC_FALLBACK_KEY=<your-zai-key-here>
 ```
 
 Le credential pool `auth.json` est ecrit par `writeAuthJson()` dans `NousHermesRunner.ts`. La cle `ZAI_ANTHROPIC_FALLBACK_KEY` est envoyee par `agentCustomEnv` → Hermes seed le credential pool avec le bon endpoint.
@@ -101,8 +101,8 @@ Deamon a 2 tokens Z.AI (E=primary, Y=secondary). Le credential pool peut conteni
 
 | Token | Label dans auth.json | Cle dans .env |
 |---|---|---|
-| Primary | `ANTHROPIC_AUTH_TOKEN_E` | `ANTHROPIC_AUTH_TOKEN_E` = `5f65...q3m3` |
-| Secondary | `ANTHROPIC_AUTH_TOKEN_Y` | `ANTHROPIC_AUTH_TOKEN_Y` = `c78a...1ISt` |
+| Primary | `ANTHROPIC_AUTH_TOKEN_E` | `ANTHROPIC_AUTH_TOKEN_E` = `<your-zai-token-E>` |
+| Secondary | `ANTHROPIC_AUTH_TOKEN_Y` | `ANTHROPIC_AUTH_TOKEN_Y` = `<your-zai-token-Y>` |
 
 Pour qu'un agent utilise le token Y (secondary) au lieu de E (primary), le settings doit utiliser `$ANTHROPIC_AUTH_TOKEN_Y` au lieu de `$ANTHROPIC_AUTH_TOKEN_E`.
 
@@ -221,13 +221,13 @@ $HOME/.overmind/hermes/agent_<name>/.hermes                  (Linux/Mac sudo npm
 ```
 
 Pour un agent nomme `sniperbot_analyst`:
-- Dev local (workspace = `C:\Users\Deamon\Desktop\Backup\Serveur MCP\Workflow`):
+- Dev local (workspace = `~/overmind-mcp`):
   `Workflow\.overmind\hermes\agent_sniperbot_analyst\.hermes` (si deja cree)
 - Prod Linux: `~/.overmind/hermes/agent_sniperbot_analyst/.hermes`
 - Prod Windows: `%LOCALAPPDATA%\overmind\hermes\agent_sniperbot_analyst\.hermes`
 
 **Pourquoi c'est important**: avant, le runner Overmind calculait HERMES_HOME
-depuis `process.cwd()`. Si le sniper etait lance depuis `C:\Users\Deamon\Desktop\Backup\Serveur MCP\`
+depuis `process.cwd()`. Si le sniper etait lance depuis `~/overmind-mcp/`
 et le runner depuis `Workflow\`, ils lisaient des `.hermes/.env` differents
 et ecrivaient dans des `auth.json` differents. Maintenant, c'est cwd-independent.
 
@@ -319,13 +319,13 @@ settings_[agent].json
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "$ZAI_ANTHROPIC_FALLBACK_KEY",  ← Runner remplace $VAR → "token_reel"
     "ANTHROPIC_BASE_URL": "https://api.z.ai/api/coding/paas/v4",
-    "ANTHROPIC_MODEL": "glm-5.1"
+    "ANTHROPIC_MODEL": "glm-5.2"
   }
   ↓ (interpolateEnvVars par NousHermesRunner)
 agentCustomEnv envoye a Hermes:
   ANTHROPIC_AUTH_TOKEN=token_reel
   ANTHROPIC_BASE_URL=https://api.z.ai/api/coding/paas/v4
-  ANTHROPIC_MODEL=glm-5.1
+  ANTHROPIC_MODEL=glm-5.2
 
 MAIS Hermes ne lit PAS ANTHROPIC_AUTH_TOKEN directement.
 Hermes lit le CREDENTIAL POOL (auth.json) + les .env vars listees dans api_key_env_vars.
@@ -350,7 +350,7 @@ Le `$VAR` dans `ANTHROPIC_AUTH_TOKEN` est juste une convenience pour que le toke
 4. `agentCustomEnv` envoye a Hermes:
    - `ANTHROPIC_AUTH_TOKEN=<TOKEN>`
    - `ANTHROPIC_BASE_URL=https://api.z.ai/api/coding/paas/v4`
-   - `ANTHROPIC_MODEL=glm-5.1`
+   - `ANTHROPIC_MODEL=glm-5.2`
 5. Hermes fait son propre lookup:
    - `load_pool("zai")` → `_resolve_api_key_provider_secret("zai")`
    - Cherche `ZAI_ANTHROPIC_FALLBACK_KEY` via `_get_env_prefer_dotenv()` dans `HERMES_HOME/.env` puis `os.environ`
@@ -387,7 +387,7 @@ mcp_servers:
     url: "http://localhost:5433/mcp"
 
 model:
-  default: glm-5.1
+  default: glm-5.2
   provider: z-ai
 
 tts:
@@ -438,7 +438,7 @@ Ce config est ecrit dans `.overmind/hermes/agent_<name>/.hermes/config.yaml` a c
 
 | Tu veux... | Utilise ces vars |
 |---|---|
-| Z.AI (glm-5.1) | `ZAI_ANTHROPIC_FALLBACK_KEY` dans `.env` + settings `$ZAI_ANTHROPIC_FALLBACK_KEY` |
+| Z.AI (glm-5.2) | `ZAI_ANTHROPIC_FALLBACK_KEY` dans `.env` + settings `$ZAI_ANTHROPIC_FALLBACK_KEY` |
 | Z.AI secondary (token Y) | `ANTHROPIC_AUTH_TOKEN_Y` dans `.env` + settings `$ANTHROPIC_AUTH_TOKEN_Y` |
 | MiniMax CN | `MINIMAX_CN_API_KEY` dans `.env` + settings `$MINIMAX_CN_API_KEY` |
 | Embeddings OpenRouter | `OVERMIND_EMBEDDING_KEY` (pour embeddings, PAS LLM) |

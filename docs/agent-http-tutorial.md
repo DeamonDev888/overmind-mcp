@@ -367,7 +367,7 @@ console.log(result.result ?? result.error);
 import { HermesRunner } from './dist/services/HermesRunner.js';
 
 const runners = [
-  new HermesRunner({ model: 'glm-5.1' }),
+  new HermesRunner({ model: 'glm-5.2' }),
   new HermesRunner({ model: 'glm-4' }),
 ];
 
@@ -407,7 +407,7 @@ const agents = [
   // 1× KiloRunner
   { runner: new KiloRunner(),    name: 'archi', prompt: 'Décris un pattern.', model: null },
   // 2× HermesRunner
-  { runner: new HermesRunner({ model: 'glm-5.1' }), name: 'nexus_g', prompt: 'Ping système.', model: 'glm-5.1' },
+  { runner: new HermesRunner({ model: 'glm-5.2' }), name: 'nexus_g', prompt: 'Ping système.', model: 'glm-5.2' },
   { runner: new HermesRunner({ model: 'glm-4' }),   name: 'nexus_s', prompt: 'Rapport RAM.', model: 'glm-4' },
   // 1× GeminiRunner
   { runner: new GeminiRunner(), name: 'probe', prompt: 'Combien de cores CPU ?', model: null },

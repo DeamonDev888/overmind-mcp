@@ -156,7 +156,7 @@ hermes gateway run --port 8080
 ```yaml
 # === MODÈLE ===
 model:
-  default: glm-5.1
+  default: glm-5.2
   provider: z-ai
   context_length: 128000
 
@@ -333,7 +333,7 @@ cronjob(
   prompt="Analyse BTC...",       # Prompt auto-suffisant
   skills=["web", "terminal"],    # Skills à charger
   deliver="origin",              # Livraison (origin, all, platform:chat:thread)
-  model={"model": "glm-5.1"},   # Override modèle
+  model={"model": "glm-5.2"},   # Override modèle
   workdir="/path/to/project",   # Répertoire de travail
   enabled_toolsets=["web", "terminal", "file"],  # Restreindre outils
   context_from=["job_id_abc"],  # Chaîner avec sortie d'un autre job

@@ -193,7 +193,7 @@ Historique conversations, sessions, cache. **Géré automatiquement par Hermes.*
 create_agent(name: "mon_agent", runner: "hermes", prompt: "Tu es...")
 
 # 2. Configurer (OVERMIND)
-update_agent_config(name: "mon_agent", model: "glm-5.1",
+update_agent_config(name: "mon_agent", model: "glm-5.2",
   mcpServers: ["memory-server", "discord-server"])
 
 # 3. Clés (OVERMIND)

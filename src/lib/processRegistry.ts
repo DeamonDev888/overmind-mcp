@@ -13,9 +13,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import { spawn } from 'child_process';
 import { getWorkspaceDir } from './config.js';
-import pino from 'pino';
+import { rootLogger } from './logger.js';
 
-const logger = pino({ name: 'processRegistry' });
+const logger = rootLogger.child({ module: 'processRegistry' });
 
 
 const REGISTRY_FILE = '.claude/process-registry.json';

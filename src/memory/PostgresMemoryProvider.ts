@@ -2,7 +2,6 @@ import { Pool, Client } from 'pg';
 import { getPool } from 'overmind-postgres-mcp';
 import crypto from 'crypto';
 import { embedText } from 'overmind-postgres-mcp/services/embeddings';
-import pino from 'pino';
 import {
   MemoryProvider,
   AgentRun,
@@ -11,8 +10,9 @@ import {
   StoreRunParams,
   SearchMemoryParams,
 } from './types.js';
+import { rootLogger } from '../lib/logger.js';
 
-const logger = pino({ name: 'PostgresMemory' });
+const logger = rootLogger.child({ module: 'PostgresMemory' });
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
 

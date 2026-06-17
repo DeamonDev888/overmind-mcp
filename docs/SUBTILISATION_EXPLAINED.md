@@ -191,7 +191,7 @@ Pour forcer un path explicite (Docker, deploy custom) :
   export OVERMIND_AGENT_HOME=/var/lib/overmind/hermes
 
 Pour migrer un ancien install (state dans le workspace-relative path) :
-  cd "C:/Users/Deamon/Desktop/Backup/Serveur MCP/Workflow"
+  cd ~/overmind-mcp
   node scripts/migrate-hermes-home.mjs --dry-run    # preview
   node scripts/migrate-hermes-home.mjs              # apply
 
@@ -276,7 +276,7 @@ Fix appliqué en 2.8.28 : le runner ne passe PLUS --provider. Le
 resolvedProvider est juste loggué en INFO pour debug. Hermes choisit
 le bon plugin depuis l'env.
 
-Référence : C:\Users\Deamon\Desktop\launcher\Hermes-MiniMax-2.bat
+Référence : ~/launcher/Hermes-MiniMax-2.bat
 marche parce qu'il fait juste `hermes chat --yolo` (pas --provider).
 
 

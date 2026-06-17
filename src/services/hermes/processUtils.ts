@@ -1,8 +1,8 @@
 import { exec } from 'child_process';
 import { ChildProcess } from 'child_process';
-import pino from 'pino';
+import { rootLogger } from '../../lib/logger.js';
 
-const logger = pino({ name: 'NousHermesRunner' });
+const logger = rootLogger.child({ module: 'Hermes-processUtils' });
 
 /**
  * Kill a process tree reliably across platforms.

@@ -19,6 +19,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.51] - 2026-06-17
+
+### Fixed & Cleaned
+- **[Logger]**: Replaced ad-hoc `pino` logger instantiations with `rootLogger` children across all services (e.g. `NousHermesRunner.ts`) to unify log streams and format consistency.
+- **[Documentation]**: Cleaned up deprecated refactoring plans and updated guides.
+
 ## [2.8.50] - 2026-06-13
 
 ### Security

@@ -456,10 +456,31 @@ process.on('SIGTERM', () => {
 // This is critical for MCP servers because any non-JSON output on stdout kills the handshake (EOF).
 console.log = (...args) => rootLogger.info(args.length > 1 ? { args } : args[0]);
 console.info = (...args) => rootLogger.info(args.length > 1 ? { args } : args[0]);
-console.warn = (...args) => rootLogger.warn(args.length > 1 ? { args } : args[0]);
+
+// 🛡️ E3: Warning filter — suppress repetitive FastMCP "could not infer client capabilities" spam.
+// FastMCP retries client capability detection every ~180s in stateless HTTP mode, generating
+// dozens of identical warnings. We log the FIRST occurrence, then suppress the rest.
+const SUPPRESSED_WARN_PATTERNS = [
+  'could not infer client capabilities',
+];
+const loggedWarnings = new Set<string>();
+
+console.warn = (...args) => {
+  const msg = typeof args[0] === 'string' ? args[0] : String(args[0] ?? '');
+  const isSuppressed = SUPPRESSED_WARN_PATTERNS.some((p) => msg.includes(p));
+  if (isSuppressed) {
+    if (loggedWarnings.has(msg)) return; // Already logged once — suppress duplicate
+    loggedWarnings.add(msg);
+    rootLogger.debug({ suppressed: true }, `[WARN-DEDUP] ${msg}`);
+    return;
+  }
+  rootLogger.warn(args.length > 1 ? { args } : args[0]);
+};
 console.error = (...args) => rootLogger.error(args.length > 1 ? { args } : args[0]);
 
 // 🛡️ ULTIMATE SHIELD: Proxy process.stdout.write to redirect non-JSON data to stderr
+// E3: Deduplicate SHIELD warnings — library pino loggers fire repeatedly on stdout
+const shieldDedup = new Set<string>();
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 process.stdout.write = function (
   chunk: string | Uint8Array,
@@ -487,7 +508,10 @@ process.stdout.write = function (
 
       // BLOCK ARRAYS on stdout (Batch responses are not standard in MCP)
       if (Array.isArray(parsed)) {
-        rootLogger.warn({ raw: str }, '🛡️ [SHIELD] Blocked array-as-JSON-RPC on stdout');
+        if (!shieldDedup.has('array-blocked')) {
+          shieldDedup.add('array-blocked');
+          rootLogger.warn({ raw: str }, '🛡️ [SHIELD] Blocked array-as-JSON-RPC on stdout (future occurrences suppressed)');
+        }
         return process.stderr.write(chunk, encoding as BufferEncoding | undefined, callback);
       }
 
@@ -496,8 +520,11 @@ process.stdout.write = function (
         return originalStdoutWrite(chunk, encoding as BufferEncoding | undefined, callback);
       }
 
-      // Block non-RPC JSON
-      rootLogger.warn({ raw: str }, '🛡️ [SHIELD] Blocked non-JSON-RPC (Object) on stdout');
+      // Block non-RPC JSON (deduplicated — these fire repeatedly from library pino loggers)
+      if (!shieldDedup.has('object-blocked')) {
+        shieldDedup.add('object-blocked');
+        rootLogger.warn({ raw: str }, '🛡️ [SHIELD] Blocked non-JSON-RPC (Object) on stdout (future occurrences suppressed)');
+      }
       return process.stderr.write(chunk, encoding as BufferEncoding | undefined, callback);
     } catch (e) {
       // Malformed JSON-like content

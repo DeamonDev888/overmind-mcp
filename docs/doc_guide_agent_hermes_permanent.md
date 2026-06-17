@@ -229,7 +229,7 @@ memory_search(query: "trading strategy", include_runs: true)
 create_agent(name: "mon_bot", runner: "hermes", prompt: "Tu es...")
 
 # 2. Configurer (Overmind)
-update_agent_config(name: "mon_bot", model: "glm-5.1",
+update_agent_config(name: "mon_bot", model: "glm-5.2",
   mcpServers: ["discord-server", "memory-server"])
 
 # 3. Injecter clés (Overmind)

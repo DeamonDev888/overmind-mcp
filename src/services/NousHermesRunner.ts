@@ -7,7 +7,7 @@ import { linkSessionToPid } from '../lib/processRegistry.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 import { withSpan } from '../lib/telemetry.js';
 import { loadEnvQuietly } from '../lib/loadEnv.js';
-import pino from 'pino';
+import { rootLogger } from '../lib/logger.js';
 import {
   registerProcess,
   appendOutput,
@@ -24,7 +24,7 @@ import { findHermesBinary } from './hermes/binaryFinder.js';
 import { defaultBaseUrlFor, TOKEN_KEYS } from './hermes/providerConfig.js';
 import { filterConfigYaml } from './hermes/configYamlFilter.js';
 
-const logger = pino({ name: 'NousHermesRunner' });
+const logger = rootLogger.child({ module: 'NousHermesRunner' });
 
 export interface RunAgentOptions {
   prompt: string;
