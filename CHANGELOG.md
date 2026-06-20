@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.52] - 2026-06-20
+
+### Fixed
+- **[Services] `ClaudeRunner.ts`**: Force-inject `ANTHROPIC_BASE_URL` and `ANTHROPIC_MODEL` from agent settings directly into the spawn environment variables, bypassing/correcting potentially corrupted or mismatched entries inside `.env` configuration (such as typos like `minimax` vs `minimaxi`).
+
 ## [2.8.51] - 2026-06-17
 
 ### Fixed & Cleaned

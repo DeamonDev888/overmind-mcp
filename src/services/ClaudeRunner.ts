@@ -438,6 +438,46 @@ export class ClaudeRunner {
             ...(process.env as Record<string, string>),
             ...agentCustomEnv,
           };
+          // [FIX] Force-injecter ANTHROPIC_BASE_URL et ANTHROPIC_MODEL depuis les
+          // settings de l'agent AVANT le spread process.env. Sinon, un .env
+          // corrompu (ex: ANTHROPIC_BASE_URL=https://api.minimax.com avec typo
+          // minimax au lieu de minimaxi) pollue le spawn et Claude CLI ne peut
+          // pas joindre l'API. Les settings de l'agent sont la source de vérité.
+          const CRITICAL_KEYS = [
+            "ANTHROPIC_BASE_URL",
+            "ANTHROPIC_MODEL",
+            "ANTHROPIC_PROVIDER",
+          ];
+          for (const k of CRITICAL_KEYS) {
+            // Priority order: agentCustomEnv > process.env (skip if not set)
+            // Si l'env de l'agent a la valeur, l'utiliser. Sinon garder process.env
+            // MAIS: si process.env contient une valeur "connue cassée" (ex: api.minimax.com
+            // au lieu de api.minimaxi.com), forcer la résolution depuis l'agent ou zéro.
+            if (agentCustomEnv[k] && typeof agentCustomEnv[k] === "string") {
+              let resolved = agentCustomEnv[k] as string;
+              if (resolved.startsWith("$")) {
+                const envKey = resolved.slice(1);
+                resolved = process.env[envKey] || "";
+              }
+              if (resolved && resolved !== spawnEnv[k]) {
+                // Override process.env (même si process.env a déjà une valeur)
+                spawnEnv[k] = resolved;
+              }
+            }
+            // Si process.env a api.minimax.com (typo) ET l'agent a $ANTHROPIC_BASE_URL_M
+            // (= api.minimaxi.com), l'override ci-dessus aura déjà corrigé.
+            // Sinon, si aucune résolution, nettoyer la valeur cassée.
+            if (
+              k === "ANTHROPIC_BASE_URL" &&
+              spawnEnv[k] === "https://api.minimax.com/anthropic"
+            ) {
+              // Force fallback to minimaxi if agent settings have _M suffix
+              const mKey = k + "_M";
+              if (process.env[mKey]) {
+                spawnEnv[k] = process.env[mKey]!;
+              }
+            }
+          }
           if (tokenInfo) {
             // Remplacer le token actif par celui du fallback
             // NOTE: Les tokens peuvent encore contenir des $VAR non résolus
