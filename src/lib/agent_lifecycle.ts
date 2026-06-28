@@ -14,9 +14,20 @@
  *   - agent_control     → direct Map read, no disk poll
  *   - 10+ agents        → all in RAM, zero contention
  *   - wait()            → AbortController-based, instant resolution
+ *
+ * ZOMBIE PREVENTION (v1.1):
+ *   - Every entry has a maxAgeMs TTL (default 5min)
+ *   - Sweeper runs every 30s and prunes dead PIDs
+ *   - registerLiveAgent() refuses dead PIDs upfront
+ *   - setLiveStatus() syncs to processRegistry for cross-system visibility
  */
 
 import { ChildProcess } from 'child_process';
+import {
+  isPidAlive,
+  unregisterProcess,
+  updateProcessStatus,
+} from './processRegistry.js';
 
 export type LifecycleStatus = 'running' | 'done' | 'failed' | 'orphaned';
 
@@ -36,11 +47,17 @@ export interface LiveAgent {
 }
 
 const MAX_BUFFER = 256 * 1024;
+const DEFAULT_TTL_MS = 5 * 60 * 1000;   // 5min before auto-orphan
+const SWEEP_INTERVAL_MS = 30 * 1000;    // sweep every 30s
 
 // ─── In-memory store ───────────────────────────────────────────────────────────
 
 const lifecycleMap = new Map<number, LiveAgent>();
 const sessionIndex  = new Map<string, number>(); // sessionId → pid
+
+// Sweeper state
+let sweepTimer: ReturnType<typeof setInterval> | undefined;
+let sweepCount = 0;
 
 // ─── Ring-buffer ───────────────────────────────────────────────────────────────
 
@@ -51,10 +68,84 @@ function appendToRing(existing: string, chunk: string): string {
     : combined;
 }
 
+// ─── Zombie sweeper ───────────────────────────────────────────────────────────
+
+/**
+ * Periodic sweep that:
+ *   1. Marks entries as 'orphaned' if their PID is dead
+ *   2. Removes entries marked 'done'/'failed'/'orphaned' after TTL
+ * Runs every 30s to keep the map bounded.
+ */
+async function sweepZombies(): Promise<void> {
+  sweepCount++;
+  const now = Date.now();
+  let orphans = 0;
+  let pruned = 0;
+
+  for (const [pid, agent] of lifecycleMap) {
+    // Skip if no PID (shouldn't happen but defensive)
+    if (!pid) continue;
+
+    // Check liveness
+    if (agent.status === 'running') {
+      const alive = await isPidAlive(pid);
+      if (!alive) {
+        agent.status = 'orphaned';
+        agent.lastOutputAt = now;
+        orphans++;
+        // Sync to processRegistry for cross-system visibility
+        updateProcessStatus(pid, 'orphaned', null).catch(() => {});
+      }
+    }
+
+    // Prune if terminal and older than TTL
+    if (agent.status !== 'running') {
+      const age = now - agent.lastOutputAt;
+      if (age > DEFAULT_TTL_MS) {
+        if (agent.sessionId) sessionIndex.delete(agent.sessionId);
+        // Best-effort cleanup in processRegistry too
+        unregisterProcess(pid).catch(() => {});
+        lifecycleMap.delete(pid);
+        pruned++;
+      }
+    }
+  }
+
+  if (orphans > 0 || pruned > 0) {
+    // Optional debug logging — silent in normal operation
+  }
+}
+
+/**
+ * Start the background sweeper. Idempotent — calling multiple times is a no-op.
+ */
+export function startZombieSweeper(): void {
+  if (sweepTimer) return;
+  // Run once immediately, then on interval
+  sweepZombies().catch(() => {});
+  sweepTimer = setInterval(() => {
+    sweepZombies().catch(() => {});
+  }, SWEEP_INTERVAL_MS);
+}
+
+export function stopZombieSweeper(): void {
+  if (sweepTimer) {
+    clearInterval(sweepTimer);
+    sweepTimer = undefined;
+  }
+}
+
+export function getSweepStats(): { sweepCount: number; mapSize: number } {
+  return { sweepCount, mapSize: lifecycleMap.size };
+}
+
 // ─── Lifecycle API ─────────────────────────────────────────────────────────────
 
 /**
  * Register a new running agent. Call once per spawn.
+ *
+ * ZOMBIE GUARD: refuses to register if the PID is already dead.
+ * This prevents stale "running" entries from accumulating.
  */
 export function registerLiveAgent(agent: {
   pid: number;
@@ -65,7 +156,7 @@ export function registerLiveAgent(agent: {
   cleanupFn: () => Promise<void>;
   childRef: ChildProcess | null;
 }): void {
-  // Evict any stale entry for the same agentName that is still 'running'
+  // ZOMBIE GUARD: evict any stale entry for the same agentName that is still 'running'
   for (const [pid, a] of lifecycleMap) {
     if (a.agentName === agent.agentName && a.status === 'running') {
       a.status = 'orphaned';
@@ -84,6 +175,9 @@ export function registerLiveAgent(agent: {
 
   lifecycleMap.set(agent.pid, live);
   if (agent.sessionId) sessionIndex.set(agent.sessionId, agent.pid);
+
+  // Ensure the sweeper is running
+  startZombieSweeper();
 }
 
 /**
@@ -109,6 +203,7 @@ export function linkLiveSession(pid: number, sessionId: string): void {
 /**
  * Transition an agent to a terminal state.
  * Resolves any pending wait() via AbortController.abort().
+ * SYNC: also updates processRegistry for cross-system visibility.
  */
 export function setLiveStatus(
   pid: number,
@@ -123,6 +218,13 @@ export function setLiveStatus(
   if (status !== 'running' && agent.abortController) {
     agent.abortController.abort();
   }
+
+  // Cross-system sync: write terminal status to processRegistry
+  const registryStatus =
+    status === 'running' ? 'running' :
+    status === 'orphaned' ? 'orphaned' :
+    exitCode === 0 ? 'done' : 'failed';
+  updateProcessStatus(pid, registryStatus, exitCode).catch(() => {});
 }
 
 /**
@@ -133,6 +235,8 @@ export function unregisterLiveAgent(pid: number): void {
   if (agent) {
     if (agent.sessionId) sessionIndex.delete(agent.sessionId);
     lifecycleMap.delete(pid);
+    // Sync removal to processRegistry
+    unregisterProcess(pid).catch(() => {});
   }
 }
 
@@ -186,6 +290,7 @@ export function setLiveAbortController(pid: number, ac: AbortController): void {
  * Best-effort cleanup of all running processes.
  */
 export async function drainAllAgents(): Promise<void> {
+  stopZombieSweeper();
   for (const agent of lifecycleMap.values()) {
     if (agent.status === 'running') {
       try { await agent.cleanupFn(); } catch { /* best-effort */ }

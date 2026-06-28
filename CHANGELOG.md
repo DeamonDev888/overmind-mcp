@@ -21,6 +21,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+
+## [2.8.53] - 2026-06-28
+
+### Added & Fixed
+- **[Hermes Integration]**: Migrated `NousHermesRunner.ts` into a clean refactored module under `HermesRunner.ts` and `HermesProfileManager.ts`.
+- **[Build/Scripts]**: Updated the prebuild scripts to copy `launch.cjs` instead of `launch.js`.
+- **[Cleanup]**: Removed deprecated swarm code files and legacy tests.
+
 ## [2.8.52] - 2026-06-20
 
 ### Fixed

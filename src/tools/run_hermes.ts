@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { NousHermesRunner } from '../services/NousHermesRunner.js';
+import { HermesRunner } from '../services/HermesRunner.js';
 import { storeRun } from '../memory/MemoryFactory.js';
 import { getWorkspaceDir } from '../lib/config.js';
 import { deleteSessionId } from '../lib/sessions.js';
 
 export const runHermesSchema = z
   .object({
-    prompt: z.string().describe("Le prompt à envoyer à l'agent Nous Hermes"),
+    prompt: z.string().describe("Le prompt à envoyer à l'agent Hermes"),
     sessionId: z.string().optional(),
     agentName: z.string().optional(),
     autoResume: z.boolean().optional().default(false),
@@ -17,7 +17,13 @@ export const runHermesSchema = z
       .string()
       .optional()
       .describe(
-        'Le modèle à utiliser. Priorité OpenAI (ex: gpt-4o), NVIDIA NIM (ex: deepseek-ai/deepseek-v4-pro) ou OpenRouter (ex: tencent/hy3-preview)',
+        'Model override (optional — the profile config.yaml is the default)',
+      ),
+    provider: z
+      .string()
+      .optional()
+      .describe(
+        'Provider override (optional — the profile config.yaml is the default)',
       ),
     signal: z.custom<AbortSignal>().optional().describe("AbortSignal pour annuler l'agent"),
     /** Quand true, skip storeRun() — utilisé par Overmind MCP (le stockage est fait cote MCP Server) */
@@ -37,7 +43,7 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
     };
   }
 
-  const runner = new NousHermesRunner();
+  const runner = new HermesRunner();
   const {
     prompt,
     agentName,
@@ -47,6 +53,7 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
     config: argConfig,
     silent,
     model,
+    provider,
     signal,
     overmindMode,
   } = args;
@@ -63,6 +70,7 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
     configPath: finalConfig,
     silent,
     model,
+    provider,
     signal,
   });
 
@@ -78,6 +86,7 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
       configPath: finalConfig,
       silent,
       model,
+      provider,
       signal,
     });
   }
@@ -105,7 +114,7 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
 
   if (result.error)
     return {
-      content: [{ type: 'text' as const, text: `❌ Erreur NousHermes: ${result.error}` }],
+      content: [{ type: 'text' as const, text: `❌ Erreur Hermes: ${result.error}` }],
       isError: true,
     };
   return {

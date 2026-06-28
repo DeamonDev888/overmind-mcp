@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
-import { CONFIG, resolveConfigPath, getWorkspaceDir, getSharedHermesHome } from '../lib/config.js';
+import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
 import { getMemoryProvider } from '../memory/MemoryFactory.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 
@@ -44,6 +44,8 @@ export interface AgentConfigUpdates {
   cliPath?: string;
   file?: 'prompt.md' | 'settings.json' | '.mcp.json' | 'skill.md';
   content?: string;
+  /** SOUL.md / system prompt content (Hermes profiles only) */
+  prompt?: string;
 }
 
 export class AgentManager {
@@ -76,19 +78,13 @@ export class AgentManager {
     const claudeFiles = await fs.readdir(claudeAgentsDir).catch(() => [] as string[]);
     const claudeAgentNames = claudeFiles.filter((f) => f.endsWith('.md')).map((f) => f.replace('.md', ''));
 
-    // 2. Scan <HERMES_HOME>/agents/*/ (agents Hermes — layout natif 2.8.30+)
-    //    ❌ NE PAS scanner agent_* (ancien layout pré-2.8.30 supprimé)
-    const hermesHome = getSharedHermesHome();
-    const hermesAgentsDir = path.join(hermesHome, 'agents');
-    const hermesAgentDirs = await fs.readdir(hermesAgentsDir).catch(() => [] as string[]);
-    const hermesAgentNames = (await Promise.all(
-      hermesAgentDirs.map(async (d) => {
-        try {
-          const stat = await fs.stat(path.join(hermesAgentsDir, d));
-          return stat.isDirectory() ? d : null;
-        } catch { return null; }
-      })
-    )).filter((d): d is string => d !== null);
+    // 2. Scan Hermes profiles via `hermes profile list` (v3.0 — native profiles)
+    //    Pas de scan de dossier manuel — on utilise la CLI native Hermes.
+    const { HermesProfileManager } = await import('./HermesProfileManager.js');
+    const hermesProfiles = await HermesProfileManager.list();
+    const hermesAgentNames = hermesProfiles
+      .filter(p => p.name !== 'default') // 'default' n'est pas un agent Overmind
+      .map(p => p.name);
 
     // Collect info
     interface AgentInfo {
@@ -156,52 +152,24 @@ export class AgentManager {
         promptSize,
       });
     }
-    // Process Hermes agents — lit depuis <HERMES_HOME>/agents/<name>/settings.json
-    for (const name of hermesAgentNames) {
-      let model = 'MiniMax-M3';
-      let provider = 'minimax-cn';
-      let mcpServers: string[] = [];
-      let promptSize = 0;
-      let missingConfig = false;
-
-      const agentDir = path.join(hermesAgentsDir, name);
-
-      // SOUL.md → system prompt
-      try {
-        const soulStat = await fs.stat(path.join(agentDir, 'SOUL.md'));
-        promptSize = soulStat.size;
-      } catch { /* Ignored */ }
-
-      // settings.json → credentials + MCP config (source de vérité unique)
-      const settingsPath = path.join(agentDir, 'settings.json');
-      try {
-        const raw = await fs.readFile(settingsPath, 'utf-8');
-        let settings = JSON.parse(raw);
-        settings = interpolateEnvVars(settings);
-        model = settings.env?.ANTHROPIC_MODEL || settings.env?.MODEL || model;
-        provider = settings.env?.ANTHROPIC_PROVIDER || settings.env?.PROVIDER || provider;
-        mcpServers = settings.enabledMcpjsonServers || [];
-      } catch {
-        missingConfig = true;
-      }
+    // Process Hermes agents — lit depuis les profils Hermes natifs (v3.0)
+    for (const profile of hermesProfiles.filter(p => p.name !== 'default')) {
+      const name = profile.name;
+      const model = profile.model || 'unknown';
+      const provider = model.includes('(') ? model.match(/\(([^)]+)\)/)?.[1] || 'auto' : 'auto';
+      const promptSize = 0;
 
       if (!agentsMap.has(name)) {
         agentsMap.set(name, {
           name,
           runner: 'hermes',
-          model,
+          model: model.replace(/\s*\(.*\)$/, '').trim() || 'unknown',
           provider,
-          mcpServers,
+          mcpServers: [],
           origin: 'hermes',
-          missingConfig,
+          missingConfig: false,
           promptSize,
         });
-      } else {
-        const existing = agentsMap.get(name)!;
-        if (existing.runner === 'claude' && existing.missingConfig) {
-          existing.runner = 'hermes';
-          existing.missingConfig = false;
-        }
       }
     }
 
@@ -262,61 +230,57 @@ export class AgentManager {
 
   /**
    * Lecture non-destructive du runner effectif d'un agent.
-   *   - Hermes : <HERMES_HOME>/agents/<name>/settings.json existe → 'hermes'
+   *   - Hermes : `hermes profile list` contient <name> → 'hermes'
    *   - Claude/Kilo : .claude/settings_<name>.json → settings.runner || 'claude'
    *   - Sinon : undefined
-   *
-   * ❌ NE PAS utiliser agent_<name> (ancien layout pré-2.8.30 supprimé)
    */
-  peekRunner(name: string): string | undefined {
-    const hermesHome = getSharedHermesHome();
-    const hermesSettingsPath = path.join(hermesHome, 'agents', name, 'settings.json');
+  async peekRunner(name: string): Promise<string | undefined> {
+    // Hermes profile check via CLI (v3.0)
     try {
-      if (fsSync.existsSync(hermesSettingsPath)) {
-        try {
-          const raw = fsSync.readFileSync(hermesSettingsPath, 'utf-8');
-          const parsed = JSON.parse(raw);
-          return parsed?.runner || 'hermes';
-        } catch { return 'hermes'; }
+      const { HermesProfileManager } = await import('./HermesProfileManager.js');
+      const profiles = await HermesProfileManager.list();
+      if (profiles.some(p => p.name === name)) {
+        return 'hermes';
       }
-      const claudeSettingsPath = path.join(this.claudeDir, `settings_${name}.json`);
+    } catch { /* fall through to Claude check */ }
+
+    // Claude/Kilo check via filesystem
+    const claudeSettingsPath = path.join(this.claudeDir, `settings_${name}.json`);
+    try {
       if (fsSync.existsSync(claudeSettingsPath)) {
-        try {
-          const raw = fsSync.readFileSync(claudeSettingsPath, 'utf-8');
-          const parsed = JSON.parse(raw);
-          return (parsed && typeof parsed.runner === 'string' && parsed.runner) || 'claude';
-        } catch { return undefined; }
+        const raw = fsSync.readFileSync(claudeSettingsPath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed.runner === 'string' && parsed.runner) || 'claude';
       }
-      return undefined;
-    } catch { return undefined; }
+    } catch { /* Ignored */ }
+    return undefined;
   }
 
   async deleteAgent(name: string): Promise<{ deletedFiles: string[]; errors: string[] }> {
     validateAgentName(name);
-    const hermesHome = getSharedHermesHome();
-    // Layout natif Hermes 2.8.30+ : <HERMES_HOME>/agents/<name>/
-    const hermesAgentDir = path.join(hermesHome, 'agents', name);
-
-    let isHermes = false;
-    try {
-      const stat = await fs.stat(hermesAgentDir);
-      isHermes = stat.isDirectory();
-    } catch { /* Ignored */ }
-
     const deletedFiles: string[] = [];
     const errors: string[] = [];
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // HERMES PROFILE (v3.0 — Délègue à `hermes profile delete`)
+    // ═══════════════════════════════════════════════════════════════════════
+    const { HermesProfileManager } = await import('./HermesProfileManager.js');
+    const hermesProfiles = await HermesProfileManager.list();
+    const isHermes = hermesProfiles.some(p => p.name === name);
+
     if (isHermes) {
       try {
-        await fs.rm(hermesAgentDir, { recursive: true, force: true });
-        deletedFiles.push(hermesAgentDir);
+        await HermesProfileManager.delete(name);
+        deletedFiles.push(`hermes profile: ${name}`);
       } catch (e) {
-        errors.push(`hermes_dir: ${e instanceof Error ? e.message : String(e)}`);
+        errors.push(`hermes_profile: ${e instanceof Error ? e.message : String(e)}`);
       }
       return { deletedFiles, errors };
     }
 
-    // Claude/Kilo agent
+    // ═══════════════════════════════════════════════════════════════════════
+    // CLAUDE/KILO/etc. — garde le code existant
+    // ═══════════════════════════════════════════════════════════════════════
     const agentsDir = path.join(this.claudeDir, 'agents');
     const promptPath = path.join(agentsDir, `${name}.md`);
     const settingsPath = path.join(this.claudeDir, `settings_${name}.json`);
@@ -341,20 +305,18 @@ export class AgentManager {
     const changes: string[] = [];
     const claudeDir = this.claudeDir;
 
-    // Layout natif Hermes : <HERMES_HOME>/agents/<name>/
-    const hermesHome = getSharedHermesHome();
-    const hermesAgentDir = path.join(hermesHome, 'agents', name);
-
-    let isHermes = false;
-    try {
-      const stat = await fs.stat(hermesAgentDir);
-      isHermes = stat.isDirectory();
-    } catch { /* Ignored */ }
+    // ═══════════════════════════════════════════════════════════════════════
+    // HERMES PROFILE (v3.0 — Délègue à HermesProfileManager)
+    // ═══════════════════════════════════════════════════════════════════════
+    const { HermesProfileManager } = await import('./HermesProfileManager.js');
+    const profiles = await HermesProfileManager.list();
+    const isHermes = profiles.some(p => p.name === name);
+    const hermesAgentDir = isHermes ? (await HermesProfileManager.getProfilePath(name)) || '' : '';
 
     // --- MODE RÉÉCRITURE DE FICHIER COMPLET ---
     if (updates.file && updates.content) {
-      if (isHermes) {
-        // Layout natif Hermes : <HERMES_HOME>/agents/<name>/
+      if (isHermes && hermesAgentDir) {
+        // Profil Hermes natif : config.yaml, SOUL.md, mcp.json, .env
         let filePath: string;
         switch (updates.file) {
           case 'prompt.md':
@@ -363,15 +325,15 @@ export class AgentManager {
             changes.push(`✅ **SOUL.md** réécrit → ${filePath}`);
             break;
           case 'settings.json':
-            // Écrit directement le JSON Hermes natif (pas de conversion .env)
-            filePath = path.join(hermesAgentDir, 'settings.json');
+            // Pour Hermes, settings.json = config.yaml
+            filePath = path.join(hermesAgentDir, 'config.yaml');
             await fs.writeFile(filePath, updates.content, 'utf-8');
-            changes.push(`✅ **settings.json** réécrit → ${filePath}`);
+            changes.push(`✅ **config.yaml** réécrit → ${filePath}`);
             break;
           case '.mcp.json':
-            filePath = path.join(hermesAgentDir, '.mcp.json');
+            filePath = path.join(hermesAgentDir, 'mcp.json');
             await fs.writeFile(filePath, updates.content, 'utf-8');
-            changes.push(`✅ **.mcp.json** réécrit → ${filePath}`);
+            changes.push(`✅ **mcp.json** réécrit → ${filePath}`);
             break;
           case 'skill.md':
             filePath = path.join(hermesAgentDir, 'skills', 'skill.md');
@@ -409,43 +371,35 @@ export class AgentManager {
       }
     }
 
-    if (isHermes) {
-      // Lit et écrit dans <HERMES_HOME>/agents/<name>/settings.json (format JSON natif)
-      const settingsPath = path.join(hermesAgentDir, 'settings.json');
-      let settings: Record<string, unknown> & { env?: Record<string, string>; enabledMcpjsonServers?: string[] } = {};
-      try {
-        const raw = await fs.readFile(settingsPath, 'utf-8');
-        settings = JSON.parse(raw);
-      } catch { /* fichier absent ou invalide — on repart d'un objet vide */ }
-
+    if (isHermes && hermesAgentDir) {
+      // ═══════════════════════════════════════════════════════════════════════
+      // HERMES PROFILE — update via HermesProfileManager (v3.0)
+      // Délègue à `hermes config set` + écriture directe .env + SOUL.md
+      // ═══════════════════════════════════════════════════════════════════════
       if (updates.model) {
-        settings.env = settings.env || {};
-        const old = settings.env.ANTHROPIC_MODEL || settings.env.MODEL || '(none)';
-        settings.env.ANTHROPIC_MODEL = updates.model;
-        changes.push(`- Modèle : ${old} → ${updates.model}`);
+        const oldModel = profiles.find(p => p.name === name)?.model || '(none)';
+        await HermesProfileManager.update(name, { model: updates.model });
+        changes.push(`- Modèle : ${oldModel} → ${updates.model}`);
       }
       if (updates.env) {
-        settings.env = settings.env || {};
+        const envMap: Record<string, string> = {};
         for (const [key, value] of Object.entries(updates.env)) {
-          const oldVal = settings.env[key] ? '***' : '(undefined)';
-          settings.env[key] = value;
-          changes.push(`- Env '${key}' : ${oldVal} → ${value ? '***' : '(vide)'}`);
+          envMap[key] = value;
+          changes.push(`- Env '${key}' → ${value ? '***' : '(vide)'}`);
         }
+        await HermesProfileManager.update(name, { credentials: envMap });
+      }
+      if (updates.prompt) {
+        await HermesProfileManager.update(name, { prompt: updates.prompt });
+        changes.push(`- SOUL.md mis à jour`);
       }
       if (updates.mcpServers) {
-        const old = settings.enabledMcpjsonServers || [];
-        settings.enabledMcpjsonServers = updates.mcpServers;
-        changes.push(`- MCPs : [${old.join(', ')}] → [${updates.mcpServers.join(', ')}]`);
+        await HermesProfileManager.update(name, { mcpServers: updates.mcpServers });
+        changes.push(`- MCPs : [${updates.mcpServers.join(', ')}]`);
       }
       if (updates.runner) {
-        const old = settings.runner || 'hermes';
-        settings.runner = updates.runner;
-        changes.push(`- Runner : ${old} → ${updates.runner}`);
-      }
-
-      if (changes.length > 0) {
-        await fs.mkdir(hermesAgentDir, { recursive: true });
-        await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+        // Runner n'est plus stocké dans le profil — c'est Overmind qui route
+        changes.push(`- Runner : ${updates.runner} (routing Overmind)`);
       }
       return changes;
     }
@@ -679,49 +633,59 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
     envVars.ANTHROPIC_MODEL = model; // Ensure model is correctly set
 
     if (runner === 'hermes') {
-      // Layout natif Hermes 2.8.30+ : <HERMES_HOME>/agents/<name>/
-      // ❌ NE PAS créer agent_<name>/.hermes/ (ancien layout supprimé)
-      const hermesHome = getSharedHermesHome();
-      const hermesAgentDir = path.join(hermesHome, 'agents', name);
-      const hermesSkillsDir = path.join(hermesAgentDir, 'skills');
-      await fs.mkdir(hermesAgentDir, { recursive: true });
-      await fs.mkdir(hermesSkillsDir, { recursive: true });
+      // ═══════════════════════════════════════════════════════════════════════
+      // NATIVE HERMES PROFILE (v3.0 — Refactored)
+      //
+      // Au lieu de créer un layout custom (settings.json + SOUL.md manuels),
+      // on délègue à `hermes profile create` qui crée un profil natif:
+      //   ~/.hermes/profiles/<name>/
+      //     ├── config.yaml   (provider + model + MCP — géré par Hermes)
+      //     ├── .env          (credentials — géré par Hermes)
+      //     ├── SOUL.md       (system prompt)
+      //     ├── memories/     (state.db — isolation native)
+      //     └── sessions/     (historique — géré par Hermes)
+      //
+      // Avantages:
+      //   - Zero credential drift (1 .env par profil, point final)
+      //   - Provider routing géré par Hermes (35+ providers natifs)
+      //   - Pas de TOKEN_KEYS, pas de token resolution, pas de HERMES_HOME custom
+      // ═══════════════════════════════════════════════════════════════════════
+      const { HermesProfileManager } = await import('./HermesProfileManager.js');
 
-      // SOUL.md — system prompt
-      const promptPath = path.join(hermesAgentDir, 'SOUL.md');
-      await fs.writeFile(promptPath, finalPrompt, 'utf-8');
+      // Build credentials map from envVars (extract provider-specific keys)
+      const credentials: Record<string, string> = {};
+      const authToken = envVars.ANTHROPIC_AUTH_TOKEN || '';
+      if (authToken) {
+        // Auto-detect provider from token prefix to set the right env var
+        if (authToken.startsWith('sk-cp-') || authToken.startsWith('sk-mm-')) {
+          credentials['MINIMAX_CN_API_KEY'] = authToken;
+        } else if (/^[0-9a-f]{32}/i.test(authToken)) {
+          credentials['GLM_API_KEY'] = authToken;
+        } else {
+          credentials['ANTHROPIC_API_KEY'] = authToken;
+        }
+      }
 
-      // settings.json — credentials + MCP (format JSON natif Hermes)
-      // ❌ NE PAS écrire .env ou config.yaml — Hermes lit settings.json
-      const settingsPath = path.join(hermesAgentDir, 'settings.json');
-      const hermesSettings: Record<string, unknown> = {
-        env: {
-          ANTHROPIC_AUTH_TOKEN: envVars.ANTHROPIC_AUTH_TOKEN || '',
-          ANTHROPIC_BASE_URL: envVars.ANTHROPIC_BASE_URL || 'https://api.minimaxi.com/anthropic',
-          ANTHROPIC_MODEL: envVars.ANTHROPIC_MODEL || model,
-          ANTHROPIC_PROVIDER: 'minimax-cn',
-          // Provider-specific (injecté aussi par NousHermesRunner au spawn)
-          MINIMAX_CN_API_KEY: envVars.ANTHROPIC_AUTH_TOKEN || '',
-          MINIMAX_CN_BASE_URL: 'https://api.minimaxi.com/anthropic',
-        },
-        enableAllProjectMcpServers: false,
-        enabledMcpjsonServers: mcpServers,
-        agent: name,
-        runner: 'hermes',
-      };
-      await fs.writeFile(settingsPath, JSON.stringify(hermesSettings, null, 2), 'utf-8');
+      const { profilePath, soulPath } = await HermesProfileManager.create({
+        name,
+        prompt: finalPrompt,
+        model,
+        credentials,
+        mcpServers,
+        description: `Overmind agent: ${name}`,
+      });
 
       // Mémoriser la création de l'agent
       try {
         const memory = getMemoryProvider();
         await memory.storeKnowledge({
-          text: `Nouvel agent Hermes créé : '${name}'. Credentials : ${settingsPath}.`,
+          text: `Nouvel agent Hermes créé : '${name}'. Profile path : ${profilePath}.`,
           source: 'agent',
           agentName: name,
         });
       } catch { /* Ignored */ }
 
-      return { promptPath, settingsPath };
+      return { promptPath: soulPath, settingsPath: path.join(profilePath, 'config.yaml') };
     }
 
     const agentsDir = path.join(this.claudeDir, 'agents');
@@ -785,41 +749,33 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
   async getDetailedConfigs(name: string): Promise<Record<string, string>> {
     validateAgentName(name);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // DÉTECTION DU TYPE D'AGENT — LAYOUT NATIF 2.8.45+
-    //   Hermes  → <HERMES_HOME>/agents/<name>/settings.json
-    //   Claude  → <WORKSPACE>/.claude/settings_<name>.json
-    // ❌ NE PAS chercher dans agent_<name>/.hermes/ (ancien layout supprimé)
-    // ═══════════════════════════════════════════════════════════════════════
-    const hermesHome = getSharedHermesHome();
-    const hermesAgentDir = path.join(hermesHome, 'agents', name);
-
-    let isHermes = false;
-    try {
-      const stat = await fs.stat(hermesAgentDir);
-      isHermes = stat.isDirectory();
-    } catch { /* Ignored */ }
-
     const result: Record<string, string> = {};
     const readFileSafe = async (filePath: string) => {
       try { return await fs.readFile(filePath, 'utf-8'); }
       catch { return 'MISSING'; }
     };
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // HERMES PROFILE (v3.0 — lit depuis ~/.hermes/profiles/<name>/)
+    // ═══════════════════════════════════════════════════════════════════════
+    const { HermesProfileManager } = await import('./HermesProfileManager.js');
+    const profiles = await HermesProfileManager.list();
+    const isHermes = profiles.some(p => p.name === name);
+
     if (isHermes) {
-      // ───────────────────────────────────────────────────────────────────────
-      // HERMES AGENT — lit directement depuis <HERMES_HOME>/agents/<name>/
-      // settings.json = credentials + MCP + provider (source de vérité unique)
-      // SOUL.md      = system prompt
-      // .mcp.json    = MCP override (optionnel)
-      // ───────────────────────────────────────────────────────────────────────
-      result['settings.json'] = await readFileSafe(path.join(hermesAgentDir, 'settings.json'));
-      result['prompt.md']     = await readFileSafe(path.join(hermesAgentDir, 'SOUL.md'));
-      result['.mcp.json']     = await readFileSafe(path.join(hermesAgentDir, '.mcp.json'));
-      result['skill.md']      = await readFileSafe(path.join(hermesAgentDir, 'skills', 'skill.md'));
+      const profilePath = await HermesProfileManager.getProfilePath(name);
+      if (profilePath) {
+        result['settings.json'] = await readFileSafe(path.join(profilePath, 'config.yaml'));
+        result['prompt.md']     = await readFileSafe(path.join(profilePath, 'SOUL.md'));
+        result['.mcp.json']     = await readFileSafe(path.join(profilePath, 'mcp.json'));
+        result['.env']          = await readFileSafe(path.join(profilePath, '.env'));
+      }
       return result;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // CLAUDE/KILO/etc. — garde le code existant
+    // ═══════════════════════════════════════════════════════════════════════
     const agentsDir = path.join(this.claudeDir, 'agents');
     const promptPath = path.join(agentsDir, `${name}.md`);
     const settingsPath = path.join(this.claudeDir, `settings_${name}.json`);

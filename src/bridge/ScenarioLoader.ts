@@ -50,7 +50,8 @@ export type ScenarioStep =
   | A2AStep
   | ParallelStep
   | ConditionalStep
-  | WaitStep;
+  | WaitStep
+  | KanbanStep;
 
 export interface RunStep {
   id: string;
@@ -100,6 +101,26 @@ export interface WaitStep {
   id: string;
   type: 'wait';
   ms: number;
+}
+
+/**
+ * Kanban Step (v3.0) — Durable task via Hermes Kanban.
+ *
+ * Creates a Kanban task, optionally waits for completion, and exposes
+ * the result as ${stepId.output}. If the server crashes, the Kanban
+ * task survives and can be reclaimed automatically.
+ */
+export interface KanbanStep {
+  id: string;
+  type: 'kanban';
+  assignee: string;        // Hermes profile name
+  title: string;
+  body?: string;           // defaults to interpolated from vars
+  tenant?: string;
+  wait?: boolean;          // default: true — wait for completion
+  timeoutMs?: number;      // default: 600000 (10min)
+  /** Output saved as ${stepId.output} */
+  outputVar?: string;
 }
 
 export interface Scenario {
@@ -208,6 +229,9 @@ function validateStep(step: unknown, path: string): void {
     }
   } else if (type === 'wait') {
     if (typeof s.ms !== 'number') throw new Error(`${path}.ms required for wait`);
+  } else if (type === 'kanban') {
+    if (typeof s.assignee !== 'string') throw new Error(`${path}.assignee required for kanban`);
+    if (typeof s.title !== 'string') throw new Error(`${path}.title required for kanban`);
   } else {
     throw new Error(`${path}.type must be one of: run, a2a, parallel, if, wait (got: ${String(type)})`);
   }
@@ -364,6 +388,49 @@ async function runStep(step: ScenarioStep, ctx: ScenarioRunnerContext): Promise<
           stepId: step.id,
           type: 'wait',
           success: true,
+          durationMs: Date.now() - startTime,
+        };
+      }
+
+      case 'kanban': {
+        const title = interpolate(step.title, ctx.vars);
+        const body = step.body ? interpolate(step.body, ctx.vars) : title;
+        const shouldWait = step.wait !== false; // default: true
+        log(`▶ [${step.id}] kanban → ${step.assignee}: "${title}"`);
+
+        // Dynamic import to avoid circular dependency
+        const { KanbanAdapter } = await import('../services/KanbanAdapter.js');
+        const kanban = new KanbanAdapter();
+
+        const { taskId } = await kanban.createTask({
+          title,
+          assignee: step.assignee,
+          body,
+          tenant: step.tenant,
+        });
+
+        if (!shouldWait) {
+          log(`✓ [${step.id}] kanban task created (fire-and-forget): ${taskId}`);
+          return {
+            stepId: step.id,
+            type: 'kanban',
+            success: true,
+            output: `kanban:${taskId}`,
+            durationMs: Date.now() - startTime,
+          };
+        }
+
+        const result = await kanban.wait(taskId, step.timeoutMs || 600000);
+        log(result.status === 'done'
+          ? `✓ [${step.id}] kanban done (${Date.now() - startTime}ms)`
+          : `✗ [${step.id}] kanban ${result.status}: ${result.error || ''}`
+        );
+
+        return {
+          stepId: step.id,
+          type: 'kanban',
+          success: result.status === 'done',
+          output: result.summary || result.error || `kanban:${taskId}`,
           durationMs: Date.now() - startTime,
         };
       }

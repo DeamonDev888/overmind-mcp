@@ -161,6 +161,121 @@ export async function runAgentsLocally(
 
 // ─── Dispatcher ────────────────────────────────────────────────────────────────
 
+/**
+ * Main dispatcher entry point (v3.0 — Refactored).
+ *
+ * Routing logic:
+ *   - ALL agents are Hermes + waitAll=true → dispatch via Kanban (durable, SQLite-backed)
+ *   - Otherwise → dispatch via runAgentsLocally (in-process, spawn direct)
+ *
+ * Kanban dispatch is only used for Hermes-only groups because:
+ *   1. Kanban provides durability (survives crashes)
+ *   2. Kanban provides circuit breaker (auto-reclaim, auto-retry)
+ *   3. Kanban provides dependency graph (parent→child)
+ *   4. Non-Hermes runners (claude, kilo, etc.) can't be spawned by the Kanban dispatcher
+ */
 export async function dispatchAgents(agents: AgentSpec[], opts: DispatchOptions) {
+  const allHermes = agents.length > 1 && agents.every(a => a.runner === 'hermes');
+
+  // ─── All-Hermes parallel dispatch → Kanban (durable) ──────────────────────
+  if (allHermes && opts.waitAll) {
+    try {
+      return await dispatchViaKanban(agents, opts);
+    } catch (e) {
+      // Fallback to in-process dispatch if kanban fails
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[dispatchAgents] Kanban dispatch failed (${msg}) — falling back to in-process.`);
+    }
+  }
+
+  // ─── Default: in-process dispatch ─────────────────────────────────────────
   return runAgentsLocally(agents, opts);
+}
+
+/**
+ * Dispatch a group of Hermes agents via Kanban tasks.
+ *
+ * Each agent becomes a Kanban task assigned to its profile. The Kanban dispatcher
+ * spawns each as a separate OS process with circuit breaker, retry, and durability.
+ *
+ * YOLO: auto-reclaim on stale, auto-unblock on block, no human intervention.
+ */
+async function dispatchViaKanban(
+  agents: AgentSpec[],
+  opts: DispatchOptions,
+): Promise<{ content: [{ type: 'text'; text: string }]; isError: boolean }> {
+  const { KanbanAdapter } = await import('../../services/KanbanAdapter.js');
+  const kanban = new KanbanAdapter();
+
+  const startTime = Date.now();
+
+  // ─── Ensure kanban is initialized ─────────────────────────────────────────
+  try {
+    await kanban.init();
+  } catch {
+    // init is idempotent — ignore errors
+  }
+
+  // ─── Create parallel tasks ────────────────────────────────────────────────
+  const taskDefs = agents.map((agent, i) => ({
+    title: agent.taskId || agent.agentName || `task_${i + 1}`,
+    assignee: agent.agentName || 'default',
+    body: agent.prompt,
+    idempotencyKey: agent.taskId, // dedup if taskId is provided
+  }));
+
+  const taskIds = await kanban.createParallelTasks(taskDefs);
+
+  // ─── Wait for all tasks to complete ───────────────────────────────────────
+  const timeoutMs = 600000; // 10min per task
+  const results = await Promise.all(
+    taskIds.map(async (taskId, i) => {
+      const label = agents[i].taskId || agents[i].agentName || `task_${i + 1}`;
+      const taskStart = Date.now();
+
+      try {
+        const result = await kanban.wait(taskId, timeoutMs);
+        const elapsed = ((Date.now() - taskStart) / 1000).toFixed(1);
+
+        return {
+          label,
+          runner: 'hermes' as const,
+          agentName: agents[i].agentName,
+          status: (result.status === 'done' ? 'success' : 'error') as 'success' | 'error',
+          elapsed: `${elapsed}s`,
+          result: result.summary || result.error || '(no output)',
+        };
+      } catch (e) {
+        const elapsed = ((Date.now() - taskStart) / 1000).toFixed(1);
+        return {
+          label,
+          runner: 'hermes' as const,
+          agentName: agents[i].agentName,
+          status: 'error' as const,
+          elapsed: `${elapsed}s`,
+          result: e instanceof Error ? e.message : String(e),
+        };
+      }
+    })
+  );
+
+  // ─── Build summary ────────────────────────────────────────────────────────
+  const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  const successCount = results.filter(r => r.status === 'success').length;
+  const errorCount = results.filter(r => r.status === 'error').length;
+
+  const summary = [
+    `⚡ dispatch_via_kanban — ${results.length} agent(s) | ✅ ${successCount} succès | ❌ ${errorCount} erreurs | 🕐 ${totalElapsed}s total`,
+    '',
+    ...results.map(r => {
+      const icon = r.status === 'success' ? '✅' : '❌';
+      const header = `${icon} [${r.label}] ${r.runner}${r.agentName ? `/${r.agentName}` : ''} (${r.elapsed})`;
+      return `${header}\n${r.result}`;
+    }),
+  ].join('\n---\n');
+
+  return {
+    content: [{ type: 'text' as const, text: summary }],
+    isError: errorCount === results.length,
+  };
 }

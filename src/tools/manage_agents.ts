@@ -130,7 +130,7 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
   const isUnitUpdate = !!(model || mcpServers || env || mode || cliPath);
   const isFileRewrite = !!(file && content);
   if (isUnitUpdate && !isFileRewrite && !runner) {
-    const detected = manager.peekRunner(name); // (b) lecture du runner déjà en place
+    const detected = await manager.peekRunner(name); // (b) lecture du runner déjà en place
     const detectedTxt = detected ? `**${detected}**` : '**non défini** (sera initialisé à `claude`)';
     return {
       content: [
@@ -163,10 +163,10 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
     });
 
     // (b) Validation runtime : on confirme le runner effectif après update
-    const effectiveRunner = manager.peekRunner(name);
+    const effectiveRunner = await manager.peekRunner(name);
     const runnerNotice = effectiveRunner
-      ? `\n\n🏃 Runner effectif (lu dans settings_${name}.json) : **${effectiveRunner}**`
-      : `\n\n⚠️ Aucun runner détectable dans settings_${name}.json — un futur run_agent risque d'échouer.`;
+      ? `\n\n🏃 Runner effectif : **${effectiveRunner}**`
+      : `\n\n⚠️ Aucun runner détectable — un futur run_agent risque d'échouer.`;
 
     if (changes.length === 0) {
       return {
