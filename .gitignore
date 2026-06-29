@@ -129,3 +129,8 @@ notes/
 **/sessions.json
 auth.json
 **/auth.json
+
+# ─── Runtime registries (created by Overmind on first run, don't commit) ───────
+
+bridge/agents.json
+bridge/process-registry.json

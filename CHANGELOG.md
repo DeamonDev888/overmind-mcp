@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.0.1] - 2026-06-29
+
+### Fixed
+- **[CI]**: Added `vitest.config.ts` to constrain test discovery. Previously, vitest scanned `.kilo/node_modules/`, `.claude/`, `.hermes/` and other agent-internal directories, which broke the GitHub Actions `Unit Tests` job (#280, failed after ~58s on v3.0.0 push). Local dev masked the bug because vitest auto-selected the `forks` pool without an explicit config.
+- **[CI]**: Pinned `pool: 'forks'` in vitest config. Test `agentHermesHome.test.ts:165` calls `process.chdir()` which throws `"process.chdir() is not supported in workers"` under vitest v4 `threads` pool. Local dev masked this because vitest defaulted to `forks` when no config was present.
+- **[Repo hygiene]**: Added `bridge/agents.json` and `bridge/process-registry.json` to `.gitignore` — these runtime registries are created on first run and should not be committed.
+
 ## [3.0.0] - 2026-06-29
 
 ### Breaking Changes — Architecture v3.1 (Profile layout refactor)
