@@ -18,7 +18,7 @@ import { rootLogger } from './logger.js';
 const logger = rootLogger.child({ module: 'processRegistry' });
 
 
-const REGISTRY_FILE = '.claude/process-registry.json';
+const REGISTRY_FILE = 'bridge/process-registry.json';
 const PROCESS_TTL_MS = 60 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 

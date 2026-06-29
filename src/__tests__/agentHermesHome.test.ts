@@ -1,18 +1,23 @@
 /**
  * Tests for getSharedHermesHome + getAgentHermesHome — the canonical
- * Hermes home resolver for Overmind+Hermes (2.8.30+).
+ * Hermes home resolver for Overmind+Hermes (v3.1+).
  *
- * Layout we're testing:
- *   <hermesHome>/agents/<name>/settings.json   ← per-agent env + persona
- *   <hermesHome>/agents/<name>/SOUL.md         ← per-agent system prompt
- *   <hermesHome>/config.yaml                   ← global, managed by Hermes upstream
- *   <hermesHome>/auth.json                     ← global, managed by Hermes upstream
+ * Layout we're testing (v3.1 canonical):
+ *   <hermesHome>/profiles/<name>/profile.yaml   ← per-agent descriptor
+ *   <hermesHome>/profiles/<name>/SOUL.md        ← per-agent system prompt
+ *   <hermesHome>/config.yaml                    ← global, managed by Hermes upstream
+ *   <hermesHome>/auth.json                      ← global, managed by Hermes upstream
+ *
+ * Resolution order for getAgentHermesHome():
+ *   1. <shared>/profiles/<name>/         (v3.1 canonical)
+ *   2. <shared>/agents/<name>/           (legacy pre-v3.1)
+ *   3. ~/.hermes/profiles/<name>/        (native Hermes fallback)
+ *   4. <shared>/profiles/<name>/         (canonical — create on demand)
  *
  * Resolution order for the shared Hermes home:
  *   1. OVERMIND_HERMES_HOME env var (operator-declared, e.g. via systemd)
- *   2. <workspace>/.overmind/hermes/           (dev + local install)
- *   3. $HOME/.overmind/hermes/                  (Linux/Mac sudo npm -g)
- *      %LOCALAPPDATA%\overmind\hermes\          (Windows sudo npm -g)
+ *   2. $HOME/.overmind/hermes/        (Linux/Mac)
+ *      %LOCALAPPDATA%\overmind\hermes\ (Windows)
  *
  * Uses REAL functions with controlled env vars + real fs (no module mocking).
  */
@@ -23,7 +28,6 @@ import fs from 'fs';
 import os from 'os';
 import {
   getAgentHermesHome,
-  getAgentOvermindHome,
   getSharedHermesHome,
 } from '../lib/config.js';
 
@@ -75,13 +79,16 @@ describe('getSharedHermesHome (shared Hermes root)', () => {
     expect(getSharedHermesHome()).toBe(explicit);
   });
 
-  it('falls through to <workspace>/.overmind/hermes/ when no env override', () => {
-    const ws = makeTmp('ws');
-    process.env.OVERMIND_WORKSPACE = ws;
-    const expected = path.join(ws, '.overmind', 'hermes');
-    expect(getSharedHermesHome()).toBe(expected);
-    // Side effect: created
-    expect(fs.existsSync(expected)).toBe(true);
+  it('falls through to HOME-based path when no env override (creates dir)', () => {
+    // When no OVERMIND_HERMES_HOME, it falls to HOME-based resolution.
+    // We just verify the result ends with the canonical marker and was created.
+    const fakeHome = makeTmp('ws');
+    process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
+    delete process.env.LOCALAPPDATA;
+    const result = getSharedHermesHome();
+    expect(result).toMatch(/[/\\](?:\.?)overmind[/\\]hermes$/);
+    expect(fs.existsSync(result)).toBe(true);
   });
 
   it('Linux/Mac: HOME-based branch constructs $HOME/.overmind/hermes/', () => {
@@ -94,7 +101,6 @@ describe('getSharedHermesHome (shared Hermes root)', () => {
     process.env.HOME = fakeHome;
     process.env.USERPROFILE = fakeHome;
     delete process.env.LOCALAPPDATA;
-    process.env.OVERMIND_WORKSPACE = fakeHome;
     const originalPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
     try {
@@ -114,7 +120,6 @@ describe('getSharedHermesHome (shared Hermes root)', () => {
     process.env.LOCALAPPDATA = fakeLocal;
     delete process.env.HOME;
     delete process.env.USERPROFILE;
-    process.env.OVERMIND_WORKSPACE = fakeLocal;
     const originalPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     try {
@@ -131,19 +136,19 @@ describe('getSharedHermesHome (shared Hermes root)', () => {
 });
 
 describe('getAgentHermesHome (per-agent home under shared root)', () => {
-  it('returns <sharedRoot>/agents/<name>/', () => {
+  it('returns <sharedRoot>/profiles/<name>/ (v3.1 canonical)', () => {
     const explicit = makeTmp('agent');
     process.env.OVERMIND_HERMES_HOME = explicit;
     expect(getAgentHermesHome('sniperbot_analyst')).toBe(
-      path.join(explicit, 'agents', 'sniperbot_analyst'),
+      path.join(explicit, 'profiles', 'sniperbot_analyst'),
     );
   });
 
-  it('null/undefined agentName maps to <sharedRoot>/agents/central/', () => {
+  it('null/undefined agentName maps to <sharedRoot>/profiles/central/', () => {
     const explicit = makeTmp('central');
     process.env.OVERMIND_HERMES_HOME = explicit;
-    expect(getAgentHermesHome(null)).toBe(path.join(explicit, 'agents', 'central'));
-    expect(getAgentHermesHome(undefined)).toBe(path.join(explicit, 'agents', 'central'));
+    expect(getAgentHermesHome(null)).toBe(path.join(explicit, 'profiles', 'central'));
+    expect(getAgentHermesHome(undefined)).toBe(path.join(explicit, 'profiles', 'central'));
   });
 
   it('cwd-independence: same agent → same path regardless of cwd', () => {
@@ -155,47 +160,35 @@ describe('getAgentHermesHome (per-agent home under shared root)', () => {
       const a = getAgentHermesHome('sniperbot_analyst');
       const b = getAgentHermesHome('sniperbot_analyst');
       expect(a).toBe(b);
-      expect(a).toBe(path.join(explicit, 'agents', 'sniperbot_analyst'));
+      expect(a).toBe(path.join(explicit, 'profiles', 'sniperbot_analyst'));
     } finally {
       process.chdir(origCwd);
     }
   });
 
-  it('canonical layout: returns <sharedRoot>/agents/<name>/ when canonical exists', () => {
+  it('canonical layout: returns <sharedRoot>/profiles/<name>/ when canonical exists', () => {
     const explicit = makeTmp('canon-exists');
     process.env.OVERMIND_HERMES_HOME = explicit;
-    const canonical = path.join(explicit, 'agents', 'sniperbot_analyst');
+    const canonical = path.join(explicit, 'profiles', 'sniperbot_analyst');
     fs.mkdirSync(canonical, { recursive: true });
     expect(getAgentHermesHome('sniperbot_analyst')).toBe(canonical);
   });
 
-  it('legacy fallback: returns <sharedRoot>/agent_<name>/.hermes/ when only legacy exists', () => {
+  it('legacy fallback: returns <sharedRoot>/agents/<name>/ when only legacy agents/ exists', () => {
     const explicit = makeTmp('legacy-only');
     process.env.OVERMIND_HERMES_HOME = explicit;
-    const legacy = path.join(explicit, 'agent_legacyagent', '.hermes');
+    const legacy = path.join(explicit, 'agents', 'legacyagent');
     fs.mkdirSync(legacy, { recursive: true });
-    // canonical doesn't exist, legacy does → return legacy
+    // canonical profiles/ doesn't exist, legacy agents/ does → return legacy
     expect(getAgentHermesHome('legacyagent')).toBe(legacy);
-    // ...and it DOES end with .hermes (legacy)
-    expect(getAgentHermesHome('legacyagent').endsWith('.hermes')).toBe(true);
   });
 
-  it('new agent (no state): returns canonical path, no .hermes subdir', () => {
+  it('new agent (no state): returns canonical profiles/ path', () => {
     const explicit = makeTmp('new-agent');
     process.env.OVERMIND_HERMES_HOME = explicit;
     const result = getAgentHermesHome('freshagent');
-    // For a brand-new agent, neither path exists; we return canonical.
-    expect(result).toBe(path.join(explicit, 'agents', 'freshagent'));
+    // For a brand-new agent, neither path exists; we return canonical (profiles/).
+    expect(result).toBe(path.join(explicit, 'profiles', 'freshagent'));
     expect(result.endsWith('.hermes')).toBe(false);
-  });
-});
-
-describe('getAgentOvermindHome (deprecated alias)', () => {
-  it('returns the same as getAgentHermesHome (the per-agent dir IS the home)', () => {
-    const explicit = makeTmp('alias');
-    process.env.OVERMIND_HERMES_HOME = explicit;
-    const hermes = getAgentHermesHome('sniperbot_analyst');
-    const overmind = getAgentOvermindHome('sniperbot_analyst');
-    expect(overmind).toBe(hermes);
   });
 });

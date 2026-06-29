@@ -9,7 +9,7 @@ const logger = rootLogger.child({ module: 'sessions' });
 
 const sessionMutex = new Mutex();
 
-const SESSIONS_FILE = '.claude/sessions.json';
+const SESSIONS_FILE = 'bridge/agents.json';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 interface SessionEntry {

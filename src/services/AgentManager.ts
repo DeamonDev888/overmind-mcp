@@ -6,20 +6,22 @@ import { getMemoryProvider } from '../memory/MemoryFactory.js';
 import { interpolateEnvVars } from '../lib/envUtils.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ⭐ LAYOUT DES FICHIERS — RÈGLE ABSOLUE
+// ⭐ LAYOUT DES FICHIERS — v3.1
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-//  HERMES agents  →  <HERMES_HOME>/agents/<name>/settings.json
-//                    <HERMES_HOME>/agents/<name>/SOUL.md
-//                    <HERMES_HOME>/agents/<name>/.mcp.json  (optionnel)
+//  HERMES agents  →  ~/.overmind/hermes/profiles/<name>/
+//                      ├── profile.yaml      (kanban — OBLIGATOIRE)
+//                      ├── config.yaml       (Hermes config)
+//                      ├── SOUL.md           (system prompt)
+//                      ├── .env              (credentials)
+//                      ├── .mcp.json         (override MCP)
+//                      ├── state.db          (local SQLite)
+//                      ├── workspace.yaml    (kind: scratch|persistent|shared)
+//                      └── README.md         (role + owner)
 //
-//  CLAUDE/KILO    →  <WORKSPACE>/.claude/settings_<name>.json
-//                    <WORKSPACE>/.claude/agents/<name>.md
+//  CLAUDE/KILO    →  <WORKSPACE>/.claude/agents/<name>.md  (legacy support)
 //
-//  ❌ INTERDIT : agent_<name>/.hermes/.env  (ancien layout pré-2.8.30 — SUPPRIMÉ)
-//  ❌ INTERDIT : .claude/settings_<name>.json pour les agents Hermes
-//
-//  getSharedHermesHome() = OVERMIND_HERMES_HOME || <workspace>/.overmind/hermes/
+//  getSharedHermesHome() = OVERMIND_HERMES_HOME || ~/.overmind/hermes/
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
