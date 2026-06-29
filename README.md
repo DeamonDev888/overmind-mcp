@@ -50,8 +50,8 @@ Le postinstall crée `~/.overmind/` automatiquement :
 │   ├── agents.json                       ← registre sessions unifié
 │   └── process-registry.json             ← runtime live
 └── hermes/
-    ├── profiles/                         ← SOURCE homes
-    │   └── <name>/
+    └── profiles/                         ← SOURCE homes (unique)
+        └── <name>/
     │       ├── profile.yaml              ← description kanban (OBLIGATOIRE)
     │       ├── config.yaml               ← Hermes config (model, provider)
     │       ├── SOUL.md                   ← system prompt
@@ -60,8 +60,6 @@ Le postinstall crée `~/.overmind/` automatiquement :
     │       ├── state.db                  ← state local (SQLite)
     │       ├── workspace.yaml            ← kind: scratch|persistent|shared
     │       └── README.md                 ← rôle + owner
-    ├── runs/                             ← SYMLINK → profiles/
-    └── agents/                           ← SYMLINK → profiles/
 ```
 
 ### Configuration MCP Client
@@ -200,7 +198,7 @@ Agent 3 ──┘
 
 ## 🔄 Migration v3.1
 
-Si vous upgradez depuis v2.8.x, voir [docs/MIGRATION_V3.1.md](docs/MIGRATION_V3.1.md).
+Si vous upgradez depuis v2.8.x, voir [docs/MIGRATION_V3.md](docs/MIGRATION_V3.md).
 
 Les profils existants dans `~/.hermes/profiles/` continuent de fonctionner.
 La migration est recommandée mais pas obligatoire immédiatement.

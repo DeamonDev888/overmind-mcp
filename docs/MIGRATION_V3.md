@@ -74,18 +74,7 @@ cp .claude/sessions.json ~/.overmind/bridge/agents.json 2>/dev/null
 
 ---
 
-## Étape 4 — Symlinks rétrocompat (optionnel)
-
-```bash
-# Ancien layout → nouveau (pour les scripts existants)
-ln -sfn ~/.overmind/hermes/profiles ~/.overmind/hermes/agents
-ln -sfn ~/.overmind/hermes/profiles ~/.overmind/hermes/runs
-ln -sfn ~/.overmind/hermes/profiles ~/.overmind/hermes/sessions
-```
-
----
-
-## Étape 5 — Redémarrer les services
+## Étape 4 — Redémarrer les services
 
 ```bash
 # Ubuntu (systemd)
@@ -99,7 +88,7 @@ systemctl is-active overmind-mcp discord-llm tradingview-analyst
 
 ---
 
-## Étape 6 — Valider
+## Étape 5 — Valider
 
 ```bash
 # Lister les agents

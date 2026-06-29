@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.0.3] - 2026-06-29
+
+### Changed
+- docs: README indentation fix, symlinks legacy section removed from MIGRATION_V3.md
+
 ## [3.0.2] - 2026-06-29
 
 ### Changed
