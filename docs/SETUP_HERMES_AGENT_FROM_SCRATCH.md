@@ -10,10 +10,10 @@ compte Discord bot + token.
 **Stack final :**
 - Node.js 22 LTS
 - Docker (PostgreSQL + pgvector pour la mémoire vectorielle)
-- overmind-mcp 2.8.40+ (`npm i -g overmind-mcp`)
-- hermes-agent 0.16.0+ (`pip install hermes-agent` ou `npm i -g hermes-agent`)
+- overmind-mcp 3.0+ (`npm i -g overmind-mcp@latest`)
+- hermes-agent 0.17.0+ (`hermes update` or `pip install hermes-agent`)
 - discord_llm (le bridge Discord ↔ Overmind)
-- Un token MiniMax CN (sk-cp-* ou sk-mm-*) — voir §5
+- Un token MiniMax CN (sk-cp-*) ou tout autre provider LLM
 
 ---
 

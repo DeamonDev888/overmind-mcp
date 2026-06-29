@@ -1,21 +1,21 @@
 {
   "mcpServers": {
-    "memory-server": {
+    "memory": {
       "transport": "httpStream",
       "url": "http://localhost:3099/mcp",
-      "description": "OverMind MCP - memory singleton sur port 3099"
+      "description": "OverMind MCP — orchestration + memory (port 3099)"
     },
-    "postgresql": {
+    "postgres": {
       "transport": "httpStream",
       "url": "http://localhost:5433/mcp",
-      "description": "PostgreSQL MCP - vector search sur port 5433"
+      "description": "PostgreSQL MCP — vector search + queries (port 5433)"
     },
-    "discord-server": {
+    "serveur_discord": {
       "transport": "httpStream",
       "url": "http://localhost:3141/mcp",
-      "description": "Discord MCP - 88 outils sur port 3141"
-    } 
+      "description": "Discord MCP — messages, channels, members (port 3141)"
+    }
   },
-  "description": "Configuration MCP HTTP Singleton - Anti-Zombie. Tous les serveurs doivent être démarrés.",
-  "version": "2.4.0"
+  "description": "Configuration MCP HTTP Singleton — v3.1. 'discord' est un nom réservé Hermes, utilisez 'serveur_discord'.",
+  "version": "3.1.0"
 }

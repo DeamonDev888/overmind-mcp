@@ -9,10 +9,7 @@
  *   <hermesHome>/auth.json                      ← global, managed by Hermes upstream
  *
  * Resolution order for getAgentHermesHome():
- *   1. <shared>/profiles/<name>/         (v3.1 canonical)
- *   2. <shared>/agents/<name>/           (legacy pre-v3.1)
- *   3. ~/.hermes/profiles/<name>/        (native Hermes fallback)
- *   4. <shared>/profiles/<name>/         (canonical — create on demand)
+ *   1. <shared>/profiles/<name>/         (v3.1 canonical — always)
  *
  * Resolution order for the shared Hermes home:
  *   1. OVERMIND_HERMES_HOME env var (operator-declared, e.g. via systemd)
@@ -172,15 +169,6 @@ describe('getAgentHermesHome (per-agent home under shared root)', () => {
     const canonical = path.join(explicit, 'profiles', 'sniperbot_analyst');
     fs.mkdirSync(canonical, { recursive: true });
     expect(getAgentHermesHome('sniperbot_analyst')).toBe(canonical);
-  });
-
-  it('legacy fallback: returns <sharedRoot>/agents/<name>/ when only legacy agents/ exists', () => {
-    const explicit = makeTmp('legacy-only');
-    process.env.OVERMIND_HERMES_HOME = explicit;
-    const legacy = path.join(explicit, 'agents', 'legacyagent');
-    fs.mkdirSync(legacy, { recursive: true });
-    // canonical profiles/ doesn't exist, legacy agents/ does → return legacy
-    expect(getAgentHermesHome('legacyagent')).toBe(legacy);
   });
 
   it('new agent (no state): returns canonical profiles/ path', () => {

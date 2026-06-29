@@ -3,7 +3,7 @@
  * =====================================================================
  *
  * ONLY handles:
- *   - Read/write ProcessEntry to .claude/process-registry.json
+ *   - Read/write ProcessEntry to bridge/process-registry.json
  *   - Background sweeper (cleanupRegistry every 5min)
  *   - OS-level killProcessTree + isPidAlive (Windows tasklist / Unix kill -0)
  *

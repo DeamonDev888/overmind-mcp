@@ -228,18 +228,10 @@ export class HermesProfileManager {
    */
   static async getProfilePath(name: string): Promise<string | null> {
     try {
-      // 1. Canonical v3.1: ~/.overmind/hermes/profiles/<name>/
       const overmindBase = process.env.LOCALAPPDATA || process.env.HOME || '';
       const v31Path = process.platform === 'win32'
         ? path.join(overmindBase, 'overmind', 'hermes', 'profiles', name)
         : path.join(overmindBase, '.overmind', 'hermes', 'profiles', name);
-      if (fs.existsSync(v31Path)) return v31Path;
-
-      // 2. Native Hermes: ~/.hermes/profiles/<name>/
-      const nativePath = path.join(overmindBase, '.hermes', 'profiles', name);
-      if (fs.existsSync(nativePath)) return nativePath;
-
-      // 3. Return canonical v3.1 path even if it doesn't exist yet
       return v31Path;
     } catch {
       return null;

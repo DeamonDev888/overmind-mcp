@@ -36,14 +36,14 @@ canonique + 1 format config globale. Pas le choix si on veut supporter
 [6] Workflow/src/services/NousHermesRunner.ts  (le runner)
    ── Phase A : Lit Workflow/.claude/settings_sniperbot_analyst.json
    ── Phase B : Interpole les $VAR depuis Workflow/.env
-   ── Phase C : Détecte le provider (subtilisation 2.8.34)
-   ── Phase D : Écrit Workflow/.overmind/hermes/agents/sniperbot_analyst/settings.json
+   ── Phase C : Détecte le provider (auto-detect v3.0)
+   ── Phase D : Écrit ~/.overmind/hermes/profiles/sniperbot_analyst/config.yaml
    ── Phase E : Spawn `hermes chat -q ... --model MiniMax-M3 --provider minimax-cn`
                 avec HERMES_HOME=Workflow/.overmind/hermes/
    ↓
 [7] Hermes upstream  (binaire `hermes` v0.16.0+ installé via `npm i -g hermes-agent`)
-   Lit Workflow/.overmind/hermes/agents/sniperbot_analyst/settings.json
-   + Lit Workflow/.overmind/hermes/agents/sniperbot_analyst/SOUL.md
+   Lit ~/.overmind/hermes/profiles/sniperbot_analyst/config.yaml
+   + Lit ~/.overmind/hermes/profiles/sniperbot_analyst/SOUL.md
    + Charge les MCP servers de Workflow/.mcp.json
    + Construit un client OpenAI/Anthropic
    ↓
@@ -72,7 +72,7 @@ Format unifié Overmind, partagé entre tous les runners. Tu mets ici :
 
 ### Couche 2 : Settings canonique Hermes (auto-généré)
 
-**`Workflow/.overmind/hermes/agents/sniperbot_analyst/settings.json`**
+**`~/.overmind/hermes/profiles/sniperbot_analyst/config.yaml`**
 
 Format canonique qu'Hermes upstream attend. Le runner l'écrit à chaque spawn.
 Contient **en plus** du source :
@@ -94,7 +94,7 @@ Hermes upstream écrit/lit ces fichiers pour :
 
 ---
 
-## Les subtilisations du runner (2.8.34+)
+## Les subtilisations du runner (v3.0+)
 
 Quand le runner écrit le settings.json canonique, il **injecte** des env vars
 spécifiques au provider détecté, basées sur :

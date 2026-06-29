@@ -205,21 +205,8 @@ export function updateConfig(newSettingsPath?: string, newMcpPath?: string) {
 export function getAgentHermesHome(agentName: string | null | undefined): string {
   const base = getSharedHermesHome();
   const name = agentName || 'central';
-
   // v3.1 canonical: <shared>/profiles/<name>/
-  const canonical = path.join(base, 'profiles', name);
-  if (fs.existsSync(canonical)) return canonical;
-
-  // Legacy: <shared>/agents/<name>/ (pre-v3.1)
-  const legacyAgents = path.join(base, 'agents', name);
-  if (fs.existsSync(legacyAgents)) return legacyAgents;
-
-  // Native Hermes fallback: ~/.hermes/profiles/<name>/
-  const nativeHermes = path.join(os.homedir(), '.hermes', 'profiles', name);
-  if (fs.existsSync(nativeHermes)) return nativeHermes;
-
-  // Return canonical path (will be created on demand)
-  return canonical;
+  return path.join(base, 'profiles', name);
 }
 
 /**

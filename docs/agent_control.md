@@ -652,5 +652,5 @@ agent_control({ agentName: "...", config: "/path/to/overmind", action: "..." })
 
 **Fichier source** : `src/tools/agent_control.ts`
 **Registry** : `src/lib/processRegistry.ts`
-**Store** : `.claude/sessions.json`
+**Store** : `bridge/agents.json`
 **TTL** : 1h après terminaison (cleanup automatique)

@@ -8,24 +8,27 @@
 
 </div>
 
-_Orchestrateur universel agents IA multi-modeles via MCP pour piloter Claude-Code, Gemini-cli, QwenCli, Nous Hermes, Kilo/Cline, OpenClaw, GLM, Minimax, Kimi, Ollama et plus sans limite._
+_Orchestrateur universel agents IA multi-modèles via MCP. Pilote Hermes, Claude-Code, Gemini-cli, QwenCli, Kilo/Cline, OpenClaw et plus — avec mémoire vectorielle PostgreSQL + pgvector._
 
 <p align="center">
-  <a href="https://discord.gg/4AR82phtBz"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://deamondev888.github.io/overmind-mcp/"><img src="https://img.shields.io/badge/Documentation-Live-00fff5?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Live Doc"></a>
+  <a href="https://discord.gg/4AR82phtBz"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logo-color=white" alt="Discord"></a>
+  <a href="https://deamondev888.github.io/overmind-mcp/"><img src="https://img.shields.io/badge/Documentation-Live-00fff5?style=for-the-badge&logo=google-chrome&logo-color=white" alt="Live Doc"></a>
+  <a href="https://www.npmjs.com/package/overmind-mcp"><img src="https://img.shields.io/npm/v/overmind-mcp?style=for-the-badge&logo=npm&color=CB383D" alt="NPM"></a>
 </p>
 
-**OverMind-MCP** est une conscience supérieure conçue pour orchestrer, commander et automatiser une flotte illimitée d'agents IA. Compatible avec **Claude-Code, Gemini-cli, QwenCli, Nous Hermes, Kilo/Cline, OpenClaw**, et prêt pour **GLM, Minimax, Kimi, Ollama** et bien d'autres.
+**OverMind-MCP** orchestre une flotte illimitée d'agents IA via le Model Context Protocol. Compatible avec **Hermes (natif)**, **Claude-Code**, **Gemini-cli**, **QwenCli**, **Kilo/Cline**, **OpenClaw**, et extensible à tout runner CLI.
 
-Il transforme les outils CLI isolés en une force coordonnée, pilotable par API ou par MCP, capable d'exécuter des missions complexes. Expert en outils MCP, il peut être scripté pour les faire fonctionner ensemble et les mettre en production.
+---
 
-- 🔌 **Contrôle Total** : Lancez des missions complexes via MCP ou directement via le code (Claude, Gemini, QwenCli, Hermes).
-- 🏗️ **Architecture Pro** : Basé sur des services (`AgentManager`, `ClaudeRunner`, `PromptManager`) pour une stabilité maximale.
-- 🧠 **Mémoire Haute-Performance (4096D)** : Système RAG intégré via PostgreSQL + `pgvector`.
-- 🛡️ **Mémoire Ségréguée** : Chaque agent peut posséder ses propres souvenirs isolés tout en ayant accès au socle global.
-- 🤖 **Multi-Agents** : Créez, configurez et gérez des personnalités d'agents isolées (Prompts & Settings dédiés).
-- 📦 **Prêt pour l'Intégration** : Importable comme un module NPM dans vos autres projets.
-- 🅾️ **HTTP Singleton** : Plus de zombies — 1 serveur HTTP partagé par tous les agents.
+## ✨ Fonctionnalités
+
+- 🔌 **Multi-Runner** : Hermes natif, Claude-Code, Gemini, Kilo, QwenCli, OpenClaw — 1 commande par runner
+- 🧠 **Mémoire Vectorielle** : RAG 4096D via PostgreSQL + pgvector, isolation par agent
+- 🏗️ **Architecture v3.1** : Profils Hermes canoniques avec `profile.yaml`, `workspace.yaml`, `state.db`
+- 🌉 **Bridge HTTP JSON-RPC** : Orchestration A2A, scénarios, webhooks, sessions multi-tenant
+- 🛡️ **Anti-Zombie** : 1 seul process HTTP partagé, processRegistry avec TTL + cleanup auto
+- 📋 **14 Outils MCP** : run_agent, create_agent, memory_search/store, agent_control, etc.
+- 🅾️ **HTTP Singleton** : FastMCP httpStream — 1 serveur, tous les agents
 
 ---
 
@@ -37,34 +40,55 @@ Il transforme les outils CLI isolés en une force coordonnée, pilotable par API
 npm install -g overmind-mcp@latest
 ```
 
-> [!IMPORTANT]
-> **Configuration du Workspace (`OVERMIND_WORKSPACE`)**
-> Pour éviter les erreurs de résolution (notamment si vous lancez Overmind hors du dossier du projet), déclarez le chemin du workspace au niveau du système ou de la configuration de votre service, et non dans le `.env` de projet :
-> * **Via Systemd** : Ajoutez `WorkingDirectory=/chemin/du/projet` ou `Environment=OVERMIND_WORKSPACE=/chemin/du/projet` dans la directive `[Service]`.
-> * **Via le Shell** : Exécutez `export OVERMIND_WORKSPACE="/chemin/du/projet"` (dans `.bashrc` ou `.profile`).
+Le postinstall crée `~/.overmind/` automatiquement :
 
-### Configuration MCP (HTTP)
+```
+~/.overmind/                              ← racine unique
+├── .mcp.json                             ← MCP canonique (1 fichier)
+├── .env                                  ← secrets globaux
+├── bridge/
+│   ├── agents.json                       ← registre sessions unifié
+│   └── process-registry.json             ← runtime live
+└── hermes/
+    ├── profiles/                         ← SOURCE homes
+    │   └── <name>/
+    │       ├── profile.yaml              ← description kanban (OBLIGATOIRE)
+    │       ├── config.yaml               ← Hermes config (model, provider)
+    │       ├── SOUL.md                   ← system prompt
+    │       ├── .env                      ← credentials spécifiques
+    │       ├── .mcp.json                 ← override MCP
+    │       ├── state.db                  ← state local (SQLite)
+    │       ├── workspace.yaml            ← kind: scratch|persistent|shared
+    │       └── README.md                 ← rôle + owner
+    ├── runs/                             ← SYMLINK → profiles/
+    └── agents/                           ← SYMLINK → profiles/
+```
 
-Après installation, configurez votre client MCP en mode HTTP :
+### Configuration MCP Client
 
 ```json
 {
   "mcpServers": {
     "overmind": {
-      "transport": "http-stream",
-      "url": "http://localhost:3099"
+      "type": "http",
+      "url": "http://localhost:3099/mcp"
     },
-    "memory": {
-      "transport": "http-stream",
-      "url": "http://localhost:3099"
-    },
-"postgresql": {
-      "transport": "http-stream",
-      "url": "http://localhost:5433",
-      "description": "PostgreSQL MCP - Base de données vectorielle"
+    "postgres": {
+      "type": "http",
+      "url": "http://localhost:5433/mcp"
     }
   }
 }
+```
+
+### Lancer le serveur
+
+```bash
+# Foreground (dev)
+overmind --transport httpStream --port 3099
+
+# Systemd (prod)
+overmind-setup  # installe PostgreSQL + pgvector si absent
 ```
 
 ---
@@ -76,54 +100,85 @@ git clone https://github.com/DeamonDev888/overmind-mcp.git
 cd overmind-mcp
 pnpm install
 pnpm run build
+pnpm run test
 ```
 
 ---
 
-### Utilisation comme Bibliothèque
+## 📚 Utilisation
+
+### CLI
+
+```bash
+# Démarrer le serveur MCP
+overmind --transport httpStream --port 3099
+
+# Bridge (Discord, SMS, webhooks)
+overmind-bridge server --port 3001
+
+# Gestion PostgreSQL
+overmind-postgres-mcp up     # docker-compose up
+overmind-postgres-mcp status # vérifier l'état
+```
+
+### Bibliothèque (ESM)
 
 ```typescript
-import { runAgent, AgentManager, updateConfig } from 'overmind-mcp';
+import { runAgent, AgentManager } from 'overmind-mcp';
 
-// 1. Initialisation
-updateConfig('./settings.json', './mcp.local.json');
-
-// 2. Gestion des agents
+// Créer un agent Hermes
 const manager = new AgentManager();
-await manager.createAgent('expert-seo', 'Tu es un expert SEO...', 'claude');
-
-// 3. Lancer une exécution
-const { content, isError } = await runAgent({
-  runner: 'claude',
-  agentName: 'expert-seo',
-  prompt: 'Analyse le site example.com',
-  autoResume: true,
+await manager.createAgent({
+  name: 'analyst',
+  runner: 'hermes',
+  prompt: 'Tu es un analyste financier.',
+  model: 'MiniMax-M3',
 });
 
-if (!isError) {
-  console.log('🤖 Résultat:', content[0].text);
-}
+// Lancer une mission
+const { content, isError } = await runAgent({
+  runner: 'hermes',
+  agentName: 'analyst',
+  prompt: 'Analyse BTCUSDT',
+  autoResume: true,
+});
 ```
+
+### Outils MCP (14)
+
+| Outil | Description |
+|-------|-------------|
+| `run_agent` | Lance un agent (Hermes/Claude/Kilo/etc.) |
+| `run_agents_parallel` | Lance N agents en parallèle |
+| `create_agent` | Crée un profil Hermes + SOUL.md + profile.yaml |
+| `list_agents` | Liste tous les agents (Hermes + Claude) |
+| `delete_agent` | Supprime un agent |
+| `update_agent_config` | Modifie model, provider, credentials, SOUL.md |
+| `get_agent_configs` | Affiche config.yaml + SOUL.md d'un agent |
+| `memory_search` | Recherche vectorielle (pgvector) |
+| `memory_store` | Stocke un souvenir (avec embedding auto) |
+| `memory_runs` | Historique des exécutions |
+| `create_prompt` / `edit_prompt` | Gestion des prompts Claude |
+| `agent_control` | Status, stream, kill, wait |
+| `config_example` | Exemple de configuration |
 
 ---
 
 ## 📂 Structure du Projet
 
 ```
-Workflow/
-├── bin/                    # Scripts d'installation et launchers
-├── docker/                 # Configuration Docker (PostgreSQL, pgvector)
-├── docs/                   # Documentation
-├── scripts/                # Scripts de maintenance (setup, postgres, etc.)
-├── src/                    # Code source TypeScript
-│   ├── bin/                # Points d'entrée CLI (cli.ts, overmind-bridge.ts)
-│   ├── bridge/             # Bridge HTTP JSON-RPC (OverBridgeServer, SessionStore)
-│   ├── lib/                # Bibliothèques partagées (config, logger, telemetry)
-│   ├── memory/             # Provider mémoire PostgreSQL + pgvector
-│   ├── services/           # Runners d'agents (Claude, Hermes, Gemini, Kilo, etc.)
-│   │   └── hermes/         # Modules extraits du NousHermesRunner
-│   ├── tools/              # 14 outils MCP (run_agent, memory_search, etc.)
+overmind-mcp/
+├── src/
+│   ├── bin/                # Entrypoints CLI (cli.ts, overmind-bridge.ts)
+│   ├── bridge/             # Bridge HTTP JSON-RPC + scénarios + webhooks
+│   ├── lib/                # Config, logger, sessions, processRegistry
+│   ├── memory/             # Provider PostgreSQL + pgvector
+│   ├── services/           # Runners: Hermes, Claude, Gemini, Kilo, etc.
+│   ├── tools/              # 14 outils MCP (1 fichier par tool)
 │   └── __tests__/          # Tests unitaires (vitest)
+├── scripts/                # setup, postgres-manager, postinstall, migration
+├── bin/                    # Launchers (bat, sh, launch.cjs)
+├── docs/                   # Documentation + site web GitHub Pages
 └── assets/                 # Images et ressources
 ```
 
@@ -131,22 +186,27 @@ Workflow/
 
 ## 🛡️ Anti-Zombie Architecture
 
-L'ancien problème : chaque agent spawn son propre node.exe MCP server → zombies.
-
-La solution : 1 seul serveur HTTP par service, partagé par tous les agents.
+1 seul serveur HTTP FastMCP partagé par tous les agents. Le `processRegistry`
+traque les PIDs avec TTL automatique (1h) et cleanup background (5min).
 
 ```
 Agent 1 ──┐
-Agent 2 ──┼──→ Overmind:3099 (1 process)
+Agent 2 ──┼──→ Overmind MCP :3099 (1 process FastMCP)
 Agent 3 ──┘
-         └──→ PostgreSQL:5433 (1 process)
-         └──→ Discord:3141 (1 process)
+         └──→ PostgreSQL :5433 (pgvector)
 ```
-
-Plus de node.exe par agent = plus de zombies.
 
 ---
 
-![Aperçu du Terminal](https://cdn.jsdelivr.net/npm/overmind-mcp@latest/assets/terminal_preview.png)
+## 🔄 Migration v3.1
 
-_Projet propulsé par DeaMoN888 - 2026_
+Si vous upgradez depuis v2.8.x, voir [docs/MIGRATION_V3.1.md](docs/MIGRATION_V3.1.md).
+
+Les profils existants dans `~/.hermes/profiles/` continuent de fonctionner.
+La migration est recommandée mais pas obligatoire immédiatement.
+
+---
+
+![Aperçu du Terminal](assets/terminal_preview.png)
+
+_Projet propulsé par DeaMoN888 — 2026_

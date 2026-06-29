@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.0.2] - 2026-06-29
+
+### Changed
+- **Docs refonte v3.1**: README entièrement réécrit (arborescence canonique, 14 outils listés, exemples à jour, section anti-zombie).
+- **Docs**: `.mcp.json.example` — `discord-server` → `serveur_discord` (nom réservé Hermes), version 3.0+.
+- **Docs**: `agent_control.md` — `.claude/sessions.json` → `bridge/agents.json`.
+- **Docs**: `OVERMIND_HERMES_SNIPERBOT_FLOW.md` — chemins `Workflow/.overmind/hermes/agents/` → `~/.overmind/hermes/profiles/`.
+- **Docs**: `SETUP_HERMES_AGENT_FROM_SCRATCH.md` — versions 2.8.40 → 3.0+, Hermes 0.16 → 0.17.
+- **Code**: `processRegistry.ts` — commentaire `.claude/` → `bridge/`.
+- **Code**: `config.ts`, `HermesProfileManager.ts`, `agentHermesHome.test.ts` — alignement docs/code post-refonte.
+
 ## [3.0.1] - 2026-06-29
 
 ### Fixed
