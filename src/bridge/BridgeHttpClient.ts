@@ -171,7 +171,7 @@ export class BridgeHttpClient {
             if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
               try {
                 resolve(JSON.parse(text) as JsonRpcCallResponse | JsonRpcCallResponse[]);
-              } catch (err) {
+              } catch (_err) {
                 reject(new Error(`Invalid JSON response: ${text.slice(0, 200)}`));
               }
             } else {

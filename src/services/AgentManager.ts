@@ -84,9 +84,6 @@ export class AgentManager {
     //    Pas de scan de dossier manuel — on utilise la CLI native Hermes.
     const { HermesProfileManager } = await import('./HermesProfileManager.js');
     const hermesProfiles = await HermesProfileManager.list();
-    const hermesAgentNames = hermesProfiles
-      .filter(p => p.name !== 'default') // 'default' n'est pas un agent Overmind
-      .map(p => p.name);
 
     // Collect info
     interface AgentInfo {

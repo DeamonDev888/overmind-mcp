@@ -21,7 +21,7 @@
  * ╚════════════════════════════════════════════════════════════════════════╝
  */
 
-import { exec } from 'child_process';
+import { exec, execSync } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
@@ -75,7 +75,7 @@ export class HermesProfileManager {
   static exists(name: string): boolean {
     if (!SAFE_NAME_RE.test(name)) return false;
     try {
-      const { stdout } = require_execSync(`hermes profile list`);
+      const stdout = execSync(`hermes profile list`, { encoding: 'utf-8', timeout: 10000 });
       return stdout.includes(name);
     } catch {
       return false;
@@ -160,7 +160,7 @@ export class HermesProfileManager {
       // Profile might already exist — that's OK if it does
       const msg = e instanceof Error ? e.message : String(e);
       if (!msg.includes('already exists')) {
-        throw new Error(`Failed to create profile '${name}': ${msg}`);
+        throw new Error(`Failed to create profile '${name}': ${msg}`, { cause: e });
       }
       logger.warn({ name }, '[CREATE] Profile already exists, will update configuration.');
     }
@@ -256,7 +256,7 @@ export class HermesProfileManager {
     const configPath = path.join(profilePath, 'config.yaml');
 
     // Read existing config or start fresh
-    let configContent = '';
+    let configContent: string;
     try {
       configContent = fs.readFileSync(configPath, 'utf-8');
     } catch {
@@ -265,7 +265,7 @@ export class HermesProfileManager {
 
     // Read the workspace .mcp.json to get actual server configs
     const { getWorkspaceDir } = await import('../lib/config.js');
-    let mcpConfigs: Record<string, { url?: string; type?: string; command?: string; args?: string[] }> = {};
+    let mcpConfigs: Record<string, { url?: string; type?: string; command?: string; args?: string[] }>;
     try {
       const mcpJsonPath = path.join(getWorkspaceDir(), '.mcp.json');
       const mcpContent = fs.readFileSync(mcpJsonPath, 'utf-8');
@@ -409,7 +409,7 @@ export class HermesProfileManager {
     // Update credentials
     if (updates.credentials) {
       const envPath = path.join(profilePath, '.env');
-      let envContent = '';
+      let envContent: string;
       try {
         envContent = fs.readFileSync(envPath, 'utf-8');
       } catch {
@@ -442,11 +442,4 @@ export class HermesProfileManager {
 
     logger.info({ name, updates: Object.keys(updates) }, '[UPDATE] Profile updated.');
   }
-}
-
-// ─── Inline helpers (avoid circular imports) ──────────────────────────────────
-
-function require_execSync(cmd: string): { stdout: string } {
-  const { execSync } = require('child_process') as typeof import('child_process');
-  return { stdout: execSync(cmd, { encoding: 'utf-8', timeout: 10000 }) };
 }

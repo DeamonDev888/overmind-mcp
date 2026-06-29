@@ -28,11 +28,11 @@ import { z } from 'zod';
 import { OverBridgeService } from './OverBridgeService.js';
 import { AgentRegistry, type AgentLiveState } from './AgentRegistry.js';
 import { MessageLog, type MessageLogConfig } from './MessageLog.js';
-import { SessionStore, type SessionEntry, type SessionContextPatch } from './SessionStore.js';
+import { SessionStore } from './SessionStore.js';
 import { DirectiveParser, type ParsedDirectives } from './DirectiveParser.js';
 import { WebhookAdapter, type WebhookProvider, type NormalizedWebhook } from './WebhookAdapter.js';
-import { sanitizeAndParse, sanitizeJsonRaw, looksLikeWindowsPathIssue } from './JsonSanitizer.js';
-import { getOrCreateRequestId, newRequestId } from './RequestContext.js';
+import { sanitizeAndParse, looksLikeWindowsPathIssue } from './JsonSanitizer.js';
+import { getOrCreateRequestId } from './RequestContext.js';
 import { createBridgeLogger, type BridgeLogger, validateAgentName } from './utils.js';
 import type { RunnerType } from './types.js';
 

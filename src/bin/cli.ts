@@ -716,10 +716,10 @@ if (transportType === 'httpStream') {
   // compare pour éviter les timing attacks.
   const origCreateServer = http.createServer.bind(http);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (http as any).createServer = function (requestListener?: any) {
+  (http as { createServer: typeof http.createServer }).createServer = function (requestListener?: any) {
     // Wrap avec auth middleware si token configuré
     const wrappedListener = mcpAuthToken
-      ? (req: any, res: any) => {
+      ? (req: http.IncomingMessage, res: http.ServerResponse) => {
           // Permettre les requêtes SSE (GET) et POST sans auth pour l'initialization
           // FastMCP fait l'initialize handshake avant les tool calls. On exige le
           // token sur TOUTES les requêtes — le client doit l'envoyer dès le début.
@@ -742,7 +742,7 @@ if (transportType === 'httpStream') {
     hServer.headersTimeout = 0;
     hServer.keepAliveTimeout = 0;
     // Restaurer immédiatement — seul le serveur FastMCP doit être patché.
-    (http as any).createServer = origCreateServer;
+    (http as { createServer: typeof http.createServer }).createServer = origCreateServer;
     return hServer;
   };
 

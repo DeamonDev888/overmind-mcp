@@ -125,7 +125,7 @@ export function requireFlag<T extends ArgValue>(args: ParsedArgs, name: string):
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function coerceValue(raw: string, fromEquals: boolean): string | number | boolean {
+function coerceValue(raw: string, _fromEquals: boolean): string | number | boolean {
   // Si --flag=true / false
   if (raw === 'true') return true;
   if (raw === 'false') return false;

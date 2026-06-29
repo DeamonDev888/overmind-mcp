@@ -92,7 +92,7 @@ async function runKanban(args: string[], opts?: { timeout?: number }): Promise<{
   } catch (e) {
     const err = e as Error & { stdout?: string; stderr?: string };
     logger.error({ cmd, error: err.message, stdout: err.stdout?.slice(0, 500), stderr: err.stderr?.slice(0, 500) }, '[KANBAN] CLI command failed.');
-    throw new Error(`Kanban CLI failed: ${err.message}`);
+    throw new Error(`Kanban CLI failed: ${err.message}`, { cause: e });
   }
 }
 

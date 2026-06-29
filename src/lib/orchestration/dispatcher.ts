@@ -202,7 +202,7 @@ export async function dispatchAgents(agents: AgentSpec[], opts: DispatchOptions)
  */
 async function dispatchViaKanban(
   agents: AgentSpec[],
-  opts: DispatchOptions,
+  _opts: DispatchOptions,
 ): Promise<{ content: [{ type: 'text'; text: string }]; isError: boolean }> {
   const { KanbanAdapter } = await import('../../services/KanbanAdapter.js');
   const kanban = new KanbanAdapter();

@@ -22,7 +22,6 @@
  */
 
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { hasStdinData, readStdin } from './ArgParser.js';
 
 // ─── Public API ────────────────────────────────────────────────────────────

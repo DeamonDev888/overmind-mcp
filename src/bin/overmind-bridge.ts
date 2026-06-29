@@ -39,7 +39,7 @@
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 
-import { parseArgs, requireFlag, getFlag, hasStdinData, type ParsedArgs } from '../bridge/ArgParser.js';
+import { parseArgs, requireFlag, getFlag, type ParsedArgs } from '../bridge/ArgParser.js';
 import { resolvePrompt, parseVars } from '../bridge/PromptSource.js';
 import { loadScenario, runScenario, type StepResult } from '../bridge/ScenarioLoader.js';
 import { BridgeHttpClient } from '../bridge/BridgeHttpClient.js';
@@ -49,7 +49,6 @@ import {
   loadMessageLogConfigFromEnv,
   createBridgeLogger,
 } from '../bridge/index.js';
-import type { RunnerType } from '../bridge/types.js';
 
 const log = createBridgeLogger('overmind-bridge');
 const clog = (msg: string) => log.info(msg);

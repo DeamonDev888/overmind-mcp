@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { interpolateEnvVars, consumeUnresolvedVars } from '../lib/envUtils.js';
 
 describe('interpolateEnvVars (subtilisation $VAR and ${VAR})', () => {
