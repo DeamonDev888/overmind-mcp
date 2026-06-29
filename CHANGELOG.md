@@ -6,6 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.0.0] - 2026-06-29
+
+### Breaking Changes — Architecture v3.1 (Profile layout refactor)
+- **[Config] `src/lib/config.ts`**:
+  - `getWorkspaceDir()`: fallback `~/.overmind-mcp/` → `~/.overmind/` (canonical).
+  - `getSharedHermesHome()`: simplified to `~/.overmind/hermes/` (removed legacy 3-level resolution + workspace fallback).
+  - `getAgentHermesHome()`: now searches `profiles/<name>/` instead of `agents/<name>/` (v3.1).
+  - Legacy `agents/<name>/` fallback kept for retro-compat.
+  - Native `~/.hermes/profiles/<name>/` fallback kept for Hermes retro-compat.
+  - Removed deprecated `getAgentOvermindHome()`.
+- **[Sessions] `src/lib/sessions.ts`**: `.claude/sessions.json` → `bridge/agents.json` (unified registry).
+- **[ProcessRegistry] `src/lib/processRegistry.ts`**: `.claude/process-registry.json` → `bridge/process-registry.json`.
+- **[Profiles] `src/services/HermesProfileManager.ts`**:
+  - `getProfilePath()`: searches `~/.overmind/hermes/profiles/<name>/` first, fallback `~/.hermes/profiles/<name>/`.
+  - `create()`: now generates `profile.yaml` + `workspace.yaml` + `README.md` (3 new files per profile).
+  - Added `writeProfileYaml()`, `writeWorkspaceYaml()`, `writeReadme()`.
+  - Removed inline `require_execSync` helper (was `@typescript-eslint/no-require-imports` trap).
+- **[Agents] `src/services/AgentManager.ts`**: Layout comments aligned with v3.1 (profiles/ instead of agents/).
+
+### Added
+- **New files per profile**: `profile.yaml`, `workspace.yaml`, `README.md` auto-generated on `create_agent`.
+- **Bridge directory**: `bridge/agents.json` and `bridge/process-registry.json` now used as canonical runtime registries.
+
+### Migration
+- Existing agents in `~/.hermes/profiles/` continue to work (automatic fallback).
+- `.claude/sessions.json` will be migrated to `bridge/agents.json` at next startup.
+- See `docs/MIGRATION_V3.md` for the full upgrade guide.
+
+### Compatibility
+- Windows: `%LOCALAPPDATA%\overmind\hermes\profiles\<name>\`
+- Linux: `~/.overmind/hermes/profiles\<name>/`
+- Fallback: `~/.hermes/profiles\<name>/` (if already exists)
+
+### Post-Refactor Cleanup
+- Removed unused imports in `cli.ts`, `overmind-bridge.ts`, `ArgParser.ts`, `OverBridgeServer.ts`, `PromptSource.ts`.
+- Replaced `require_execSync` helper with native `execSync` import in `HermesProfileManager.ts`.
+- Fixed TypeScript strict-mode warnings (`_opts`, `_err`, explicit types).
+- Removed dead code path filtering `default` profile in `AgentManager.ts`.
+- Renamed `docs/MIGRATION_V3.1.md` → `docs/MIGRATION_V3.md`.
+
+## [2.8.53] - 2026-06-28
+
+
+
 
 
 
