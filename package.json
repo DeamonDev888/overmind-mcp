@@ -1,6 +1,6 @@
 {
   "name": "overmind-mcp",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "Orchestrateur universel agents IA multi-modeles via MCP. Inclut le protocole 'Custom-Nickname' pour identifier vos agents avec des surnoms originaux (The Chaos Prophet, Shadow Sniper, etc.), l'isolation mémoire (Private Memory Context) et le support pour QwenCli et Nous Hermes. Installation automatique des dépendances Docker (PostgreSQL, pgvector) inclus.",
   "type": "module",
   "main": "dist/index.js",
@@ -83,33 +83,33 @@
   },
   "homepage": "https://deamondev888.github.io/overmind-mcp/",
 "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.18.0"
   },
   "packageManager": "pnpm@10.18.0",
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
-    "@types/node": "^25.6.2",
+    "@types/node": "^26.0.1",
     "@types/pg": "^8.20.0",
-    "eslint": "^10.3.0",
+    "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
-    "globals": "^17.6.0",
+    "globals": "^17.7.0",
     "pino-pretty": "^13.1.3",
-    "prettier": "^3.8.3",
+    "prettier": "^3.9.4",
     "rimraf": "^6.1.3",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.2",
-    "vitest": "^4.1.5"
+    "typescript-eslint": "^8.62.1",
+    "vitest": "^4.1.9"
   },
   "dependencies": {
     "async-mutex": "^0.5.0",
     "dotenv": "^17.4.2",
-    "fastmcp": "^4.0.1",
-    "overmind-postgres-mcp": "^1.4.1",
-    "pg": "^8.20.0",
+    "fastmcp": "^4.3.2",
+    "overmind-postgres-mcp": "^1.4.2",
+    "pg": "^8.22.0",
     "pino": "^10.3.1",
     "pino-roll": "^4.0.0",
-    "tinyglobby": "^0.2.16",
+    "tinyglobby": "^0.2.17",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

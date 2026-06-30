@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.0.4] - 2026-06-29
+
+### Changed
+- deps: fastmcp 4.3.2, pg 8.22.0, overmind-postgres-mcp 1.4.2, tinyglobby 0.2.17
+- devDeps: @types/node 26.0.1, eslint 10.6.0, globals 17.7.0, prettier 3.9.4, typescript-eslint 8.62.1, vitest 4.1.9
+- engines: node >=24.18.0
+- bin/launch.cjs: process.title for window ID, windowsHide on exec
+- docs: removed obsolete PLAN_MIGRATION_V3.md (superseded by MIGRATION_V3.md)
+
 ## [3.0.3] - 2026-06-29
 
 ### Changed
