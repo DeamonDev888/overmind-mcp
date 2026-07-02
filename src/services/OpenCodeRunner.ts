@@ -46,21 +46,28 @@ export class OpenCodeRunner {
     if (options.agentName) {
       // Inline validation — prevents path traversal on settings_${agentName}.json
       if (!/^[a-zA-Z0-9_-]+$/.test(options.agentName)) {
-        return { result: '', error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.` };
+        return {
+          result: '',
+          error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.`,
+        };
       }
     }
-    return withSpan('opencode.runAgent', async (span) => {
-      span.setAttribute('agentName', options.agentName || '');
-      span.setAttribute('runner', 'opencode');
+    return withSpan(
+      'opencode.runAgent',
+      async (span) => {
+        span.setAttribute('agentName', options.agentName || '');
+        span.setAttribute('runner', 'opencode');
 
-      const result = await this.runAgentInternal(options);
+        const result = await this.runAgentInternal(options);
 
-      if (options.agentName && result.sessionId) {
-        await saveSessionId(options.agentName, result.sessionId, options.configPath, 'opencode');
-      }
+        if (options.agentName && result.sessionId) {
+          await saveSessionId(options.agentName, result.sessionId, options.configPath, 'opencode');
+        }
 
-      return result;
-    }, { agentName: options.agentName || '', runner: 'opencode' });
+        return result;
+      },
+      { agentName: options.agentName || '', runner: 'opencode' },
+    );
   }
 
   private async runAgentInternal(options: RunAgentOptions): Promise<RunAgentResult> {
@@ -119,7 +126,11 @@ export class OpenCodeRunner {
       });
 
       if (child.pid) {
-        void registerProcess(child.pid, { agentName: agentName || '', runner: 'opencode', configPath: options.configPath });
+        void registerProcess(child.pid, {
+          agentName: agentName || '',
+          runner: 'opencode',
+          configPath: options.configPath,
+        });
       }
 
       let stdout = '';
@@ -164,7 +175,13 @@ export class OpenCodeRunner {
       child.on('close', async (code: number | null) => {
         clearTimeout(timeout);
         cleanup(); // Moved here: cleanup after process actually exits
-        if (child.pid) void updateProcessStatus(child.pid, code === 0 ? 'done' : 'failed', code, options.configPath);
+        if (child.pid)
+          void updateProcessStatus(
+            child.pid,
+            code === 0 ? 'done' : 'failed',
+            code,
+            options.configPath,
+          );
 
         if (code !== 0 && !stdout) {
           return resolve({ result: '', error: `EXIT_CODE_${code}`, rawOutput: stderr });

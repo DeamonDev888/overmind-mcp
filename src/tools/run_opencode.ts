@@ -66,7 +66,9 @@ export async function runOpenCodeAgent(args: z.infer<typeof runOpenCodeSchema>) 
       sessionId: result.sessionId,
     });
   } catch (e) {
-    console.error(`[run_opencode] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
+    console.error(
+      `[run_opencode] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 
   if (result.error)

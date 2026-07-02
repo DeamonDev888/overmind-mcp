@@ -46,12 +46,7 @@ function tryLoadYaml(): ((input: string) => unknown) | undefined {
 // ─── Public Types ──────────────────────────────────────────────────────────
 
 export type ScenarioStep =
-  | RunStep
-  | A2AStep
-  | ParallelStep
-  | ConditionalStep
-  | WaitStep
-  | KanbanStep;
+  RunStep | A2AStep | ParallelStep | ConditionalStep | WaitStep | KanbanStep;
 
 export interface RunStep {
   id: string;
@@ -113,12 +108,12 @@ export interface WaitStep {
 export interface KanbanStep {
   id: string;
   type: 'kanban';
-  assignee: string;        // Hermes profile name
+  assignee: string; // Hermes profile name
   title: string;
-  body?: string;           // defaults to interpolated from vars
+  body?: string; // defaults to interpolated from vars
   tenant?: string;
-  wait?: boolean;          // default: true — wait for completion
-  timeoutMs?: number;      // default: 600000 (10min)
+  wait?: boolean; // default: true — wait for completion
+  timeoutMs?: number; // default: 600000 (10min)
   /** Output saved as ${stepId.output} */
   outputVar?: string;
 }
@@ -233,7 +228,9 @@ function validateStep(step: unknown, path: string): void {
     if (typeof s.assignee !== 'string') throw new Error(`${path}.assignee required for kanban`);
     if (typeof s.title !== 'string') throw new Error(`${path}.title required for kanban`);
   } else {
-    throw new Error(`${path}.type must be one of: run, a2a, parallel, if, wait (got: ${String(type)})`);
+    throw new Error(
+      `${path}.type must be one of: run, a2a, parallel, if, wait (got: ${String(type)})`,
+    );
   }
 }
 
@@ -280,7 +277,8 @@ export async function runScenario(
     results.push(result);
     if (result.output !== undefined) {
       // Expose output aux steps suivants : ${stepId.output} et ${stepId}
-      const outputStr = typeof result.output === 'string' ? result.output : JSON.stringify(result.output);
+      const outputStr =
+        typeof result.output === 'string' ? result.output : JSON.stringify(result.output);
       localCtx.vars[result.stepId] = outputStr;
       localCtx.vars[`${result.stepId}.output`] = outputStr;
     }
@@ -308,7 +306,9 @@ async function runStep(step: ScenarioStep, ctx: ScenarioRunnerContext): Promise<
           mode: step.mode,
           path: step.path,
         });
-        log(r.isError ? `✗ [${step.id}] failed` : `✓ [${step.id}] done (${Date.now() - startTime}ms)`);
+        log(
+          r.isError ? `✗ [${step.id}] failed` : `✓ [${step.id}] done (${Date.now() - startTime}ms)`,
+        );
         return {
           stepId: step.id,
           type: 'run',
@@ -328,7 +328,9 @@ async function runStep(step: ScenarioStep, ctx: ScenarioRunnerContext): Promise<
           prompt,
           model: step.model,
         });
-        log(r.isError ? `✗ [${step.id}] failed` : `✓ [${step.id}] done (${Date.now() - startTime}ms)`);
+        log(
+          r.isError ? `✗ [${step.id}] failed` : `✓ [${step.id}] done (${Date.now() - startTime}ms)`,
+        );
         return {
           stepId: step.id,
           type: 'a2a',
@@ -421,9 +423,10 @@ async function runStep(step: ScenarioStep, ctx: ScenarioRunnerContext): Promise<
         }
 
         const result = await kanban.wait(taskId, step.timeoutMs || 600000);
-        log(result.status === 'done'
-          ? `✓ [${step.id}] kanban done (${Date.now() - startTime}ms)`
-          : `✗ [${step.id}] kanban ${result.status}: ${result.error || ''}`
+        log(
+          result.status === 'done'
+            ? `✓ [${step.id}] kanban done (${Date.now() - startTime}ms)`
+            : `✗ [${step.id}] kanban ${result.status}: ${result.error || ''}`,
         );
 
         return {

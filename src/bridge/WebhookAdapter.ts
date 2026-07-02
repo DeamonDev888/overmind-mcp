@@ -59,7 +59,9 @@ export interface WebhookAdapterConfig {
 // ─── WebhookAdapter ────────────────────────────────────────────────────────
 
 export class WebhookAdapter {
-  private readonly config: Required<Omit<WebhookAdapterConfig, 'fieldMap' | 'discordContext' | 'logger'>> &
+  private readonly config: Required<
+    Omit<WebhookAdapterConfig, 'fieldMap' | 'discordContext' | 'logger'>
+  > &
     Pick<WebhookAdapterConfig, 'fieldMap' | 'discordContext'>;
   private readonly log: BridgeLogger;
 
@@ -109,7 +111,12 @@ export class WebhookAdapter {
     const messageId = stringOr(raw.id ?? raw.MessageSid, '');
     const date = stringOr(raw.date ?? raw.Date, new Date().toISOString());
     const mediaRaw = stringOr(raw.media ?? raw.MediaUrl0 ?? '', '');
-    const mediaUrls = mediaRaw ? mediaRaw.split('|').map((u) => u.trim()).filter(Boolean) : [];
+    const mediaUrls = mediaRaw
+      ? mediaRaw
+          .split('|')
+          .map((u) => u.trim())
+          .filter(Boolean)
+      : [];
 
     const promptParts: string[] = [];
     if (this.config.promptPrefix) promptParts.push(this.config.promptPrefix);
@@ -178,7 +185,11 @@ export class WebhookAdapter {
   private adaptTelegram(raw: Record<string, unknown>): NormalizedWebhook {
     const message = (raw.message ?? raw.edited_message) as Record<string, unknown> | undefined;
     const chat = (message?.chat ?? {}) as { id?: unknown; title?: unknown };
-    const from = (message?.from ?? {}) as { id?: unknown; username?: unknown; first_name?: unknown };
+    const from = (message?.from ?? {}) as {
+      id?: unknown;
+      username?: unknown;
+      first_name?: unknown;
+    };
 
     const chatId = stringOr(chat.id, '');
     const userId = stringOr(from.id, '');
@@ -231,11 +242,11 @@ export class WebhookAdapter {
 
     return {
       externalKey: userId || channelId,
-      prompt: this.config.promptPrefix
-        ? `${this.config.promptPrefix}\n${prompt}`
-        : prompt,
+      prompt: this.config.promptPrefix ? `${this.config.promptPrefix}\n${prompt}` : prompt,
       mediaUrls: Array.isArray(raw.attachments)
-        ? (raw.attachments as Array<{ url?: string }>).map((a) => a.url).filter((u): u is string => Boolean(u))
+        ? (raw.attachments as Array<{ url?: string }>)
+            .map((a) => a.url)
+            .filter((u): u is string => Boolean(u))
         : [],
       metadata: { provider: 'discord', channelId, userId, username },
     };
@@ -256,13 +267,16 @@ export class WebhookAdapter {
     const externalKey = get('externalKey') || 'default';
     const prompt = get('prompt') || JSON.stringify(raw);
     const mediaStr = get('mediaUrls');
-    const mediaUrls = mediaStr ? mediaStr.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    const mediaUrls = mediaStr
+      ? mediaStr
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
 
     return {
       externalKey,
-      prompt: this.config.promptPrefix
-        ? `${this.config.promptPrefix}\n${prompt}`
-        : prompt,
+      prompt: this.config.promptPrefix ? `${this.config.promptPrefix}\n${prompt}` : prompt,
       mediaUrls,
       metadata: { provider: 'generic', raw },
     };

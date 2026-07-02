@@ -31,10 +31,7 @@ import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { linkSessionToPid } from '../lib/processRegistry.js';
 import { withSpan } from '../lib/telemetry.js';
 import { rootLogger } from '../lib/logger.js';
-import {
-  registerProcess,
-  updateProcessStatus,
-} from '../lib/processRegistry.js';
+import { registerProcess, updateProcessStatus } from '../lib/processRegistry.js';
 import {
   registerLiveAgent,
   appendLiveOutput,
@@ -144,7 +141,10 @@ export class HermesRunner {
       return result;
     } catch (error) {
       logger.error(
-        { error: error instanceof Error ? error.message : String(error), agentName: options.agentName },
+        {
+          error: error instanceof Error ? error.message : String(error),
+          agentName: options.agentName,
+        },
         '[RUN_AGENT] Hermes runner threw.',
       );
       throw error;
@@ -260,13 +260,19 @@ export class HermesRunner {
       currentChildRef = child;
 
       if (child.pid) {
-        void registerProcess(child.pid, { agentName: agentName || '', runner: 'hermes', configPath });
+        void registerProcess(child.pid, {
+          agentName: agentName || '',
+          runner: 'hermes',
+          configPath,
+        });
         void registerLiveAgent({
           pid: child.pid,
           runner: 'hermes',
           agentName: agentName || '',
           sessionId: currentSessionId || '',
-          cleanupFn: async () => { await killChildTree(child); },
+          cleanupFn: async () => {
+            await killChildTree(child);
+          },
           childRef: child,
         });
         child.once('exit', (code) => {
@@ -309,7 +315,11 @@ export class HermesRunner {
       // ─── Timeout ───────────────────────────────────────────────────────────
       const timer = setTimeout(() => {
         if (child.stdin && !child.stdin.destroyed) {
-          try { child.stdin.write('\n'); } catch { /* ignore */ }
+          try {
+            child.stdin.write('\n');
+          } catch {
+            /* ignore */
+          }
         }
         setTimeout(async () => {
           await killChildTree(child);

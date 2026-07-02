@@ -141,7 +141,11 @@ export class BridgeHttpClient {
 
   // ─── HTTP Helpers ────────────────────────────────────────────────────────
 
-  private async _post(path: string, body: unknown, timeoutMs: number): Promise<JsonRpcCallResponse | JsonRpcCallResponse[]> {
+  private async _post(
+    path: string,
+    body: unknown,
+    timeoutMs: number,
+  ): Promise<JsonRpcCallResponse | JsonRpcCallResponse[]> {
     const url = new URL(this.config.baseUrl + path);
     const data = JSON.stringify(body);
 
@@ -156,7 +160,7 @@ export class BridgeHttpClient {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
+            Accept: 'application/json',
             'Content-Length': Buffer.byteLength(data),
             ...(this.config.authToken ? { Authorization: `Bearer ${this.config.authToken}` } : {}),
           },

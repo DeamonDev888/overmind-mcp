@@ -13,7 +13,10 @@ const DEFAULT_MCP_SERVERS = ['memory'];
 export const createAgentSchema = z.object({
   name: z
     .string()
-    .regex(/^[a-zA-Z0-9_-]+$/, "Agent name must only contain alphanumeric, underscores, and hyphens (no path separators)")
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      'Agent name must only contain alphanumeric, underscores, and hyphens (no path separators)',
+    )
     .describe(
       "Nom unique de l'agent (ex: 'sniper_analyst'). Ce nom servira d'identifiant pour sa mémoire sémantique isolée.",
     ),

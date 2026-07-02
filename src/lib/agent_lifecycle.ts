@@ -23,11 +23,7 @@
  */
 
 import { ChildProcess } from 'child_process';
-import {
-  isPidAlive,
-  unregisterProcess,
-  updateProcessStatus,
-} from './processRegistry.js';
+import { isPidAlive, unregisterProcess, updateProcessStatus } from './processRegistry.js';
 
 export type LifecycleStatus = 'running' | 'done' | 'failed' | 'orphaned';
 
@@ -37,7 +33,7 @@ export interface LiveAgent {
   agentName: string;
   sessionId: string;
   status: LifecycleStatus;
-  outputBuffer: string;       // Ring buffer — last MAX_BUFFER chars
+  outputBuffer: string; // Ring buffer — last MAX_BUFFER chars
   exitCode: number | null;
   startedAt: number;
   lastOutputAt: number;
@@ -47,13 +43,13 @@ export interface LiveAgent {
 }
 
 const MAX_BUFFER = 256 * 1024;
-const DEFAULT_TTL_MS = 5 * 60 * 1000;   // 5min before auto-orphan
-const SWEEP_INTERVAL_MS = 30 * 1000;    // sweep every 30s
+const DEFAULT_TTL_MS = 5 * 60 * 1000; // 5min before auto-orphan
+const SWEEP_INTERVAL_MS = 30 * 1000; // sweep every 30s
 
 // ─── In-memory store ───────────────────────────────────────────────────────────
 
 const lifecycleMap = new Map<number, LiveAgent>();
-const sessionIndex  = new Map<string, number>(); // sessionId → pid
+const sessionIndex = new Map<string, number>(); // sessionId → pid
 
 // Sweeper state
 let sweepTimer: ReturnType<typeof setInterval> | undefined;
@@ -63,9 +59,7 @@ let sweepCount = 0;
 
 function appendToRing(existing: string, chunk: string): string {
   const combined = existing + chunk;
-  return combined.length > MAX_BUFFER
-    ? combined.slice(-MAX_BUFFER)
-    : combined;
+  return combined.length > MAX_BUFFER ? combined.slice(-MAX_BUFFER) : combined;
 }
 
 // ─── Zombie sweeper ───────────────────────────────────────────────────────────
@@ -221,9 +215,13 @@ export function setLiveStatus(
 
   // Cross-system sync: write terminal status to processRegistry
   const registryStatus =
-    status === 'running' ? 'running' :
-    status === 'orphaned' ? 'orphaned' :
-    exitCode === 0 ? 'done' : 'failed';
+    status === 'running'
+      ? 'running'
+      : status === 'orphaned'
+        ? 'orphaned'
+        : exitCode === 0
+          ? 'done'
+          : 'failed';
   updateProcessStatus(pid, registryStatus, exitCode).catch(() => {});
 }
 
@@ -293,7 +291,11 @@ export async function drainAllAgents(): Promise<void> {
   stopZombieSweeper();
   for (const agent of lifecycleMap.values()) {
     if (agent.status === 'running') {
-      try { await agent.cleanupFn(); } catch { /* best-effort */ }
+      try {
+        await agent.cleanupFn();
+      } catch {
+        /* best-effort */
+      }
     }
   }
 }

@@ -7,6 +7,10 @@ export { ClaudeRunner } from './services/ClaudeRunner.js';
 
 // Orchestration (v3.0 — swarm.ts replaced by KanbanAdapter)
 export { dispatchAgents } from './lib/orchestration/dispatcher.js';
-export type { AgentSpec, DispatchOptions, AgentDispatchResult } from './lib/orchestration/dispatcher.js';
+export type {
+  AgentSpec,
+  DispatchOptions,
+  AgentDispatchResult,
+} from './lib/orchestration/dispatcher.js';
 export { KanbanAdapter } from './services/KanbanAdapter.js';
 export type { CreateTaskOptions, TaskStatus, TaskResult } from './services/KanbanAdapter.js';

@@ -103,7 +103,9 @@ export async function runClaudeAgent(args: z.infer<typeof runClaudeSchema>): Pro
       sessionId: result.sessionId,
     });
   } catch (e) {
-    console.error(`[run_claude] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
+    console.error(
+      `[run_claude] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 
   if (result.error?.startsWith('INVALID_AGENT')) {

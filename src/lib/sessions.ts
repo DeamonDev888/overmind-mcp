@@ -6,7 +6,6 @@ import { rootLogger } from './logger.js';
 
 const logger = rootLogger.child({ module: 'sessions' });
 
-
 const sessionMutex = new Mutex();
 
 const SESSIONS_FILE = 'bridge/agents.json';

@@ -17,7 +17,6 @@ import { rootLogger } from './logger.js';
 
 const logger = rootLogger.child({ module: 'processRegistry' });
 
-
 const REGISTRY_FILE = 'bridge/process-registry.json';
 const PROCESS_TTL_MS = 60 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
@@ -103,7 +102,10 @@ async function writeStore(store: RegistryStore, filePath: string): Promise<void>
     }
   })();
 
-  fileLocks.set(filePath, lock.then(() => {}).catch(() => {}));
+  fileLocks.set(
+    filePath,
+    lock.then(() => {}).catch(() => {}),
+  );
 }
 
 // ─── OS-level process utilities ───────────────────────────────────────────────
@@ -125,7 +127,9 @@ export async function isPidAlive(pid: number): Promise<boolean> {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
         let out = '';
-        child.stdout.on('data', (d: Buffer) => { out += d.toString(); });
+        child.stdout.on('data', (d: Buffer) => {
+          out += d.toString();
+        });
         child.on('close', () => {
           const trimmed = out.trim();
           resolve(!trimmed.includes('No tasks are running') && trimmed.includes(String(pid)));
@@ -215,7 +219,9 @@ export async function linkSessionToPid(
 
 /** appendOutput — NO-OP: agent_lifecycle handles output in RAM */
 export async function appendOutput(pid: number, chunk: string, configPath?: string): Promise<void> {
-  void pid; void chunk; void configPath;
+  void pid;
+  void chunk;
+  void configPath;
 }
 
 export async function updateProcessStatus(
@@ -296,11 +302,19 @@ export async function cleanupRegistry(configPath?: string): Promise<{
     const entry = store.processes[key];
     if (entry.status === 'running' && entry.pid) {
       const alive = await isPidAlive(entry.pid);
-      if (!alive) { entry.status = 'orphaned'; orphaned++; changed = true; }
+      if (!alive) {
+        entry.status = 'orphaned';
+        orphaned++;
+        changed = true;
+      }
     }
     if (entry.status !== 'running') {
       const age = now - (entry.lastOutputAt || entry.ts);
-      if (age > PROCESS_TTL_MS) { delete store.processes[key]; expired++; changed = true; }
+      if (age > PROCESS_TTL_MS) {
+        delete store.processes[key];
+        expired++;
+        changed = true;
+      }
     }
   }
   if (changed) await writeStore(store, filePath);
@@ -314,5 +328,7 @@ export async function getRunningProcesses(configPath?: string): Promise<ProcessE
 
 export function startAutoCleanup(configPath?: string): void {
   cleanupRegistry(configPath).catch(() => {});
-  setInterval(() => { cleanupRegistry(configPath).catch(() => {}); }, CLEANUP_INTERVAL_MS);
+  setInterval(() => {
+    cleanupRegistry(configPath).catch(() => {});
+  }, CLEANUP_INTERVAL_MS);
 }

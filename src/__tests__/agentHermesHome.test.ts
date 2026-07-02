@@ -23,10 +23,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import {
-  getAgentHermesHome,
-  getSharedHermesHome,
-} from '../lib/config.js';
+import { getAgentHermesHome, getSharedHermesHome } from '../lib/config.js';
 
 const ORIGINAL_ENV = { ...process.env };
 const TMPDIRS: string[] = [];
@@ -64,7 +61,11 @@ afterEach(() => {
   }
   Object.assign(process.env, ORIGINAL_ENV);
   for (const d of TMPDIRS) {
-    try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* */ }
+    try {
+      fs.rmSync(d, { recursive: true, force: true });
+    } catch {
+      /* */
+    }
   }
   TMPDIRS.length = 0;
 });

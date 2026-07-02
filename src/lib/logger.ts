@@ -33,7 +33,9 @@ try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     PKG_VERSION = pkg.version || PKG_VERSION;
   }
-} catch { /* fallback */ }
+} catch {
+  /* fallback */
+}
 
 function getFileTargets(): string[] {
   const raw = process.env.LOG_FILES ?? '';
@@ -60,7 +62,7 @@ const transport = pino.transport({
         ignore: 'pid,hostname,service,version',
         messageFormat: '\x1b[32m[{module}]\x1b[0m {msg}',
         errorLikeObjectKeys: ['err', 'error'],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     },
     ...fileTargets.map((filePath) => ({

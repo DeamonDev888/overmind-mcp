@@ -134,3 +134,4 @@ auth.json
 
 bridge/agents.json
 bridge/process-registry.json
+bridge/*.tmp*

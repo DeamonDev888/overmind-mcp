@@ -104,7 +104,10 @@ export class ClaudeRunner {
     if (options.agentName) {
       // Inline validation — prevents path traversal on settings_${agentName}.json
       if (!/^[a-zA-Z0-9_-]+$/.test(options.agentName)) {
-        return { result: '', error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.` };
+        return {
+          result: '',
+          error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.`,
+        };
       }
     }
     const { prompt, agentName, autoResume } = options;
@@ -338,7 +341,10 @@ export class ClaudeRunner {
       const fallbacks = getAvailableFallbacks();
       const fallbackIndex = index - 1; // index 1 → fallback[0] (AUTH_FALLBACK_1)
       if (fallbackIndex < fallbacks.length) {
-        return { tokenEnvKey: fallbacks[fallbackIndex].key, tokenValue: fallbacks[fallbackIndex].value };
+        return {
+          tokenEnvKey: fallbacks[fallbackIndex].key,
+          tokenValue: fallbacks[fallbackIndex].value,
+        };
       }
       return null;
     };
@@ -443,21 +449,17 @@ export class ClaudeRunner {
           // corrompu (ex: ANTHROPIC_BASE_URL=https://api.minimax.com avec typo
           // minimax au lieu de minimaxi) pollue le spawn et Claude CLI ne peut
           // pas joindre l'API. Les settings de l'agent sont la source de vérité.
-          const CRITICAL_KEYS = [
-            "ANTHROPIC_BASE_URL",
-            "ANTHROPIC_MODEL",
-            "ANTHROPIC_PROVIDER",
-          ];
+          const CRITICAL_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL', 'ANTHROPIC_PROVIDER'];
           for (const k of CRITICAL_KEYS) {
             // Priority order: agentCustomEnv > process.env (skip if not set)
             // Si l'env de l'agent a la valeur, l'utiliser. Sinon garder process.env
             // MAIS: si process.env contient une valeur "connue cassée" (ex: api.minimax.com
             // au lieu de api.minimaxi.com), forcer la résolution depuis l'agent ou zéro.
-            if (agentCustomEnv[k] && typeof agentCustomEnv[k] === "string") {
+            if (agentCustomEnv[k] && typeof agentCustomEnv[k] === 'string') {
               let resolved = agentCustomEnv[k] as string;
-              if (resolved.startsWith("$")) {
+              if (resolved.startsWith('$')) {
                 const envKey = resolved.slice(1);
-                resolved = process.env[envKey] || "";
+                resolved = process.env[envKey] || '';
               }
               if (resolved && resolved !== spawnEnv[k]) {
                 // Override process.env (même si process.env a déjà une valeur)
@@ -467,12 +469,9 @@ export class ClaudeRunner {
             // Si process.env a api.minimax.com (typo) ET l'agent a $ANTHROPIC_BASE_URL_M
             // (= api.minimaxi.com), l'override ci-dessus aura déjà corrigé.
             // Sinon, si aucune résolution, nettoyer la valeur cassée.
-            if (
-              k === "ANTHROPIC_BASE_URL" &&
-              spawnEnv[k] === "https://api.minimax.com/anthropic"
-            ) {
+            if (k === 'ANTHROPIC_BASE_URL' && spawnEnv[k] === 'https://api.minimax.com/anthropic') {
               // Force fallback to minimaxi if agent settings have _M suffix
-              const mKey = k + "_M";
+              const mKey = k + '_M';
               if (process.env[mKey]) {
                 spawnEnv[k] = process.env[mKey]!;
               }
@@ -500,9 +499,10 @@ export class ClaudeRunner {
           currentStdout = '';
 
           const command = process.platform === 'win32' ? 'cmd.exe' : 'claude';
-          const spawnArgs = process.platform === 'win32'
-            ? ['/c', 'claude', ...argsSpawn, '-p']
-            : ['claude', ...argsSpawn, '-p'];
+          const spawnArgs =
+            process.platform === 'win32'
+              ? ['/c', 'claude', ...argsSpawn, '-p']
+              : ['claude', ...argsSpawn, '-p'];
 
           if (!options.silent) {
             const tokenLabel = tokenInfo ? ` (token: ${tokenInfo.tokenEnvKey})` : '';
@@ -695,12 +695,21 @@ export class ClaudeRunner {
                     'claude',
                   );
                   if (currentChildRef?.pid) {
-                    void linkSessionToPid(jsonEnvelope.session_id as string, currentChildRef.pid, options.configPath);
+                    void linkSessionToPid(
+                      jsonEnvelope.session_id as string,
+                      currentChildRef.pid,
+                      options.configPath,
+                    );
                   }
                 }
 
                 if (currentChildRef?.pid) {
-                  void updateProcessStatus(currentChildRef.pid, code === 0 ? 'done' : 'failed', code ?? null, options.configPath);
+                  void updateProcessStatus(
+                    currentChildRef.pid,
+                    code === 0 ? 'done' : 'failed',
+                    code ?? null,
+                    options.configPath,
+                  );
                 }
 
                 return safeResolve({

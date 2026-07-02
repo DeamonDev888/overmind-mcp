@@ -175,7 +175,7 @@ export async function runAgentsLocally(
  *   4. Non-Hermes runners (claude, kilo, etc.) can't be spawned by the Kanban dispatcher
  */
 export async function dispatchAgents(agents: AgentSpec[], opts: DispatchOptions) {
-  const allHermes = agents.length > 1 && agents.every(a => a.runner === 'hermes');
+  const allHermes = agents.length > 1 && agents.every((a) => a.runner === 'hermes');
 
   // ─── All-Hermes parallel dispatch → Kanban (durable) ──────────────────────
   if (allHermes && opts.waitAll) {
@@ -184,7 +184,9 @@ export async function dispatchAgents(agents: AgentSpec[], opts: DispatchOptions)
     } catch (e) {
       // Fallback to in-process dispatch if kanban fails
       const msg = e instanceof Error ? e.message : String(e);
-      console.error(`[dispatchAgents] Kanban dispatch failed (${msg}) — falling back to in-process.`);
+      console.error(
+        `[dispatchAgents] Kanban dispatch failed (${msg}) — falling back to in-process.`,
+      );
     }
   }
 
@@ -256,18 +258,18 @@ async function dispatchViaKanban(
           result: e instanceof Error ? e.message : String(e),
         };
       }
-    })
+    }),
   );
 
   // ─── Build summary ────────────────────────────────────────────────────────
   const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  const successCount = results.filter(r => r.status === 'success').length;
-  const errorCount = results.filter(r => r.status === 'error').length;
+  const successCount = results.filter((r) => r.status === 'success').length;
+  const errorCount = results.filter((r) => r.status === 'error').length;
 
   const summary = [
     `⚡ dispatch_via_kanban — ${results.length} agent(s) | ✅ ${successCount} succès | ❌ ${errorCount} erreurs | 🕐 ${totalElapsed}s total`,
     '',
-    ...results.map(r => {
+    ...results.map((r) => {
       const icon = r.status === 'success' ? '✅' : '❌';
       const header = `${icon} [${r.label}] ${r.runner}${r.agentName ? `/${r.agentName}` : ''} (${r.elapsed})`;
       return `${header}\n${r.result}`;

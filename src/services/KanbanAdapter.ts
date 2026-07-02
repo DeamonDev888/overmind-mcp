@@ -83,7 +83,10 @@ export interface TaskSummary {
 
 // ─── Helper: run hermes kanban CLI ────────────────────────────────────────────
 
-async function runKanban(args: string[], opts?: { timeout?: number }): Promise<{ stdout: string; stderr: string }> {
+async function runKanban(
+  args: string[],
+  opts?: { timeout?: number },
+): Promise<{ stdout: string; stderr: string }> {
   const timeout = opts?.timeout ?? 30000;
   const cmd = `hermes kanban ${args.join(' ')}`;
   try {
@@ -91,7 +94,15 @@ async function runKanban(args: string[], opts?: { timeout?: number }): Promise<{
     return { stdout: result.stdout, stderr: result.stderr };
   } catch (e) {
     const err = e as Error & { stdout?: string; stderr?: string };
-    logger.error({ cmd, error: err.message, stdout: err.stdout?.slice(0, 500), stderr: err.stderr?.slice(0, 500) }, '[KANBAN] CLI command failed.');
+    logger.error(
+      {
+        cmd,
+        error: err.message,
+        stdout: err.stdout?.slice(0, 500),
+        stderr: err.stderr?.slice(0, 500),
+      },
+      '[KANBAN] CLI command failed.',
+    );
     throw new Error(`Kanban CLI failed: ${err.message}`, { cause: e });
   }
 }
@@ -184,10 +195,8 @@ export class KanbanAdapter {
    * Create multiple independent tasks in parallel (fan-out).
    */
   async createParallelTasks(tasks: CreateTaskOptions[]): Promise<string[]> {
-    const results = await Promise.all(
-      tasks.map(t => this.createTask(t))
-    );
-    return results.map(r => r.taskId);
+    const results = await Promise.all(tasks.map((t) => this.createTask(t)));
+    return results.map((r) => r.taskId);
   }
 
   /**
@@ -256,9 +265,10 @@ export class KanbanAdapter {
             status: 'done',
             summary: lastRun?.summary || '',
             metadata: lastRun?.metadata,
-            durationMs: lastRun?.started_at && lastRun?.ended_at
-              ? lastRun.ended_at - lastRun.started_at
-              : undefined,
+            durationMs:
+              lastRun?.started_at && lastRun?.ended_at
+                ? lastRun.ended_at - lastRun.started_at
+                : undefined,
           };
         }
 
@@ -294,7 +304,10 @@ export class KanbanAdapter {
             if (activeRun && activeRun.started_at) {
               const claimAge = now - activeRun.started_at * 1000;
               if (claimAge > YOLO_CONFIG.reclaimStaleMs) {
-                logger.warn({ taskId, claimAgeMs: claimAge }, '[WAIT] Stale claim detected — auto-reclaim.');
+                logger.warn(
+                  { taskId, claimAgeMs: claimAge },
+                  '[WAIT] Stale claim detected — auto-reclaim.',
+                );
                 try {
                   await runKanban([...this.boardArgs, 'reclaim', taskId]);
                   logger.info({ taskId }, '[WAIT] Task reclaimed.');
@@ -311,7 +324,7 @@ export class KanbanAdapter {
       }
 
       // Sleep before next poll
-      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
     }
 
     // Timeout reached
@@ -361,7 +374,7 @@ export class KanbanAdapter {
 
     try {
       const parsed = JSON.parse(stdout.trim());
-      tasks = Array.isArray(parsed) ? parsed : (parsed.tasks || []);
+      tasks = Array.isArray(parsed) ? parsed : parsed.tasks || [];
     } catch {
       // Fallback: parse text output
       logger.warn('[LIST] Failed to parse JSON output — returning empty list.');
@@ -370,13 +383,13 @@ export class KanbanAdapter {
 
     // Apply filters
     if (filter?.status) {
-      tasks = tasks.filter(t => t.status === filter.status);
+      tasks = tasks.filter((t) => t.status === filter.status);
     }
     if (filter?.assignee) {
-      tasks = tasks.filter(t => t.assignee === filter.assignee);
+      tasks = tasks.filter((t) => t.assignee === filter.assignee);
     }
     if (filter?.tenant) {
-      tasks = tasks.filter(t => t.tenant === filter.tenant);
+      tasks = tasks.filter((t) => t.tenant === filter.tenant);
     }
 
     return tasks;
@@ -393,7 +406,11 @@ export class KanbanAdapter {
   /**
    * Create a board for a specific project/workstream.
    */
-  async createBoard(slug: string, name: string, opts?: { description?: string; switch?: boolean }): Promise<void> {
+  async createBoard(
+    slug: string,
+    name: string,
+    opts?: { description?: string; switch?: boolean },
+  ): Promise<void> {
     const args = ['boards', 'create', slug, '--name', `"${name}"`];
     if (opts?.description) args.push('--description', `"${opts.description}"`);
     if (opts?.switch) args.push('--switch');

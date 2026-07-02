@@ -10,32 +10,31 @@ import {
 
 // ─── Schema + Types ──────────────────────────────────────────────────────────
 
-export const agentControlSchema = z
-  .object({
-    agentName: z.string().describe("Nom unique de l'agent à contrôler"),
-    runner: z
-      .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
-      .optional()
-      .describe("Type de runner (optionnel — déduit si omis)"),
-    config: z.string().optional().describe('Chemin racine Overmind'),
-    action: z
-      .enum(['status', 'stream', 'kill', 'wait'])
-      .describe(
-        'status — état courant (pid, status, sessionId, output)\n' +
-          'stream — output en temps réel + isComplete\n' +
-          'kill   — arrêt forcé du process tree\n' +
-          'wait   — bloque jusquà terminaison (max timeoutMs)',
-      ),
-    timeoutMs: z
-      .number()
-      .int()
-      .min(1000)
-      .max(3600000)
-      .optional()
-      .default(900000)
-      .describe('Timeout wait en ms (défaut: 900s, max: 1h)'),
-    sinceTimestamp: z.number().optional().describe('Pour stream: output après ce timestamp'),
-  });
+export const agentControlSchema = z.object({
+  agentName: z.string().describe("Nom unique de l'agent à contrôler"),
+  runner: z
+    .enum(['claude', 'gemini', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
+    .optional()
+    .describe('Type de runner (optionnel — déduit si omis)'),
+  config: z.string().optional().describe('Chemin racine Overmind'),
+  action: z
+    .enum(['status', 'stream', 'kill', 'wait'])
+    .describe(
+      'status — état courant (pid, status, sessionId, output)\n' +
+        'stream — output en temps réel + isComplete\n' +
+        'kill   — arrêt forcé du process tree\n' +
+        'wait   — bloque jusquà terminaison (max timeoutMs)',
+    ),
+  timeoutMs: z
+    .number()
+    .int()
+    .min(1000)
+    .max(3600000)
+    .optional()
+    .default(900000)
+    .describe('Timeout wait en ms (défaut: 900s, max: 1h)'),
+  sinceTimestamp: z.number().optional().describe('Pour stream: output après ce timestamp'),
+});
 
 export type AgentControlArgs = z.infer<typeof agentControlSchema>;
 
@@ -136,7 +135,7 @@ async function doStatus(agentName: string, runner: string | undefined): Promise<
         pid: disk!.pid,
         sessionId: disk!.id,
         exitCode: disk!.exitCode ?? null,
-        outputBuffer: '',         // disk entry has no outputBuffer
+        outputBuffer: '', // disk entry has no outputBuffer
         startedAt: disk!.ts,
         lastOutputAt: disk!.lastOutputAt ?? disk!.ts,
       };
@@ -164,9 +163,7 @@ async function doStream(
     };
   }
 
-  const isComplete = live
-    ? live.status !== 'running'
-    : disk!.status !== 'running';
+  const isComplete = live ? live.status !== 'running' : disk!.status !== 'running';
 
   const output = live ? live.outputBuffer : '';
   if (sinceTimestamp && live) {
@@ -203,7 +200,8 @@ async function doStream(
   lines.push(`**Status:** ${view.status}`);
   lines.push(`**isComplete:** ${isComplete}`);
   if (view.pid) lines.push(`**PID:** ${view.pid}`);
-  if (view.lastOutputAt) lines.push(`**Last Output At:** ${new Date(view.lastOutputAt).toISOString()}`);
+  if (view.lastOutputAt)
+    lines.push(`**Last Output At:** ${new Date(view.lastOutputAt).toISOString()}`);
   lines.push(`\n**Output (${output.length} chars):**`);
   lines.push('```');
   lines.push(output.slice(-2000) || '(no output yet)');
@@ -283,7 +281,9 @@ async function doWait(
       const updated = getLiveAgent(agentName, runner);
       if (updated) {
         return {
-          content: [{ type: 'text', text: updated.outputBuffer || `Agent terminé (${updated.status}).` }],
+          content: [
+            { type: 'text', text: updated.outputBuffer || `Agent terminé (${updated.status}).` },
+          ],
           isError: updated.status === 'failed' || updated.status === 'orphaned',
         };
       }
@@ -293,7 +293,9 @@ async function doWait(
     const disk = await getProcessStatus(agentName, runner);
     if (!disk || disk.status !== 'running') {
       return {
-        content: [{ type: 'text', text: disk ? `Agent terminé (${disk.status}).` : `Agent non trouvé.` }],
+        content: [
+          { type: 'text', text: disk ? `Agent terminé (${disk.status}).` : `Agent non trouvé.` },
+        ],
         isError: true,
       };
     }
@@ -327,9 +329,13 @@ export async function agentControl(args: AgentControlArgs): Promise<ControlResul
   const { agentName, runner, action, timeoutMs, sinceTimestamp } = args;
 
   switch (action) {
-    case 'status': return doStatus(agentName, runner);
-    case 'stream': return doStream(agentName, runner, sinceTimestamp);
-    case 'kill':   return doKill(agentName, runner);
-    case 'wait':   return doWait(agentName, runner, timeoutMs ?? 900000);
+    case 'status':
+      return doStatus(agentName, runner);
+    case 'stream':
+      return doStream(agentName, runner, sinceTimestamp);
+    case 'kill':
+      return doKill(agentName, runner);
+    case 'wait':
+      return doWait(agentName, runner, timeoutMs ?? 900000);
   }
 }

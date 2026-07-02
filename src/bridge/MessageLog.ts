@@ -137,7 +137,9 @@ export class MessageLog {
   async init(): Promise<void> {
     if (this.initialized) return;
 
-    this.log.info(`🐘 Connecting to Postgres ${this.config.host}:${this.config.port}/${this.config.database}...`);
+    this.log.info(
+      `🐘 Connecting to Postgres ${this.config.host}:${this.config.port}/${this.config.database}...`,
+    );
 
     this.pool = new pg.Pool({
       host: this.config.host,
@@ -265,10 +267,9 @@ export class MessageLog {
    */
   async getById(id: string): Promise<PersistedMessage | null> {
     this.assertReady();
-    const result = await this.pool!.query<DbRow>(
-      'SELECT * FROM bridge_messages WHERE id = $1',
-      [id],
-    );
+    const result = await this.pool!.query<DbRow>('SELECT * FROM bridge_messages WHERE id = $1', [
+      id,
+    ]);
     return result.rows[0] ? rowToMessage(result.rows[0]) : null;
   }
 
@@ -441,8 +442,8 @@ function rowToMessage(row: DbRow): PersistedMessage {
 
 /**
  * Charge la config Postgres depuis process.env (POSTGRES_*).
-   * Utilise les variables déjà dans .env.
-   */
+ * Utilise les variables déjà dans .env.
+ */
 export function loadMessageLogConfigFromEnv(): MessageLogConfig {
   const num = (v: string | undefined, def: number): number => {
     const n = v ? Number(v) : NaN;

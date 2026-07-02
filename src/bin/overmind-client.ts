@@ -14,7 +14,7 @@
 
 const DEFAULT_BASE = 'http://localhost:3099/mcp';
 const DEFAULT_AUTH = process.env.OVERMIND_AUTH || 'changeme';
-const HEALTH_URL  = 'http://localhost:3099/health';
+const HEALTH_URL = 'http://localhost:3099/health';
 
 // ─── JSON-RPC helpers ─────────────────────────────────────────────────────────
 
@@ -33,8 +33,8 @@ async function callMcp(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'application/json, text/event-stream',
-      'Authorization': `Bearer ${auth}`,
+      Accept: 'application/json, text/event-stream',
+      Authorization: `Bearer ${auth}`,
     },
     body: JSON.stringify(jsonrpc(Date.now(), method, params)),
     signal: AbortSignal.timeout(timeoutMs),
@@ -53,7 +53,7 @@ async function callMcp(
     if (trimmed.startsWith('data: ')) {
       const data = JSON.parse(trimmed.slice(6));
       if (data.result) return { result: data.result };
-      if (data.error)  return { error: data.error as { code: number; message: string } };
+      if (data.error) return { error: data.error as { code: number; message: string } };
     }
   }
   throw new Error('No result in SSE response');
@@ -61,7 +61,8 @@ async function callMcp(
 
 // ─── Runner type ─────────────────────────────────────────────────────────────
 
-export type RunnerType = 'claude' | 'gemini' | 'kilo' | 'qwencli' | 'openclaw' | 'cline' | 'opencode' | 'hermes';
+export type RunnerType =
+  'claude' | 'gemini' | 'kilo' | 'qwencli' | 'openclaw' | 'cline' | 'opencode' | 'hermes';
 
 // ─── Agent result ────────────────────────────────────────────────────────────
 
@@ -80,11 +81,13 @@ export class OvermindClient {
   private url: string;
   private auth: string;
   private id = 0;
-  private nextId(): number { return ++this.id; }
+  private nextId(): number {
+    return ++this.id;
+  }
 
   constructor(opts: { url?: string; auth?: string } = {}) {
-    this.url   = opts.url   ?? DEFAULT_BASE;
-    this.auth  = opts.auth  ?? DEFAULT_AUTH;
+    this.url = opts.url ?? DEFAULT_BASE;
+    this.auth = opts.auth ?? DEFAULT_AUTH;
   }
 
   // ─── Health ──────────────────────────────────────────────────────────────
@@ -92,11 +95,13 @@ export class OvermindClient {
   async health(): Promise<boolean> {
     try {
       const res = await fetch(HEALTH_URL, {
-        headers: { 'Authorization': `Bearer ${this.auth}` },
+        headers: { Authorization: `Bearer ${this.auth}` },
         signal: AbortSignal.timeout(3000),
       });
       return res.ok;
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   }
 
   // ─── Agent CRUD ──────────────────────────────────────────────────────────
@@ -124,7 +129,10 @@ export class OvermindClient {
     if ('error' in res) throw new Error(`list_agents failed: ${res.error?.message}`);
     const text = (res.result as { content: Array<{ text: string }> }).content[0].text;
     // Parse the markdown list
-    return text.split('\n').filter(l => l.trim().startsWith('- ')).map(l => l.trim().slice(2));
+    return text
+      .split('\n')
+      .filter((l) => l.trim().startsWith('- '))
+      .map((l) => l.trim().slice(2));
   }
 
   /** Delete an agent from the registry */
@@ -148,17 +156,29 @@ export class OvermindClient {
     timeoutMs?: number;
   }): Promise<AgentRunResult> {
     const start = Date.now();
-    const res = await callMcp(this.url, this.auth, 'tools/call', {
-      name: 'run_agent',
-      arguments: {
-        agentName: opts.agentName,
-        prompt:    opts.prompt,
-        timeoutMs: opts.timeoutMs ?? 90_000,
+    const res = await callMcp(
+      this.url,
+      this.auth,
+      'tools/call',
+      {
+        name: 'run_agent',
+        arguments: {
+          agentName: opts.agentName,
+          prompt: opts.prompt,
+          timeoutMs: opts.timeoutMs ?? 90_000,
+        },
       },
-    }, opts.timeoutMs ?? 120_000);
+      opts.timeoutMs ?? 120_000,
+    );
 
     if ('error' in res) {
-      return { agentName: opts.agentName, runner: 'claude', output: '', error: res.error?.message, durationMs: Date.now() - start };
+      return {
+        agentName: opts.agentName,
+        runner: 'claude',
+        output: '',
+        error: res.error?.message,
+        durationMs: Date.now() - start,
+      };
     }
 
     const result = res.result as { content?: Array<{ text: string }>; sessionId?: string };
@@ -174,14 +194,18 @@ export class OvermindClient {
   /**
    * Run multiple agents in parallel. Returns results in the same order.
    */
-  async runPool(agents: Array<{
-    name: string;
-    runner: RunnerType;
-    prompt: string;
-    timeoutMs?: number;
-  }>): Promise<AgentRunResult[]> {
+  async runPool(
+    agents: Array<{
+      name: string;
+      runner: RunnerType;
+      prompt: string;
+      timeoutMs?: number;
+    }>,
+  ): Promise<AgentRunResult[]> {
     return Promise.all(
-      agents.map(a => this.runAgent({ agentName: a.name, prompt: a.prompt, timeoutMs: a.timeoutMs }))
+      agents.map((a) =>
+        this.runAgent({ agentName: a.name, prompt: a.prompt, timeoutMs: a.timeoutMs }),
+      ),
     );
   }
 
@@ -199,7 +223,10 @@ export class OvermindClient {
   }
 
   /** Stream output from a running agent (non-blocking) */
-  async agentStream(agentName: string, runner?: RunnerType): Promise<{ output: string; isComplete: boolean }> {
+  async agentStream(
+    agentName: string,
+    runner?: RunnerType,
+  ): Promise<{ output: string; isComplete: boolean }> {
     const res = await callMcp(this.url, this.auth, 'tools/call', {
       name: 'agent_control',
       arguments: { agentName, runner, action: 'stream' },
@@ -212,10 +239,16 @@ export class OvermindClient {
 
   /** Wait for an agent to finish (blocking, polls every 1s) */
   async agentWait(agentName: string, timeoutMs = 900_000, runner?: RunnerType): Promise<string> {
-    const res = await callMcp(this.url, this.auth, 'tools/call', {
-      name: 'agent_control',
-      arguments: { agentName, runner, action: 'wait', timeoutMs },
-    }, timeoutMs + 10_000);
+    const res = await callMcp(
+      this.url,
+      this.auth,
+      'tools/call',
+      {
+        name: 'agent_control',
+        arguments: { agentName, runner, action: 'wait', timeoutMs },
+      },
+      timeoutMs + 10_000,
+    );
     if ('error' in res) return `Error: ${res.error?.message}`;
     return (res.result as { content: Array<{ text: string }> }).content[0].text;
   }
@@ -268,7 +301,6 @@ async function demo() {
 
     await client.deleteAgent(TEST_AGENT);
     console.log(`[delete_agent] ${TEST_AGENT} supprimé`);
-
   } catch (e) {
     console.error('[demo] Erreur:', e);
   }

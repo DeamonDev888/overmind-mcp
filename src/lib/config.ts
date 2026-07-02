@@ -42,7 +42,9 @@ let PKG_VERSION = '2.7.0';
 try {
   const pkg = require('../../package.json');
   PKG_VERSION = pkg.version || PKG_VERSION;
-} catch { /* fallback */ }
+} catch {
+  /* fallback */
+}
 
 export { PKG_VERSION };
 
@@ -220,12 +222,11 @@ export function getSharedHermesHome(): string {
   }
 
   // 2. Canonical: ~/.overmind/hermes/
-  const homeBase = process.env.LOCALAPPDATA
-    || process.env.USERPROFILE
-    || os.homedir();
-  const overmindRoot = process.platform === 'win32'
-    ? path.join(homeBase, 'overmind', 'hermes')
-    : path.join(homeBase, '.overmind', 'hermes');
+  const homeBase = process.env.LOCALAPPDATA || process.env.USERPROFILE || os.homedir();
+  const overmindRoot =
+    process.platform === 'win32'
+      ? path.join(homeBase, 'overmind', 'hermes')
+      : path.join(homeBase, '.overmind', 'hermes');
 
   try {
     fs.mkdirSync(overmindRoot, { recursive: true });

@@ -13,7 +13,22 @@ export const runGeminiSchema = z.object({
   config: z.string().optional(),
   silent: z.boolean().optional().default(false),
   /** Mode Antigravity (défaut: GENERAL) */
-  mode: z.enum(['GENERAL', 'CONTEXT_CHECK', 'PLAN', 'COMMAND', 'CASCADE', 'EVAL', 'ANTIGRAVITY_REVIEW', 'MQUERY', 'COMMIT_MESSAGE', 'CHECKPOINT', 'FAST_APPLY']).optional().default('GENERAL'),
+  mode: z
+    .enum([
+      'GENERAL',
+      'CONTEXT_CHECK',
+      'PLAN',
+      'COMMAND',
+      'CASCADE',
+      'EVAL',
+      'ANTIGRAVITY_REVIEW',
+      'MQUERY',
+      'COMMIT_MESSAGE',
+      'CHECKPOINT',
+      'FAST_APPLY',
+    ])
+    .optional()
+    .default('GENERAL'),
 });
 
 export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
@@ -71,7 +86,9 @@ export async function runGeminiAgent(args: z.infer<typeof runGeminiSchema>) {
       sessionId: result.sessionId,
     });
   } catch (e) {
-    console.error(`[run_gemini] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
+    console.error(
+      `[run_gemini] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 
   if (result.error === 'INVALID_AGENT') {

@@ -13,11 +13,23 @@ export const listAgentsSchema = z.object({
 });
 
 export const deleteAgentSchema = z.object({
-  name: z.string().regex(/^[a-zA-Z0-9_-]+$/, "Agent name must only contain alphanumeric, underscores, and hyphens").describe("Nom de l'agent à supprimer (ex: agent_finance)"),
+  name: z
+    .string()
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      'Agent name must only contain alphanumeric, underscores, and hyphens',
+    )
+    .describe("Nom de l'agent à supprimer (ex: agent_finance)"),
 });
 
 export const updateAgentConfigSchema = z.object({
-  name: z.string().regex(/^[a-zA-Z0-9_-]+$/, "Agent name must only contain alphanumeric, underscores, and hyphens").describe("Nom de l'agent à modifier"),
+  name: z
+    .string()
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      'Agent name must only contain alphanumeric, underscores, and hyphens',
+    )
+    .describe("Nom de l'agent à modifier"),
   model: z
     .string()
     .optional()
@@ -46,7 +58,10 @@ export const updateAgentConfigSchema = z.object({
     .describe('Mode spécifique pour Kilo ou Cline'),
   cliPath: z
     .string()
-    .refine((val) => !val.includes('..') && (path.isAbsolute(val) || /^[a-zA-Z0-9_-]+$/.test(val)), 'cliPath must be a simple command name or absolute path')
+    .refine(
+      (val) => !val.includes('..') && (path.isAbsolute(val) || /^[a-zA-Z0-9_-]+$/.test(val)),
+      'cliPath must be a simple command name or absolute path',
+    )
     .optional()
     .describe("Chemin vers l'exécutable CLI (pour runners spécifiques)"),
   file: z
@@ -131,7 +146,9 @@ export async function updateAgentConfig(args: z.infer<typeof updateAgentConfigSc
   const isFileRewrite = !!(file && content);
   if (isUnitUpdate && !isFileRewrite && !runner) {
     const detected = await manager.peekRunner(name); // (b) lecture du runner déjà en place
-    const detectedTxt = detected ? `**${detected}**` : '**non défini** (sera initialisé à `claude`)';
+    const detectedTxt = detected
+      ? `**${detected}**`
+      : '**non défini** (sera initialisé à `claude`)';
     return {
       content: [
         {

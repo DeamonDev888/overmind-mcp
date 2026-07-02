@@ -38,7 +38,6 @@ export interface RunAgentResult {
   fallbackUsed?: string; // which fallback token was used (e.g. 'AUTH_FALLBACK_1')
 }
 
-
 export class KiloRunner {
   private config: typeof CONFIG.KILO;
   private timeoutMs: number;
@@ -75,7 +74,10 @@ export class KiloRunner {
     if (options.agentName) {
       // Inline validation — prevents path traversal on settings_${agentName}.json
       if (!/^[a-zA-Z0-9_-]+$/.test(options.agentName)) {
-        return { result: '', error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.` };
+        return {
+          result: '',
+          error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.`,
+        };
       }
     }
     // Load .env files first (before anything else) — same as ClaudeRunner/Hermes
@@ -291,7 +293,10 @@ export class KiloRunner {
       const fallbacks = getAvailableFallbacks();
       const fallbackIndex = index - 1;
       if (fallbackIndex < fallbacks.length) {
-        return { tokenEnvKey: fallbacks[fallbackIndex].key, tokenValue: fallbacks[fallbackIndex].value };
+        return {
+          tokenEnvKey: fallbacks[fallbackIndex].key,
+          tokenValue: fallbacks[fallbackIndex].value,
+        };
       }
       return null;
     };
@@ -366,17 +371,19 @@ export class KiloRunner {
             if (sessionId && sessionId.length > 0)
               process.stderr.write(`\x1b[33m[Kilo] 📜 Session: ${sessionId}\x1b[0m\n`);
             // Sanitize command args before display to prevent injection
-            const sanitizedArgs = argsSpawn.map(arg => {
-              let result = '';
-              for (const char of arg) {
-                const code = char.charCodeAt(0);
-                // Skip control chars (0x00-0x1F) and DEL (0x7F)
-                if (code >= 0x20 && code !== 0x7F) {
-                  result += char;
+            const sanitizedArgs = argsSpawn
+              .map((arg) => {
+                let result = '';
+                for (const char of arg) {
+                  const code = char.charCodeAt(0);
+                  // Skip control chars (0x00-0x1F) and DEL (0x7F)
+                  if (code >= 0x20 && code !== 0x7f) {
+                    result += char;
+                  }
                 }
-              }
-              return result;
-            }).join(' ');
+                return result;
+              })
+              .join(' ');
             process.stderr.write(
               `\x1b[33m[Kilo] 🚀 Commande: ${command} ${sanitizedArgs}\x1b[0m\n`,
             );

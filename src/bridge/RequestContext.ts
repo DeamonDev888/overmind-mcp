@@ -21,8 +21,11 @@ export function newRequestId(): string {
  * Récupère le requestId depuis les headers HTTP, ou en génère un nouveau.
  * Supporte les headers `X-Request-Id` et `X-Correlation-Id`.
  */
-export function getOrCreateRequestId(headers: Record<string, string | string[] | undefined>): string {
-  const fromHeader = headers['x-request-id'] ?? headers['X-Request-Id'] ?? headers['x-correlation-id'];
+export function getOrCreateRequestId(
+  headers: Record<string, string | string[] | undefined>,
+): string {
+  const fromHeader =
+    headers['x-request-id'] ?? headers['X-Request-Id'] ?? headers['x-correlation-id'];
   if (typeof fromHeader === 'string' && fromHeader) {
     return sanitizeRequestId(fromHeader);
   }

@@ -98,10 +98,12 @@ const AgentStatusParams = z.object({
   timeoutMs: z.number().optional(),
 });
 
-const ListAgentsParams = z.object({
-  status: z.enum(['online', 'offline', 'busy', 'idle']).optional(),
-  runner: z.string().optional(),
-}).default({});
+const ListAgentsParams = z
+  .object({
+    status: z.enum(['online', 'offline', 'busy', 'idle']).optional(),
+    runner: z.string().optional(),
+  })
+  .default({});
 
 const MessageHistoryParams = z.object({
   toAgent: z.string().optional(),
@@ -170,11 +172,7 @@ export class OverBridgeServer {
   private pruneTimer: ReturnType<typeof setInterval> | undefined;
   private rateLimiter = new Map<string, { count: number; windowStart: number }>();
 
-  constructor(
-    service: OverBridgeService,
-    config: OverBridgeServerConfig,
-    logger?: BridgeLogger,
-  ) {
+  constructor(service: OverBridgeService, config: OverBridgeServerConfig, logger?: BridgeLogger) {
     this.service = service;
     this.config = config;
     this.log = logger ?? createBridgeLogger('overbridge-server');
@@ -236,13 +234,16 @@ export class OverBridgeServer {
 
     // 5) Planifie le prune périodique des agents offline (toutes les 6h)
     // Évite que la map d'états grossisse indéfiniment.
-    this.pruneTimer = setInterval(() => {
-      try {
-        this.registry.prune(24 * 60 * 60 * 1000);
-      } catch (err) {
-        this.log.warn(`⚠️  Prune failed: ${(err as Error).message}`);
-      }
-    }, 6 * 60 * 60 * 1000);
+    this.pruneTimer = setInterval(
+      () => {
+        try {
+          this.registry.prune(24 * 60 * 60 * 1000);
+        } catch (err) {
+          this.log.warn(`⚠️  Prune failed: ${(err as Error).message}`);
+        }
+      },
+      6 * 60 * 60 * 1000,
+    );
 
     const addr = this.server.address();
     const port = typeof addr === 'object' && addr ? addr.port : this.config.port;
@@ -255,7 +256,9 @@ export class OverBridgeServer {
       this.log.info(`   POST ${url}/webhook/:provider   (voipms, twilio, discord, generic)`);
     }
     if (this.sessions) {
-      this.log.info(`   SessionStore: enabled (TTL ${(this.config.sessionTtlMs ?? 14_400_000) / 1000}s)`);
+      this.log.info(
+        `   SessionStore: enabled (TTL ${(this.config.sessionTtlMs ?? 14_400_000) / 1000}s)`,
+      );
     }
     if (this.config.enableDirectives) {
       this.log.info(`   DirectiveParser: enabled (SESSION_ID, CONTEXT_UPDATE, BRIDGE_NEXT)`);
@@ -311,7 +314,9 @@ export class OverBridgeServer {
 
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-    const reqId = getOrCreateRequestId(req.headers as Record<string, string | string[] | undefined>);
+    const reqId = getOrCreateRequestId(
+      req.headers as Record<string, string | string[] | undefined>,
+    );
 
     // Set reqId header in response
     res.setHeader('X-Request-Id', reqId);
@@ -349,8 +354,13 @@ export class OverBridgeServer {
           entry.count++;
           if (entry.count > maxReqs) {
             this.writeJson(res, 429, {
-              jsonrpc: '2.0', id: null,
-              error: { code: -32000, message: 'Rate limit exceeded', data: { reqId, limit: maxReqs } },
+              jsonrpc: '2.0',
+              id: null,
+              error: {
+                code: -32000,
+                message: 'Rate limit exceeded',
+                data: { reqId, limit: maxReqs },
+              },
             });
             return;
           }
@@ -361,7 +371,11 @@ export class OverBridgeServer {
       }
 
       // Webhook endpoint (si activé) — /webhook/:provider
-      if (this.config.enableWebhooks && req.method === 'POST' && url.pathname.startsWith('/webhook/')) {
+      if (
+        this.config.enableWebhooks &&
+        req.method === 'POST' &&
+        url.pathname.startsWith('/webhook/')
+      ) {
         await this.handleWebhook(req, res, url, reqId);
         return;
       }
@@ -381,7 +395,10 @@ export class OverBridgeServer {
   }
 
   private writeCors(res: http.ServerResponse, reqOrigin?: string): void {
-    const allowed = this.config.allowedOrigins ?? ['http://localhost:3000', 'http://localhost:5173'];
+    const allowed = this.config.allowedOrigins ?? [
+      'http://localhost:3000',
+      'http://localhost:5173',
+    ];
     const origin = reqOrigin || '';
     if (allowed.includes('*')) {
       res.setHeader('Access-Control-Allow-Origin', '*');
@@ -489,10 +506,18 @@ export class OverBridgeServer {
     }
     const ext = path.extname(filepath).toLowerCase();
     const mimeMap: Record<string, string> = {
-      '.html': 'text/html', '.pdf': 'application/pdf', '.png': 'image/png',
-      '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.json': 'application/json',
-      '.txt': 'text/plain', '.mp3': 'audio/mpeg', '.mp4': 'video/mp4',
-      '.gif': 'image/gif', '.wav': 'audio/wav', '.xml': 'text/xml',
+      '.html': 'text/html',
+      '.pdf': 'application/pdf',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.json': 'application/json',
+      '.txt': 'text/plain',
+      '.mp3': 'audio/mpeg',
+      '.mp4': 'video/mp4',
+      '.gif': 'image/gif',
+      '.wav': 'audio/wav',
+      '.xml': 'text/xml',
     };
     res.setHeader('Content-Type', mimeMap[ext] ?? 'application/octet-stream');
     fs.createReadStream(filepath).pipe(res);
@@ -533,7 +558,11 @@ export class OverBridgeServer {
 
   // ─── /rpc Endpoint (JSON-RPC 2.0 Dispatcher) ────────────────────────────
 
-  private async handleRpc(req: http.IncomingMessage, res: http.ServerResponse, reqId: string): Promise<void> {
+  private async handleRpc(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    reqId: string,
+  ): Promise<void> {
     // Auth check — timing-safe comparison pour éviter les timing attacks
     if (this.config.authToken) {
       const auth = req.headers.authorization || '';
@@ -590,7 +619,9 @@ export class OverBridgeServer {
         return;
       }
       const responses = await Promise.all(
-        parsed.map((r) => this.dispatchRpc(r).catch((e) => this.buildErrorResponse(r.id ?? null, e))),
+        parsed.map((r) =>
+          this.dispatchRpc(r).catch((e) => this.buildErrorResponse(r.id ?? null, e)),
+        ),
       );
       this.writeJson(res, 200, responses);
     } else {
@@ -663,7 +694,19 @@ export class OverBridgeServer {
     const params = this.validateParams(RunAgentParams, req.params, req.id);
     if (!params.ok) return params.response;
 
-    const { agentName, runner, prompt, sessionId, path, model, mode, silent, metadata, externalKey, parseDirectives } = params.data;
+    const {
+      agentName,
+      runner,
+      prompt,
+      sessionId,
+      path,
+      model,
+      mode,
+      silent,
+      metadata,
+      externalKey,
+      parseDirectives,
+    } = params.data;
     const validatedAgentName = validateAgentName(agentName);
     const reqId = (req.params as { __reqId?: string } | undefined)?.__reqId;
 
@@ -676,7 +719,9 @@ export class OverBridgeServer {
       const stored = this.sessions.get(externalKey, validatedAgentName);
       if (stored) {
         effectiveSessionId = stored.sessionId;
-        this.log.info(`[reqId=${reqId}] 🔗 Session restored for ${externalKey} → ${effectiveSessionId}`);
+        this.log.info(
+          `[reqId=${reqId}] 🔗 Session restored for ${externalKey} → ${effectiveSessionId}`,
+        );
       }
     }
 
@@ -689,7 +734,11 @@ export class OverBridgeServer {
         runner: runner as RunnerType,
         prompt,
         sessionId: effectiveSessionId,
-        metadata: { ...(metadata ?? {}), ...(reqId ? { reqId } : {}), ...(externalKey ? { externalKey } : {}) },
+        metadata: {
+          ...(metadata ?? {}),
+          ...(reqId ? { reqId } : {}),
+          ...(externalKey ? { externalKey } : {}),
+        },
       });
     }
 
@@ -733,7 +782,9 @@ export class OverBridgeServer {
               this.log.info(`[reqId=${reqId}] 🔗 SESSION_ID directive → ${action.sessionId}`);
             } else if (action.kind === 'context' && this.sessions && externalKey) {
               this.sessions.updateContext(externalKey, validatedAgentName, action.patch);
-              this.log.info(`[reqId=${reqId}] 📝 CONTEXT_UPDATE directive → ${JSON.stringify(action.patch)}`);
+              this.log.info(
+                `[reqId=${reqId}] 📝 CONTEXT_UPDATE directive → ${JSON.stringify(action.patch)}`,
+              );
             } else if (action.kind === 'hint') {
               this.log.info(`[reqId=${reqId}] 💡 BRIDGE_HINT: ${action.text}`);
             }
@@ -748,7 +799,11 @@ export class OverBridgeServer {
             runner: runner as string,
             sessionId: agentResult.sessionId,
             context: directives?.actions.find((a) => a.kind === 'context')
-              ? (directives.actions.find((a) => a.kind === 'context') as { patch: Record<string, string> }).patch
+              ? (
+                  directives.actions.find((a) => a.kind === 'context') as {
+                    patch: Record<string, string>;
+                  }
+                ).patch
               : undefined,
           });
         }
@@ -769,9 +824,7 @@ export class OverBridgeServer {
           sessionId: agentResult.sessionId,
           content: resultContent,
           isError: agentResult.isError,
-          directives: shouldParseDirectives
-            ? directives?.actions.map((a) => a.kind)
-            : undefined,
+          directives: shouldParseDirectives ? directives?.actions.map((a) => a.kind) : undefined,
         };
       } catch (err) {
         const errorMsg = (err as Error).message;
@@ -969,7 +1022,11 @@ export class OverBridgeServer {
    */
   private async methodMessageHistory(req: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (!this.messageLog) {
-      return { jsonrpc: '2.0', id: req.id ?? null, error: { code: -32003, message: 'MessageLog disabled' } };
+      return {
+        jsonrpc: '2.0',
+        id: req.id ?? null,
+        error: { code: -32003, message: 'MessageLog disabled' },
+      };
     }
     const params = this.validateParams(MessageHistoryParams, req.params, req.id);
     if (!params.ok) return params.response;
@@ -983,7 +1040,11 @@ export class OverBridgeServer {
    */
   private async methodMessageGet(req: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (!this.messageLog) {
-      return { jsonrpc: '2.0', id: req.id ?? null, error: { code: -32003, message: 'MessageLog disabled' } };
+      return {
+        jsonrpc: '2.0',
+        id: req.id ?? null,
+        error: { code: -32003, message: 'MessageLog disabled' },
+      };
     }
     const params = this.validateParams(MessageGetParams, req.params, req.id);
     if (!params.ok) return params.response;
@@ -998,14 +1059,22 @@ export class OverBridgeServer {
    */
   private async methodMessageReplay(req: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (!this.messageLog) {
-      return { jsonrpc: '2.0', id: req.id ?? null, error: { code: -32003, message: 'MessageLog disabled' } };
+      return {
+        jsonrpc: '2.0',
+        id: req.id ?? null,
+        error: { code: -32003, message: 'MessageLog disabled' },
+      };
     }
     const params = this.validateParams(MessageReplayParams, req.params, req.id);
     if (!params.ok) return params.response;
 
     const original = await this.messageLog.getById(params.data.id);
     if (!original) {
-      return { jsonrpc: '2.0', id: req.id ?? null, error: { code: -32004, message: 'Message not found' } };
+      return {
+        jsonrpc: '2.0',
+        id: req.id ?? null,
+        error: { code: -32004, message: 'Message not found' },
+      };
     }
 
     // Relance via agent.run
@@ -1029,7 +1098,11 @@ export class OverBridgeServer {
    */
   private async methodMessageStats(req: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (!this.messageLog) {
-      return { jsonrpc: '2.0', id: req.id ?? null, error: { code: -32003, message: 'MessageLog disabled' } };
+      return {
+        jsonrpc: '2.0',
+        id: req.id ?? null,
+        error: { code: -32003, message: 'MessageLog disabled' },
+      };
     }
     const stats = await this.messageLog.stats();
     return { jsonrpc: '2.0', id: req.id ?? null, result: stats };
@@ -1039,7 +1112,11 @@ export class OverBridgeServer {
 
   private async methodSessionGet(req: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (!this.sessions) {
-      return { jsonrpc: '2.0', id: req.id ?? null, error: { code: -32003, message: 'SessionStore disabled' } };
+      return {
+        jsonrpc: '2.0',
+        id: req.id ?? null,
+        error: { code: -32003, message: 'SessionStore disabled' },
+      };
     }
     const params = this.validateParams(
       z.object({ externalKey: z.string().min(1), agentName: z.string().min(1) }),
@@ -1054,7 +1131,11 @@ export class OverBridgeServer {
 
   private async methodSessionList(_req: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (!this.sessions) {
-      return { jsonrpc: '2.0', id: _req.id ?? null, error: { code: -32003, message: 'SessionStore disabled' } };
+      return {
+        jsonrpc: '2.0',
+        id: _req.id ?? null,
+        error: { code: -32003, message: 'SessionStore disabled' },
+      };
     }
     const list = this.sessions.list();
     const stats = this.sessions.stats();
@@ -1063,7 +1144,11 @@ export class OverBridgeServer {
 
   private async methodSessionDelete(req: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (!this.sessions) {
-      return { jsonrpc: '2.0', id: req.id ?? null, error: { code: -32003, message: 'SessionStore disabled' } };
+      return {
+        jsonrpc: '2.0',
+        id: req.id ?? null,
+        error: { code: -32003, message: 'SessionStore disabled' },
+      };
     }
     const params = this.validateParams(
       z.object({ externalKey: z.string().min(1), agentName: z.string().min(1) }),
@@ -1078,7 +1163,11 @@ export class OverBridgeServer {
 
   private async methodSessionStats(_req: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (!this.sessions) {
-      return { jsonrpc: '2.0', id: _req.id ?? null, error: { code: -32003, message: 'SessionStore disabled' } };
+      return {
+        jsonrpc: '2.0',
+        id: _req.id ?? null,
+        error: { code: -32003, message: 'SessionStore disabled' },
+      };
     }
     return { jsonrpc: '2.0', id: _req.id ?? null, result: this.sessions.stats() };
   }
@@ -1092,12 +1181,14 @@ export class OverBridgeServer {
         payload: z.record(z.string(), z.unknown()),
         externalKey: z.string().optional(),
         /** Si fourni, dispatch automatique vers agent.run après adaptation */
-        autoDispatch: z.object({
-          agentName: z.string().min(1),
-          runner: z.string().min(1),
-          model: z.string().optional(),
-          mode: z.string().optional(),
-        }).optional(),
+        autoDispatch: z
+          .object({
+            agentName: z.string().min(1),
+            runner: z.string().min(1),
+            model: z.string().optional(),
+            mode: z.string().optional(),
+          })
+          .optional(),
       }),
       req.params,
       req.id,
@@ -1112,7 +1203,12 @@ export class OverBridgeServer {
       return {
         jsonrpc: '2.0',
         id: req.id ?? null,
-        result: { externalKey, prompt: normalized.prompt, mediaUrls: normalized.mediaUrls, metadata: normalized.metadata },
+        result: {
+          externalKey,
+          prompt: normalized.prompt,
+          mediaUrls: normalized.mediaUrls,
+          metadata: normalized.metadata,
+        },
       };
     }
 
@@ -1170,10 +1266,7 @@ export class OverBridgeServer {
     this.writeJson(res, 200, { jsonrpc: '2.0', id, error });
   }
 
-  private buildErrorResponse(
-    id: number | string | null,
-    err: unknown,
-  ): JsonRpcResponse {
+  private buildErrorResponse(id: number | string | null, err: unknown): JsonRpcResponse {
     const error = err as Error & { code?: number };
     return {
       jsonrpc: '2.0',
@@ -1220,8 +1313,13 @@ export class OverBridgeServer {
   /**
    * Parse le retour de agent_control pour extraire le status de l'agent distant.
    */
-  private parseAgentControlStatus(result: { content: Array<{ type: string; text: string }> }): 'running' | 'done' | 'failed' | 'orphaned' | 'unknown' {
-    const text = result.content.map((c) => c.text).join('\n').toLowerCase();
+  private parseAgentControlStatus(result: {
+    content: Array<{ type: string; text: string }>;
+  }): 'running' | 'done' | 'failed' | 'orphaned' | 'unknown' {
+    const text = result.content
+      .map((c) => c.text)
+      .join('\n')
+      .toLowerCase();
     if (text.includes('running') || text.includes('status: running')) return 'running';
     if (text.includes('done') || text.includes('completed')) return 'done';
     if (text.includes('failed') || text.includes('error')) return 'failed';

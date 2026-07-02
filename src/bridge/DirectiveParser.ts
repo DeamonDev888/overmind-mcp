@@ -100,7 +100,10 @@ export class DirectiveParser {
     }
 
     return {
-      cleanText: cleanedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+      cleanText: cleanedLines
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim(),
       actions,
       errors,
     };

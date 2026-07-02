@@ -58,7 +58,13 @@ function detectProviderFromModel(model: string): string {
   const lower = model.toLowerCase();
   if (lower.includes('minimax') || lower.includes('m3')) return 'minimax-cn';
   if (lower.includes('glm') || lower.includes('zai')) return 'zai';
-  if (lower.includes('claude') || lower.includes('sonnet') || lower.includes('opus') || lower.includes('haiku')) return 'anthropic';
+  if (
+    lower.includes('claude') ||
+    lower.includes('sonnet') ||
+    lower.includes('opus') ||
+    lower.includes('haiku')
+  )
+    return 'anthropic';
   if (lower.includes('gpt')) return 'openai';
   if (lower.includes('gemini')) return 'gemini';
   if (lower.includes('deepseek')) return 'deepseek';
@@ -140,7 +146,9 @@ export class HermesProfileManager {
    *   5. Write SOUL.md with system prompt
    *   6. Optionally set mcp_servers in config.yaml
    */
-  static async create(opts: CreateProfileOptions): Promise<{ profilePath: string; soulPath: string }> {
+  static async create(
+    opts: CreateProfileOptions,
+  ): Promise<{ profilePath: string; soulPath: string }> {
     const { name, prompt, model } = opts;
 
     if (!SAFE_NAME_RE.test(name)) {
@@ -229,9 +237,10 @@ export class HermesProfileManager {
   static async getProfilePath(name: string): Promise<string | null> {
     try {
       const overmindBase = process.env.LOCALAPPDATA || process.env.HOME || '';
-      const v31Path = process.platform === 'win32'
-        ? path.join(overmindBase, 'overmind', 'hermes', 'profiles', name)
-        : path.join(overmindBase, '.overmind', 'hermes', 'profiles', name);
+      const v31Path =
+        process.platform === 'win32'
+          ? path.join(overmindBase, 'overmind', 'hermes', 'profiles', name)
+          : path.join(overmindBase, '.overmind', 'hermes', 'profiles', name);
       return v31Path;
     } catch {
       return null;
@@ -244,7 +253,11 @@ export class HermesProfileManager {
    * Reads the workspace .mcp.json to get the actual server configs (URL, command, etc.)
    * and writes them as proper YAML entries in the profile's config.yaml.
    */
-  static async setMcpServers(profileName: string, servers: string[], profilePath: string): Promise<void> {
+  static async setMcpServers(
+    profileName: string,
+    servers: string[],
+    profilePath: string,
+  ): Promise<void> {
     const configPath = path.join(profilePath, 'config.yaml');
 
     // Read existing config or start fresh
@@ -257,14 +270,19 @@ export class HermesProfileManager {
 
     // Read the workspace .mcp.json to get actual server configs
     const { getWorkspaceDir } = await import('../lib/config.js');
-    let mcpConfigs: Record<string, { url?: string; type?: string; command?: string; args?: string[] }>;
+    let mcpConfigs: Record<
+      string,
+      { url?: string; type?: string; command?: string; args?: string[] }
+    >;
     try {
       const mcpJsonPath = path.join(getWorkspaceDir(), '.mcp.json');
       const mcpContent = fs.readFileSync(mcpJsonPath, 'utf-8');
       const parsed = JSON.parse(mcpContent);
       mcpConfigs = parsed.mcpServers || parsed.mcp_servers || {};
     } catch {
-      logger.warn('[SET_MCP] Could not read workspace .mcp.json — MCP servers will not be configured.');
+      logger.warn(
+        '[SET_MCP] Could not read workspace .mcp.json — MCP servers will not be configured.',
+      );
       return;
     }
 
@@ -290,7 +308,10 @@ export class HermesProfileManager {
       return !inBlock;
     });
 
-    configContent = filtered.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
+    configContent = filtered
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trimEnd();
 
     // Add the mcp_servers block with real configs
     const yamlLines: string[] = ['\n\nmcp_servers:'];
@@ -328,7 +349,12 @@ export class HermesProfileManager {
   // ─── v3.1 Profile Scaffolding ────────────────────────────────────────────
 
   /** Write profile.yaml (kanban description — OBLIGATOIRE) */
-  private static writeProfileYaml(profilePath: string, name: string, description: string, model: string): void {
+  private static writeProfileYaml(
+    profilePath: string,
+    name: string,
+    description: string,
+    model: string,
+  ): void {
     const yaml = [
       '# Profile metadata — kanban routing (OBLIGATOIRE)',
       `name: "${name}"`,
@@ -342,13 +368,11 @@ export class HermesProfileManager {
   }
 
   /** Write workspace.yaml (kind: scratch|persistent|shared) */
-  private static writeWorkspaceYaml(profilePath: string, kind: 'scratch' | 'persistent' | 'shared'): void {
-    const yaml = [
-      `kind: ${kind}`,
-      `path: ${profilePath}`,
-      `gc_eligible: false`,
-      '',
-    ].join('\n');
+  private static writeWorkspaceYaml(
+    profilePath: string,
+    kind: 'scratch' | 'persistent' | 'shared',
+  ): void {
+    const yaml = [`kind: ${kind}`, `path: ${profilePath}`, `gc_eligible: false`, ''].join('\n');
     fs.writeFileSync(path.join(profilePath, 'workspace.yaml'), yaml, 'utf-8');
   }
 

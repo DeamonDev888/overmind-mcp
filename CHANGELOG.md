@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.2.0] - 2026-07-02
+
+### Breaking
+- config.ts getAgentHermesHome: profiles/ uniquement, fallback legacy supprimé
+- sessions.ts: .claude/sessions.json → bridge/agents.json
+- processRegistry.ts: .claude/process-registry.json → bridge/process-registry.json
+- HermesProfileManager.getProfilePath: ~/.overmind/hermes/profiles/ uniquement
+
+### Changed
+- config.ts getWorkspaceDir: fallback ~/.overmind-mcp/ → ~/.overmind/
+- config.ts getSharedHermesHome: simplifié (supprimé workspace fallback)
+- HermesProfileManager.create(): profile.yaml + workspace.yaml + README.md
+- HermesProfileManager: require_os() supprimé, execSync importé proprement
+- BridgeConfig: McpServerSpec + defaultMcpServers
+- OverBridgeService.runAgent(): injecte mcp_servers par défaut
+- WebhookAdapter: Telegram natif
+- create_agent: DEFAULT_MCP_SERVERS=['memory'] pour Hermes
+- install-overmind-native.sh: getent → multi-OS (P0)
+- install-overmind-unix.sh: Node 25+ → auto nvm 24 (P2)
+- postinstall.mjs: POSTGRES_DATABASE, password aléatoire, Docker, embedding vars (P0/P1)
+- engines.node: >=24.18.0
+- deps: fastmcp 4.3.2, pg 8.22.0, overmind-postgres-mcp 1.4.2
+- devDeps: @types/node 26.0.1, eslint 10.6.0, prettier 3.9.4, vitest 4.1.9
+- Lint: 0 warnings (all any, unused vars, imports corrigés)
+
+### Added
+- overmind-verify: smoke test post-install
+- overmind-ngrok: tunnel ngrok unifié
+- overmind-keygen: inclus package npm
+
+### Removed
+- getAgentOvermindHome (deprecated)
+- Symlinks runs/, agents/, sessions/
+- PLAN_MIGRATION_V3.md
+- AgentManager: unused var hermesAgentNames
+
+### Docs
+- README.md refonte complète (arborescence, 14 outils)
+- .mcp.json.example: discord-server → serveur_discord
+- docs/agent_control, sniperbot flow, setup hermes mis à jour
+
 ## [3.1.1] - 2026-07-02
 
 ### Fixed

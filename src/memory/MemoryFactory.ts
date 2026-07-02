@@ -1,8 +1,5 @@
 import { MemoryProvider, StoreRunParams } from './types.js';
-import {
-  PostgresMemoryProvider,
-  registerMemoryAlertCallback,
-} from './PostgresMemoryProvider.js';
+import { PostgresMemoryProvider, registerMemoryAlertCallback } from './PostgresMemoryProvider.js';
 import { rootLogger } from '../lib/logger.js';
 
 const logger = rootLogger.child({ module: 'MemoryFactory' });
@@ -12,7 +9,10 @@ let _isDbAvailable = true;
 let _lastDbError: string | null = null;
 
 // Re-export for external use
-export { registerMemoryAlertCallback, unregisterMemoryAlertCallback } from './PostgresMemoryProvider.js';
+export {
+  registerMemoryAlertCallback,
+  unregisterMemoryAlertCallback,
+} from './PostgresMemoryProvider.js';
 
 /**
  * Gets the PostgreSQL Memory Provider.
@@ -69,14 +69,19 @@ export async function storeRun(params: StoreRunParams): Promise<string> {
     _isDbAvailable = false;
     const err = error instanceof Error ? error : new Error(String(error));
     _lastDbError = err.message;
-    logger.error({
-      error: err.message,
-      runner: params.runner,
-      agentName: params.agentName,
-    }, 'CRITICAL: Failed to store run in memory - database may be unavailable!');
+    logger.error(
+      {
+        error: err.message,
+        runner: params.runner,
+        agentName: params.agentName,
+      },
+      'CRITICAL: Failed to store run in memory - database may be unavailable!',
+    );
 
     // Re-throw so the runner can report this to the user
     // Don't leak connection details — keep error generic, details in logs
-    throw new Error('MEMORY_UNAVAILABLE: Database operation failed — check server logs', { cause: error });
+    throw new Error('MEMORY_UNAVAILABLE: Database operation failed — check server logs', {
+      cause: error,
+    });
   }
 }

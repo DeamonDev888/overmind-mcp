@@ -29,8 +29,8 @@ export function createBridgeLogger(prefix: string): BridgeLogger {
 
   return {
     debug: (msg, meta) => fmt('debug', msg, meta),
-    info:  (msg, meta) => fmt('info', msg, meta),
-    warn:  (msg, meta) => fmt('warn', msg, meta),
+    info: (msg, meta) => fmt('info', msg, meta),
+    warn: (msg, meta) => fmt('warn', msg, meta),
     error: (msg, meta) => fmt('error', msg, meta),
   };
 }
@@ -71,7 +71,9 @@ export function parseMcpResponseBody(text: string): McpResponse {
     try {
       return JSON.parse(trimmed) as McpResponse;
     } catch {
-      throw new Error(`SSE response: no valid data: line. Body preview: ${trimmed.substring(0, 200)}`);
+      throw new Error(
+        `SSE response: no valid data: line. Body preview: ${trimmed.substring(0, 200)}`,
+      );
     }
   }
 
@@ -109,7 +111,9 @@ export async function withRetry<T>(
         throw err;
       }
 
-      logger?.warn(`🔁 Retry ${attempt}/${opts.maxAttempts} (${error.code}) — delay ${opts.delayMs}ms`);
+      logger?.warn(
+        `🔁 Retry ${attempt}/${opts.maxAttempts} (${error.code}) — delay ${opts.delayMs}ms`,
+      );
       await sleep(opts.delayMs);
     }
   }

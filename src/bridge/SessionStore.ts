@@ -92,8 +92,11 @@ export class SessionStore {
           if (now - entry.lastActivityAt > this.config.ttlMs) continue;
           // Déobfusquer le sessionId si le fichier est marqué _obfuscated
           if (parsed._obfuscated && entry.sessionId) {
-            try { entry.sessionId = Buffer.from(entry.sessionId, 'base64').toString('utf-8'); }
-            catch { /* skip — valeur non-base64, utiliser tel quel */ }
+            try {
+              entry.sessionId = Buffer.from(entry.sessionId, 'base64').toString('utf-8');
+            } catch {
+              /* skip — valeur non-base64, utiliser tel quel */
+            }
           }
           this.map.set(this.makeKey(entry.externalKey, entry.agentName), entry);
           loaded++;
@@ -154,7 +157,12 @@ export class SessionStore {
   /**
    * Met à jour uniquement le sessionId (cas typique : après un run, on a le vrai ID).
    */
-  updateSessionId(externalKey: string, agentName: string, sessionId: string, runner: string): SessionEntry | undefined {
+  updateSessionId(
+    externalKey: string,
+    agentName: string,
+    sessionId: string,
+    runner: string,
+  ): SessionEntry | undefined {
     const key = this.makeKey(externalKey, agentName);
     const existing = this.map.get(key);
     if (!existing) {
@@ -170,7 +178,11 @@ export class SessionStore {
   /**
    * Met à jour le context (pattern CONTEXT_UPDATE de bt-sms).
    */
-  updateContext(externalKey: string, agentName: string, patch: Record<string, unknown>): SessionEntry | undefined {
+  updateContext(
+    externalKey: string,
+    agentName: string,
+    patch: Record<string, unknown>,
+  ): SessionEntry | undefined {
     const entry = this.get(externalKey, agentName);
     if (!entry) return undefined;
     entry.context = { ...(entry.context ?? {}), ...patch };
@@ -248,9 +260,11 @@ export class SessionStore {
 
   private schedulePersist(): void {
     if (!this.config.persistPath) return;
-    this.writeQueue = this.writeQueue.then(() => this.persist()).catch((err) => {
-      this.log.error(`Persist error: ${(err as Error).message}`);
-    });
+    this.writeQueue = this.writeQueue
+      .then(() => this.persist())
+      .catch((err) => {
+        this.log.error(`Persist error: ${(err as Error).message}`);
+      });
   }
 
   private async persist(): Promise<void> {

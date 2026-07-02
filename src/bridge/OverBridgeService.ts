@@ -44,11 +44,7 @@ export class OverBridgeService {
   private session: SessionState;
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
 
-  constructor(
-    config?: Partial<BridgeConfig>,
-    logger?: BridgeLogger,
-    initialSessionId?: string,
-  ) {
+  constructor(config?: Partial<BridgeConfig>, logger?: BridgeLogger, initialSessionId?: string) {
     this.proxy = new BridgeProxy(config, undefined, logger);
     this.session = {
       currentSessionId: initialSessionId,
@@ -178,10 +174,12 @@ export class OverBridgeService {
         // sessionId côté MCP, on garde l'ancien).
         this.updateSession();
         return {
-          content: [{
-            type: 'text',
-            text: `⏱️ **Timeout — l'agent travaille toujours.**\n\nL'agent a besoin de plus de temps pour cette tâche.\nUtilise \`agent_control(status)\` pour vérifier.`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `⏱️ **Timeout — l'agent travaille toujours.**\n\nL'agent a besoin de plus de temps pour cette tâche.\nUtilise \`agent_control(status)\` pour vérifier.`,
+            },
+          ],
           isError: false,
           sessionId: this.session.currentSessionId,
         };
@@ -206,7 +204,9 @@ export class OverBridgeService {
   private _processAgentResponse(result: import('./types.js').McpResponse): AgentResult {
     if (result.error) {
       return {
-        content: [{ type: 'text', text: `MCP Error ${result.error.code}: ${result.error.message}` }],
+        content: [
+          { type: 'text', text: `MCP Error ${result.error.code}: ${result.error.message}` },
+        ],
         isError: true,
       };
     }
@@ -381,18 +381,22 @@ export class OverBridgeService {
     }>,
     waitAll = true,
   ): Promise<AgentResult> {
-    const result = await this.proxy.call('run_agents_parallel', {
-      agents: agents.map((a) => ({
-        runner: a.runner,
-        prompt: a.prompt,
-        agentName: a.agentName,
-        taskId: a.taskId,
-        path: a.path,
-        model: a.model,
-        mode: a.mode,
-      })),
-      waitAll,
-    }, undefined);
+    const result = await this.proxy.call(
+      'run_agents_parallel',
+      {
+        agents: agents.map((a) => ({
+          runner: a.runner,
+          prompt: a.prompt,
+          agentName: a.agentName,
+          taskId: a.taskId,
+          path: a.path,
+          model: a.model,
+          mode: a.mode,
+        })),
+        waitAll,
+      },
+      undefined,
+    );
     return this._processAgentResponse(result);
   }
 
@@ -416,7 +420,9 @@ export class OverBridgeService {
   ): Promise<AgentResult[]> {
     const results: AgentResult[] = [];
     for (const t of texts) {
-      results.push(await this.memoryStore({ text: t.text, agent_name: agentName, source: t.source }));
+      results.push(
+        await this.memoryStore({ text: t.text, agent_name: agentName, source: t.source }),
+      );
     }
     return results;
   }
@@ -426,7 +432,11 @@ export class OverBridgeService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /** Appel MCP raw — pour les tools non wrappés */
-  async rawCall(toolName: string, args: Record<string, unknown>, timeoutMs?: number): Promise<AgentResult> {
+  async rawCall(
+    toolName: string,
+    args: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<AgentResult> {
     const result = await this.proxy.call(toolName, args, timeoutMs);
     return this._processAgentResponse(result);
   }

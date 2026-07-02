@@ -11,33 +11,42 @@ import { verifyInstallation } from '../lib/InstallHelper.js';
 import { withSpan } from '../lib/telemetry.js';
 
 // Schema unified for all runners
-export const runAgentSchema = z
-  .object({
-    runner: z
-      .enum(['claude', 'gemini', 'antigravity', 'kilo', 'qwencli', 'openclaw', 'cline', 'opencode', 'hermes'])
-      .describe('Type de runner a utiliser'),
-    prompt: z.string().min(1, 'prompt vide interdit').describe("Le prompt a envoyer a l'agent"),
-    sessionId: z.string().optional().describe('Session ID'),
-    agentName: z
-      .string()
-      .regex(
-        /^[a-zA-Z0-9_-]+$/,
-        'agentName ne doit contenir que des caractères alphanumériques, tirets ou underscores',
-      )
-      .optional()
-      .describe("Nom de l'agent"),
-    autoResume: z.boolean().optional().default(false).describe('Auto resume session'),
-    mode: z.string().optional().describe('Mode specifique'),
-    path: z.string().optional().describe('Working directory'),
-    config: z.string().optional().describe('Config directory'),
-    silent: z.boolean().optional().default(false).describe('Silent mode'),
-    model: z
-      .string()
-      .optional()
-      .describe(
-        "Nom du modèle. Pour Hermes : priorité OpenAI ou NVIDIA. Pour Kilo (gratuits) : 'tencent/hy3-preview:free' ou 'step 3.5 flash'.",
-      ),
-  });
+export const runAgentSchema = z.object({
+  runner: z
+    .enum([
+      'claude',
+      'gemini',
+      'antigravity',
+      'kilo',
+      'qwencli',
+      'openclaw',
+      'cline',
+      'opencode',
+      'hermes',
+    ])
+    .describe('Type de runner a utiliser'),
+  prompt: z.string().min(1, 'prompt vide interdit').describe("Le prompt a envoyer a l'agent"),
+  sessionId: z.string().optional().describe('Session ID'),
+  agentName: z
+    .string()
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      'agentName ne doit contenir que des caractères alphanumériques, tirets ou underscores',
+    )
+    .optional()
+    .describe("Nom de l'agent"),
+  autoResume: z.boolean().optional().default(false).describe('Auto resume session'),
+  mode: z.string().optional().describe('Mode specifique'),
+  path: z.string().optional().describe('Working directory'),
+  config: z.string().optional().describe('Config directory'),
+  silent: z.boolean().optional().default(false).describe('Silent mode'),
+  model: z
+    .string()
+    .optional()
+    .describe(
+      "Nom du modèle. Pour Hermes : priorité OpenAI ou NVIDIA. Pour Kilo (gratuits) : 'tencent/hy3-preview:free' ou 'step 3.5 flash'.",
+    ),
+});
 
 // AbortSignal n'est pas serialisable en JSON Schema (FastMCP rejette z.custom<>).
 // On le passe en interne via un type augmente, hors schema MCP.
@@ -112,7 +121,21 @@ const antigravityParamsSchema = z.object({
   path: z.string().optional(),
   config: z.string().optional(),
   silent: z.boolean().default(false),
-  mode: z.enum(['GENERAL', 'CONTEXT_CHECK', 'PLAN', 'COMMAND', 'CASCADE', 'EVAL', 'ANTIGRAVITY_REVIEW', 'MQUERY', 'COMMIT_MESSAGE', 'CHECKPOINT', 'FAST_APPLY']).default('GENERAL'),
+  mode: z
+    .enum([
+      'GENERAL',
+      'CONTEXT_CHECK',
+      'PLAN',
+      'COMMAND',
+      'CASCADE',
+      'EVAL',
+      'ANTIGRAVITY_REVIEW',
+      'MQUERY',
+      'COMMIT_MESSAGE',
+      'CHECKPOINT',
+      'FAST_APPLY',
+    ])
+    .default('GENERAL'),
   signal: z.custom<AbortSignal>().optional(),
 });
 
@@ -131,7 +154,19 @@ const hermesParamsSchema = z.object({
 
 // Validation manuelle des modes (déplacée ici pour compatibilité FastMCP)
 const RUNNER_MODES: Record<string, readonly string[] | undefined> = {
-  gemini: ['GENERAL', 'CONTEXT_CHECK', 'PLAN', 'COMMAND', 'CASCADE', 'EVAL', 'ANTIGRAVITY_REVIEW', 'MQUERY', 'COMMIT_MESSAGE', 'CHECKPOINT', 'FAST_APPLY'],
+  gemini: [
+    'GENERAL',
+    'CONTEXT_CHECK',
+    'PLAN',
+    'COMMAND',
+    'CASCADE',
+    'EVAL',
+    'ANTIGRAVITY_REVIEW',
+    'MQUERY',
+    'COMMIT_MESSAGE',
+    'CHECKPOINT',
+    'FAST_APPLY',
+  ],
   kilo: ['code', 'architect', 'ask', 'debug', 'orchestrator'],
   cline: ['plan', 'act'],
 } as const;
@@ -166,31 +201,35 @@ export async function runAgent(args: RunAgentInternalArgs) {
   }
 
   // Exécution avec telemetry
-  return withSpan('runAgent.execute', async () => {
-    switch (runner) {
-      case 'claude':
-        return runClaudeAgent(validateAndExtractParams(params, claudeParamsSchema));
-      case 'gemini':
-      case 'antigravity':
-        return runGeminiAgent(validateAndExtractParams(params, antigravityParamsSchema));
-      case 'kilo':
-        return runKiloAgent(validateAndExtractParams(params, kiloParamsSchema));
-      case 'qwencli':
-        return runQwenCLIAgent(validateAndExtractParams(params, genericParamsSchema));
-      case 'openclaw':
-        return runOpenClawAgent(validateAndExtractParams(params, genericParamsSchema));
-      case 'cline':
-        return runClineAgent(validateAndExtractParams(params, clineParamsSchema));
-      case 'opencode':
-        return runOpenCodeAgent(validateAndExtractParams(params, genericParamsSchema));
-      case 'hermes':
-        return runHermesAgent(validateAndExtractParams(params, hermesParamsSchema));
-      default: {
-        // Ce cas est théoriquement impossible grâce à la validation Zod de l'enum
-        const error = `Runner inconnu: ${runner}`;
-        console.error(`[runAgent] ${error}`);
-        throw new Error(error);
+  return withSpan(
+    'runAgent.execute',
+    async () => {
+      switch (runner) {
+        case 'claude':
+          return runClaudeAgent(validateAndExtractParams(params, claudeParamsSchema));
+        case 'gemini':
+        case 'antigravity':
+          return runGeminiAgent(validateAndExtractParams(params, antigravityParamsSchema));
+        case 'kilo':
+          return runKiloAgent(validateAndExtractParams(params, kiloParamsSchema));
+        case 'qwencli':
+          return runQwenCLIAgent(validateAndExtractParams(params, genericParamsSchema));
+        case 'openclaw':
+          return runOpenClawAgent(validateAndExtractParams(params, genericParamsSchema));
+        case 'cline':
+          return runClineAgent(validateAndExtractParams(params, clineParamsSchema));
+        case 'opencode':
+          return runOpenCodeAgent(validateAndExtractParams(params, genericParamsSchema));
+        case 'hermes':
+          return runHermesAgent(validateAndExtractParams(params, hermesParamsSchema));
+        default: {
+          // Ce cas est théoriquement impossible grâce à la validation Zod de l'enum
+          const error = `Runner inconnu: ${runner}`;
+          console.error(`[runAgent] ${error}`);
+          throw new Error(error);
+        }
       }
-    }
-  }, { runner, agentName: params.agentName || '', mode: mode || '' });
+    },
+    { runner, agentName: params.agentName || '', mode: mode || '' },
+  );
 }

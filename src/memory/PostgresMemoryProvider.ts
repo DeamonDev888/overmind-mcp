@@ -151,7 +151,10 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
       // Register error handler to prevent unhandled pool errors
       newPool.on('error', (err) => {
-        logger.error({ dbName, error: err.message }, 'PostgreSQL pool error — will recreate on next use');
+        logger.error(
+          { dbName, error: err.message },
+          'PostgreSQL pool error — will recreate on next use',
+        );
       });
 
       // Register pool for cleanup on process exit (prevents connection leaks on long-running servers)
@@ -249,7 +252,9 @@ export class PostgresMemoryProvider implements MemoryProvider {
         logger.error(`[PostgresMemory] 🏗️  Creating new physical database: ${dbName}`);
         // Validate dbName is a safe PostgreSQL identifier (alphanumeric + underscore only)
         if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(dbName)) {
-          throw new Error(`Invalid database name: ${dbName}. Only alphanumeric and underscore characters allowed.`);
+          throw new Error(
+            `Invalid database name: ${dbName}. Only alphanumeric and underscore characters allowed.`,
+          );
         }
         // Double quote database name to handle reserved words
         await client.query(`CREATE DATABASE "${dbName}"`);
@@ -447,8 +452,8 @@ export class PostgresMemoryProvider implements MemoryProvider {
     if (!embedding || embedding.length === 0) {
       const err = new Error(
         `[PostgresMemory] CRITICAL: embedText() returned empty embedding for text chunk "${params.text.slice(0, 50)}...". ` +
-        `Cannot store knowledge with NULL embedding — search would return corrupt results. ` +
-        `Check OVERMIND_EMBEDDING_KEY / OVERMIND_EMBEDDING_URL / OVERMIND_EMBEDDING_MODEL.`,
+          `Cannot store knowledge with NULL embedding — search would return corrupt results. ` +
+          `Check OVERMIND_EMBEDDING_KEY / OVERMIND_EMBEDDING_URL / OVERMIND_EMBEDDING_MODEL.`,
       );
       triggerMemoryAlert(`❌ EMBEDDING FAILED: Cannot store knowledge chunk`, err);
       throw err;

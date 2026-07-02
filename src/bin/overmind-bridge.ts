@@ -129,7 +129,9 @@ async function cmdServer(args: ParsedArgs): Promise<void> {
   const authToken = getFlag<string>(args, 'auth-token') ?? process.env.BRIDGE_AUTH_TOKEN;
   const enableLog = getFlag(args, 'no-log', undefined) === undefined; // --no-log désactive
   const healthInterval = Number(getFlag(args, 'health-interval', 30_000));
-  const mcpUrl = String(getFlag(args, 'mcp-url', process.env.MCP_URL ?? 'http://localhost:3099/mcp'));
+  const mcpUrl = String(
+    getFlag(args, 'mcp-url', process.env.MCP_URL ?? 'http://localhost:3099/mcp'),
+  );
   const enableSessionStore = getFlag(args, 'no-session-store', undefined) === undefined;
   const enableDirectives = getFlag(args, 'no-directives', undefined) === undefined;
   const enableWebhooks = getFlag(args, 'webhooks', false) as boolean;
@@ -195,7 +197,9 @@ async function cmdCall(args: ParsedArgs): Promise<void> {
   //   call --method <method> [--param1 v1 ...]
   const method = (args.positionals[0] ?? getFlag<string>(args, 'method')) as string | undefined;
   if (!method) {
-    throw new Error('call requires a method (e.g. "call agent.run --agent scout ..." or "call --method agent.run ...")');
+    throw new Error(
+      'call requires a method (e.g. "call agent.run --agent scout ..." or "call --method agent.run ...")',
+    );
   }
 
   const client = getClient(args);
@@ -216,10 +220,27 @@ async function cmdCall(args: ParsedArgs): Promise<void> {
   // Construit les params dynamiquement depuis tous les flags non-préfixés
   const params: Record<string, unknown> = {};
   const reservedFlags = new Set([
-    'method', 'server', 'port', 'host', 'auth-token', 'no-log', 'health-interval', 'mcp-url',
-    'prompt', 'prompt-file', 'prompt-stdin', 'prompt-base64', 'prompt-file-base64',
-    'prompt-url', 'prompt-json', 'prompt-template', 'var',
-    'id', 'output', 'json', 'pretty',
+    'method',
+    'server',
+    'port',
+    'host',
+    'auth-token',
+    'no-log',
+    'health-interval',
+    'mcp-url',
+    'prompt',
+    'prompt-file',
+    'prompt-stdin',
+    'prompt-base64',
+    'prompt-file-base64',
+    'prompt-url',
+    'prompt-json',
+    'prompt-template',
+    'var',
+    'id',
+    'output',
+    'json',
+    'pretty',
   ]);
   for (const [k, v] of Object.entries(args.flags)) {
     if (!reservedFlags.has(k)) {
@@ -264,16 +285,20 @@ async function cmdSend(args: ParsedArgs): Promise<void> {
   });
 
   const client = getClient(args);
-  const result = await client.call('agent.run', {
-    agentName,
-    runner,
-    prompt: prompt.text,
-    sessionId: getFlag<string>(args, 'session'),
-    model: getFlag<string>(args, 'model'),
-    mode: getFlag<string>(args, 'mode'),
-    path: getFlag<string>(args, 'path'),
-    silent: getFlag(args, 'silent', false) as boolean,
-  }, Number(getFlag(args, 'timeout', 600_000)));
+  const result = await client.call(
+    'agent.run',
+    {
+      agentName,
+      runner,
+      prompt: prompt.text,
+      sessionId: getFlag<string>(args, 'session'),
+      model: getFlag<string>(args, 'model'),
+      mode: getFlag<string>(args, 'mode'),
+      path: getFlag<string>(args, 'path'),
+      silent: getFlag(args, 'silent', false) as boolean,
+    },
+    Number(getFlag(args, 'timeout', 600_000)),
+  );
   printResult(result, getFlag(args, 'pretty', false) as boolean);
 }
 
@@ -291,7 +316,14 @@ async function cmdScenario(args: ParsedArgs): Promise<void> {
   const results = await runScenario(scenario, {
     vars: inputVars,
     log: (msg: string) => clog(msg),
-    runAgent: async (params: { agentName: string; runner: string; prompt: string; model?: string; mode?: string; path?: string }) => {
+    runAgent: async (params: {
+      agentName: string;
+      runner: string;
+      prompt: string;
+      model?: string;
+      mode?: string;
+      path?: string;
+    }) => {
       const r = await client.call<{
         messageId?: string;
         sessionId?: string;
@@ -305,7 +337,13 @@ async function cmdScenario(args: ParsedArgs): Promise<void> {
         messageId: r.messageId,
       };
     },
-    runA2A: async (params: { fromAgent: string; toAgent: string; runner: string; prompt: string; model?: string }) => {
+    runA2A: async (params: {
+      fromAgent: string;
+      toAgent: string;
+      runner: string;
+      prompt: string;
+      model?: string;
+    }) => {
       const r = await client.call<{
         messageId?: string;
         sessionId?: string;
@@ -333,7 +371,11 @@ async function cmdReplay(args: ParsedArgs): Promise<void> {
   const id = requireFlag<string>(args, 'id');
   const client = getClient(args);
   clog(`🔁 Replaying message ${id}...`);
-  const result = await client.call('message.replay', { id }, Number(getFlag(args, 'timeout', 600_000)));
+  const result = await client.call(
+    'message.replay',
+    { id },
+    Number(getFlag(args, 'timeout', 600_000)),
+  );
   printResult(result, getFlag(args, 'pretty', false) as boolean);
 }
 

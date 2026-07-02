@@ -22,12 +22,7 @@ import type {
   JsonRpcRequest,
 } from './types.js';
 import { DEFAULT_BRIDGE_CONFIG, DEFAULT_CIRCUIT_CONFIG } from './types.js';
-import {
-  createBridgeLogger,
-  parseMcpResponseBody,
-  withRetry,
-  type BridgeLogger,
-} from './utils.js';
+import { createBridgeLogger, parseMcpResponseBody, withRetry, type BridgeLogger } from './utils.js';
 
 // ─── Circuit Breaker ───────────────────────────────────────────────────────
 
@@ -133,7 +128,9 @@ export class BridgeProxy {
     // Circuit breaker gate
     if (!this.circuit.canExecute()) {
       throw Object.assign(
-        new Error(`Circuit breaker OPEN — too many failures. Retry after ${this.config.retryDelayMs}ms`),
+        new Error(
+          `Circuit breaker OPEN — too many failures. Retry after ${this.config.retryDelayMs}ms`,
+        ),
         { code: 'ECIRCUITOPEN' },
       );
     }
@@ -197,7 +194,7 @@ export class BridgeProxy {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          Accept: 'application/json',
         },
         body: JSON.stringify(request),
         signal: controller.signal,
@@ -247,7 +244,7 @@ export class BridgeProxy {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json, text/event-stream',
+          Accept: 'application/json, text/event-stream',
         },
         body: JSON.stringify(request),
         signal: controller.signal,
@@ -255,7 +252,11 @@ export class BridgeProxy {
     } catch (err) {
       clearTimeout(timer);
       const error = err as Error & { type?: string };
-      if (error.name === 'TimeoutError' || error.type === 'TimeoutError' || error.name === 'AbortError') {
+      if (
+        error.name === 'TimeoutError' ||
+        error.type === 'TimeoutError' ||
+        error.name === 'AbortError'
+      ) {
         throw Object.assign(
           new Error(`TIMEOUT: ${request.params.name} no response after ${timeoutMs / 1000}s`),
           { code: 'ETIMEDOUT', toolName: request.params.name, timeoutMs },
@@ -267,10 +268,10 @@ export class BridgeProxy {
     }
 
     if (!response.ok) {
-      throw Object.assign(
-        new Error(`MCP HTTP ${response.status}: ${response.statusText}`),
-        { code: 'EHTTPSTATUS', status: response.status },
-      );
+      throw Object.assign(new Error(`MCP HTTP ${response.status}: ${response.statusText}`), {
+        code: 'EHTTPSTATUS',
+        status: response.status,
+      });
     }
 
     // Lecture du body avec timeout effectif (3 couches)
@@ -298,10 +299,9 @@ export class BridgeProxy {
         // Couche 1 — deadline absolue
         if (Date.now() - startRead > timeoutMs) {
           reader.cancel();
-          throw Object.assign(
-            new Error(`Body read timeout after ${timeoutMs / 1000}s`),
-            { code: 'EBODYREAD' },
-          );
+          throw Object.assign(new Error(`Body read timeout after ${timeoutMs / 1000}s`), {
+            code: 'EBODYREAD',
+          });
         }
 
         // Couche 2+3 — Promise.race per-chunk (avec cleanup du timeout)
@@ -310,10 +310,12 @@ export class BridgeProxy {
           reader.read(),
           new Promise<{ done: true; value?: undefined }>((_, reject) => {
             raceTimer = setTimeout(
-              () => reject(Object.assign(
-                new Error(`Chunk read timeout after ${timeoutMs / 1000}s`),
-                { code: 'EBODYREAD' },
-              )),
+              () =>
+                reject(
+                  Object.assign(new Error(`Chunk read timeout after ${timeoutMs / 1000}s`), {
+                    code: 'EBODYREAD',
+                  }),
+                ),
               timeoutMs,
             );
           }),
@@ -330,10 +332,7 @@ export class BridgeProxy {
     } catch (err) {
       const error = err as Error & { code?: string };
       if (error?.code === 'EBODYREAD') throw err;
-      throw Object.assign(
-        new Error(`Body read failed: ${error.message}`),
-        { code: 'EBODYREAD' },
-      );
+      throw Object.assign(new Error(`Body read failed: ${error.message}`), { code: 'EBODYREAD' });
     }
   }
 }

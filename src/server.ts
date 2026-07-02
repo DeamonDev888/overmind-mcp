@@ -73,17 +73,21 @@ function wrapExecute(toolName: string, fn: ToolExecute) {
   return (...args: Parameters<ToolExecute>) => withSpan(`tool.${toolName}`, () => fn(...args));
 }
 
-export function createServer(name: string = 'OverMind-MCP', memoryOnly = false, memoryToolsOnly = false) {
+export function createServer(
+  name: string = 'OverMind-MCP',
+  memoryOnly = false,
+  memoryToolsOnly = false,
+) {
   const server = new FastMCP({
-    name: memoryOnly ? `${name}-Memory` : (memoryToolsOnly ? `${name}-MemoryTools` : name),
+    name: memoryOnly ? `${name}-Memory` : memoryToolsOnly ? `${name}-MemoryTools` : name,
     version: PKG_VERSION as `${number}.${number}.${number}`,
-});
+  });
 
   if (!memoryOnly && !memoryToolsOnly) {
     // ─── 1. run_agent ─────────────────────────────────────────────────────────────
-  server.addTool({
-    name: 'run_agent',
-    description: `Exécute une commande sur un agent IA via le runner spécifié.
+    server.addTool({
+      name: 'run_agent',
+      description: `Exécute une commande sur un agent IA via le runner spécifié.
 
 **Runners disponibles:**
  - claude: Claude Code (Nécessite 'create_agent' au préalable)
@@ -114,14 +118,14 @@ export function createServer(name: string = 'OverMind-MCP', memoryOnly = false, 
 run_agent(runner: "claude", agentName: "expert_python", prompt: "Analyse ce code")
 run_agent(runner: "kilo", agentName: "architect", mode: "architect", prompt: "Conçois une API REST", path: "./my-project")
 run_agent(runner: "cline", agentName: "planner", mode: "plan", prompt: "Planifie l'implémentation")`,
-    parameters: runAgentSchema,
-    execute: wrapExecute('run_agent', runAgent),
-  });
+      parameters: runAgentSchema,
+      execute: wrapExecute('run_agent', runAgent),
+    });
 
-  // ─── 2. run_agents_parallel ─────────────────────────────────────────────────
-  server.addTool({
-    name: 'run_agents_parallel',
-    description: `🚀 Lance plusieurs agents IA EN PARALLÈLE depuis un seul appel MCP. Polyglotte (mixe runners/modèles). Retourne les résultats consolidés une fois tous terminés.
+    // ─── 2. run_agents_parallel ─────────────────────────────────────────────────
+    server.addTool({
+      name: 'run_agents_parallel',
+      description: `🚀 Lance plusieurs agents IA EN PARALLÈLE depuis un seul appel MCP. Polyglotte (mixe runners/modèles). Retourne les résultats consolidés une fois tous terminés.
 
 **Cas d'usage :** Orchestration de flotte, rotation de tokens, tâches indépendantes simultanées.
 
@@ -136,14 +140,14 @@ run_agents_parallel(agents: [
 **Options :**
 - waitAll (défaut: true) : attend tous les agents avant de retourner.
 - waitAll: false : retourne dès que le premier agent réussit (race mode).`,
-    parameters: runAgentsParallelSchema,
-    execute: wrapExecute('run_agents_parallel', runAgentsParallel),
-  });
+      parameters: runAgentsParallelSchema,
+      execute: wrapExecute('run_agents_parallel', runAgentsParallel),
+    });
 
-  // ─── 3. create_agent ────────────────────────────────────────────────────────
-  server.addTool({
-    name: 'create_agent',
-    description: `Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.
+    // ─── 3. create_agent ────────────────────────────────────────────────────────
+    server.addTool({
+      name: 'create_agent',
+      description: `Crée un nouvel agent (Prompt + Config) compatible avec tous les runners.
 
 **Runners supportés:** claude, gemini, kilo, qwencli, openclaw, cline, opencode, hermes
 
@@ -151,51 +155,51 @@ run_agents_parallel(agents: [
 create_agent(name: "expert_python", runner: "claude", prompt: "Tu es un expert Python...")
 create_agent(name: "architecte", runner: "kilo", mode: "architect", prompt: "Tu es un architecte logiciel...")
 create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un planificateur de tâches...")`,
-    parameters: createAgentSchema,
-    execute: createAgent,
-  });
+      parameters: createAgentSchema,
+      execute: createAgent,
+    });
 
-  // ─── 4. list_agents ─────────────────────────────────────────────────────────
-  server.addTool({
-    name: 'list_agents',
-    description:
-      "Liste tous les agents disponibles. Option 'details=true' pour voir la config complète.",
-    parameters: listAgentsSchema,
-    execute: wrapExecute('list_agents', listAgents),
-  });
+    // ─── 4. list_agents ─────────────────────────────────────────────────────────
+    server.addTool({
+      name: 'list_agents',
+      description:
+        "Liste tous les agents disponibles. Option 'details=true' pour voir la config complète.",
+      parameters: listAgentsSchema,
+      execute: wrapExecute('list_agents', listAgents),
+    });
 
-  // ─── 5. delete_agent ───────────────────────────────────────────────────────
-  server.addTool({
-    name: 'delete_agent',
-    description: 'Supprime définitivement un agent (Prompt et Config)',
-    parameters: deleteAgentSchema,
-    execute: wrapExecute('delete_agent', deleteAgent),
-  });
+    // ─── 5. delete_agent ───────────────────────────────────────────────────────
+    server.addTool({
+      name: 'delete_agent',
+      description: 'Supprime définitivement un agent (Prompt et Config)',
+      parameters: deleteAgentSchema,
+      execute: wrapExecute('delete_agent', deleteAgent),
+    });
 
-  // ─── 6. update_agent_config ────────────────────────────────────────────────
-  server.addTool({
-    name: 'update_agent_config',
-    description:
-      "Modifie la configuration technique d'un agent (Runner, Modèle, Serveurs MCP, Variables d'environnement) OU réécrit entièrement l'un des 4 fichiers (prompt, settings, mcp, skill)",
-    parameters: updateAgentConfigSchema,
-    execute: wrapExecute('update_agent_config', updateAgentConfig),
-  });
+    // ─── 6. update_agent_config ────────────────────────────────────────────────
+    server.addTool({
+      name: 'update_agent_config',
+      description:
+        "Modifie la configuration technique d'un agent (Runner, Modèle, Serveurs MCP, Variables d'environnement) OU réécrit entièrement l'un des 4 fichiers (prompt, settings, mcp, skill)",
+      parameters: updateAgentConfigSchema,
+      execute: wrapExecute('update_agent_config', updateAgentConfig),
+    });
 
-  // ─── 7. create_prompt ───────────────────────────────────────────────────────
-  server.addTool({
-    name: 'create_prompt',
-    description: 'Crée ou écrase un fichier prompt Markdown (Persona)',
-    parameters: createPromptSchema,
-    execute: wrapExecute('create_prompt', createPrompt),
-  });
+    // ─── 7. create_prompt ───────────────────────────────────────────────────────
+    server.addTool({
+      name: 'create_prompt',
+      description: 'Crée ou écrase un fichier prompt Markdown (Persona)',
+      parameters: createPromptSchema,
+      execute: wrapExecute('create_prompt', createPrompt),
+    });
 
-  // ─── 8. edit_prompt ─────────────────────────────────────────────────────────
-  server.addTool({
-    name: 'edit_prompt',
-    description: 'Modifie un prompt existant en remplaçant un bloc de texte spécifique',
-    parameters: editPromptSchema,
-    execute: wrapExecute('edit_prompt', editPrompt),
-  });
+    // ─── 8. edit_prompt ─────────────────────────────────────────────────────────
+    server.addTool({
+      name: 'edit_prompt',
+      description: 'Modifie un prompt existant en remplaçant un bloc de texte spécifique',
+      parameters: editPromptSchema,
+      execute: wrapExecute('edit_prompt', editPrompt),
+    });
   }
 
   // ─── 9. memory_search ──────────────────────────────────────────────────────
@@ -221,32 +225,32 @@ create_agent(name: "planner", runner: "cline", mode: "plan", prompt: "Tu es un p
     description:
       "Liste l'historique des runs d'agents enregistrés par OverMind (avec stats optionnelles)",
     parameters: memoryRunsSchema,
-execute: memoryRunsTool,
+    execute: memoryRunsTool,
   });
 
   if (!memoryOnly && !memoryToolsOnly) {
     // ─── 12. get_agent_configs ─────────────────────────────────────────────────
-  server.addTool({
-    name: 'get_agent_configs',
-    description:
-      "Affiche les 4 fichiers de configuration d'un agent (prompt.md, .mcp.json, settings.json, skill.md)",
-    parameters: getAgentConfigsSchema,
-    execute: getAgentConfigs,
-  });
+    server.addTool({
+      name: 'get_agent_configs',
+      description:
+        "Affiche les 4 fichiers de configuration d'un agent (prompt.md, .mcp.json, settings.json, skill.md)",
+      parameters: getAgentConfigsSchema,
+      execute: getAgentConfigs,
+    });
 
-  // ─── 13. config_example ─────────────────────────────────────────────────────
-  server.addTool({
-    name: 'config_example',
-    description:
-      'Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).',
-    parameters: configExampleSchema,
-    execute: configExample,
-  });
+    // ─── 13. config_example ─────────────────────────────────────────────────────
+    server.addTool({
+      name: 'config_example',
+      description:
+        'Fournit des exemples de configuration settings.json pour différents LLM (GLM, MiniMax, OpenRouter).',
+      parameters: configExampleSchema,
+      execute: configExample,
+    });
 
-  // ─── 14. agent_control ─────────────────────────────────────────────────────────
-  server.addTool({
-    name: 'agent_control',
-    description: `Outil MCP unifié pour contrôler le cycle de vie des agents OverMind.
+    // ─── 14. agent_control ─────────────────────────────────────────────────────────
+    server.addTool({
+      name: 'agent_control',
+      description: `Outil MCP unifié pour contrôler le cycle de vie des agents OverMind.
 
 REMPLACE les 4 outils précédents : get_agent_status, stream_agent_output, kill_agent, wait_agent.
 L'unification simplifie la toolbox client et assure un comportement déterministe.
@@ -288,9 +292,9 @@ agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "status" })
 agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "stream" })
 agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "kill" })
 agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "wait", timeoutMs: 300000 })`,
-    parameters: agentControlSchema,
-    execute: agentControl,
-  });
+      parameters: agentControlSchema,
+      execute: agentControl,
+    });
   }
 
   return server;

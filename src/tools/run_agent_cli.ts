@@ -37,7 +37,6 @@ resetWorkspaceCache();
 
 import { runAgent } from './run_agent.js';
 
-
 // ─── Parsing des arguments ───────────────────────────────────────────────────
 const argv = process.argv.slice(2);
 
@@ -53,23 +52,25 @@ if (argv.length < 3) {
 const [runner, agentName, prompt, model] = argv;
 
 async function run() {
-    console.error(`\n[CLI] 🤖 runner="${runner}"  agent="${agentName}"${model ? `  modèle="${model}"` : ''}`);
-    
-    import('../lib/config.js').then(({ getWorkspaceDir, getAgentHermesHome }) => {
-      console.log('CLI run getWorkspaceDir():', getWorkspaceDir());
-      console.log('CLI run getAgentHermesHome():', getAgentHermesHome(agentName));
-    });
+  console.error(
+    `\n[CLI] 🤖 runner="${runner}"  agent="${agentName}"${model ? `  modèle="${model}"` : ''}`,
+  );
 
-    const result = await runAgent({
-        runner: runner as Parameters<typeof runAgent>[0]['runner'],
-        agentName,
-        prompt,
-        model,
-        autoResume: true,
-        silent: false,
-    });
-    console.log('\n── Résultat ──────────────────────────────────────────────');
-    console.log(JSON.stringify(result, null, 2));
+  import('../lib/config.js').then(({ getWorkspaceDir, getAgentHermesHome }) => {
+    console.log('CLI run getWorkspaceDir():', getWorkspaceDir());
+    console.log('CLI run getAgentHermesHome():', getAgentHermesHome(agentName));
+  });
+
+  const result = await runAgent({
+    runner: runner as Parameters<typeof runAgent>[0]['runner'],
+    agentName,
+    prompt,
+    model,
+    autoResume: true,
+    silent: false,
+  });
+  console.log('\n── Résultat ──────────────────────────────────────────────');
+  console.log(JSON.stringify(result, null, 2));
 }
 
 try {

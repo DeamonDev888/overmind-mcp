@@ -66,7 +66,9 @@ export async function runOpenClawAgent(args: z.infer<typeof runOpenClawSchema>) 
       sessionId: result.sessionId,
     });
   } catch (e) {
-    console.error(`[run_openclaw] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
+    console.error(
+      `[run_openclaw] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 
   if (result.error)

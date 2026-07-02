@@ -16,15 +16,11 @@ export const runHermesSchema = z
     model: z
       .string()
       .optional()
-      .describe(
-        'Model override (optional — the profile config.yaml is the default)',
-      ),
+      .describe('Model override (optional — the profile config.yaml is the default)'),
     provider: z
       .string()
       .optional()
-      .describe(
-        'Provider override (optional — the profile config.yaml is the default)',
-      ),
+      .describe('Provider override (optional — the profile config.yaml is the default)'),
     signal: z.custom<AbortSignal>().optional().describe("AbortSignal pour annuler l'agent"),
     /** Quand true, skip storeRun() — utilisé par Overmind MCP (le stockage est fait cote MCP Server) */
     overmindMode: z.boolean().optional().default(false),
@@ -108,7 +104,9 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
       });
     } catch (e) {
       // En mode Overmind on skip, mais en mode normal on log seulement (ne fail pas l'agent)
-      console.error(`[run_hermes] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`);
+      console.error(
+        `[run_hermes] ⚠️ Memory store failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 

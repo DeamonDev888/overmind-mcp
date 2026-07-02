@@ -355,25 +355,28 @@ const localEnvPath = path.resolve(__dirname, '../../.env');
 
 // Auto-détection et injection de OVERMIND_WORKSPACE s'il est manquant — NE PAS écraser s'il existe déjà
 try {
-    if (!fs.existsSync(localEnvPath)) {
+  if (!fs.existsSync(localEnvPath)) {
+    const workspacePath = path.resolve(__dirname, '../../');
+    atomicWriteFile(localEnvPath, `OVERMIND_WORKSPACE=${workspacePath}\n`);
+  } else {
+    const currentContent = fs.readFileSync(localEnvPath, 'utf8');
+    const match = currentContent.match(/^OVERMIND_WORKSPACE=(.*)$/m);
+    if (!match || !match[1]?.trim()) {
       const workspacePath = path.resolve(__dirname, '../../');
-      atomicWriteFile(localEnvPath, `OVERMIND_WORKSPACE=${workspacePath}\n`);
-    } else {
-      const currentContent = fs.readFileSync(localEnvPath, 'utf8');
-      const match = currentContent.match(/^OVERMIND_WORKSPACE=(.*)$/m);
-      if (!match || !match[1]?.trim()) {
-        const workspacePath = path.resolve(__dirname, '../../');
-        if (!currentContent.includes('OVERMIND_WORKSPACE=')) {
-          atomicWriteFile(localEnvPath, currentContent.trim() + `\nOVERMIND_WORKSPACE=${workspacePath}\n`);
-        } else {
-          const newContent = currentContent.replace(
-            /^OVERMIND_WORKSPACE=.*$/m,
-            `OVERMIND_WORKSPACE=${workspacePath}`,
-          );
-          atomicWriteFile(localEnvPath, newContent);
-        }
+      if (!currentContent.includes('OVERMIND_WORKSPACE=')) {
+        atomicWriteFile(
+          localEnvPath,
+          currentContent.trim() + `\nOVERMIND_WORKSPACE=${workspacePath}\n`,
+        );
+      } else {
+        const newContent = currentContent.replace(
+          /^OVERMIND_WORKSPACE=.*$/m,
+          `OVERMIND_WORKSPACE=${workspacePath}`,
+        );
+        atomicWriteFile(localEnvPath, newContent);
       }
     }
+  }
 } catch (_e) {
   // Ignorer l'erreur silencieusement
 }
@@ -460,9 +463,7 @@ console.info = (...args) => rootLogger.info(args.length > 1 ? { args } : args[0]
 // 🛡️ E3: Warning filter — suppress repetitive FastMCP "could not infer client capabilities" spam.
 // FastMCP retries client capability detection every ~180s in stateless HTTP mode, generating
 // dozens of identical warnings. We log the FIRST occurrence, then suppress the rest.
-const SUPPRESSED_WARN_PATTERNS = [
-  'could not infer client capabilities',
-];
+const SUPPRESSED_WARN_PATTERNS = ['could not infer client capabilities'];
 const loggedWarnings = new Set<string>();
 
 console.warn = (...args) => {
@@ -510,7 +511,10 @@ process.stdout.write = function (
       if (Array.isArray(parsed)) {
         if (!shieldDedup.has('array-blocked')) {
           shieldDedup.add('array-blocked');
-          rootLogger.warn({ raw: str }, '🛡️ [SHIELD] Blocked array-as-JSON-RPC on stdout (future occurrences suppressed)');
+          rootLogger.warn(
+            { raw: str },
+            '🛡️ [SHIELD] Blocked array-as-JSON-RPC on stdout (future occurrences suppressed)',
+          );
         }
         return process.stderr.write(chunk, encoding as BufferEncoding | undefined, callback);
       }
@@ -523,7 +527,10 @@ process.stdout.write = function (
       // Block non-RPC JSON (deduplicated — these fire repeatedly from library pino loggers)
       if (!shieldDedup.has('object-blocked')) {
         shieldDedup.add('object-blocked');
-        rootLogger.warn({ raw: str }, '🛡️ [SHIELD] Blocked non-JSON-RPC (Object) on stdout (future occurrences suppressed)');
+        rootLogger.warn(
+          { raw: str },
+          '🛡️ [SHIELD] Blocked non-JSON-RPC (Object) on stdout (future occurrences suppressed)',
+        );
       }
       return process.stderr.write(chunk, encoding as BufferEncoding | undefined, callback);
     } catch (e) {
@@ -656,13 +663,13 @@ if (transportType === 'httpStream' && !(sslCert && sslKey)) {
   if (!isLoopback) {
     rootLogger.error(
       `[SECURITÉ] Refus de démarrer en HTTP (sans SSL) sur ${httpHost}.` +
-      ` Utilisez --ssl-cert / --ssl-key ou bind sur localhost.`,
+        ` Utilisez --ssl-cert / --ssl-key ou bind sur localhost.`,
     );
     process.exit(1);
   }
   rootLogger.warn(
     `[SECURITÉ] Serveur HTTP sans SSL sur ${httpHost}.` +
-    ` Acceptable en local, MAIS ne pas exposer sur le réseau sans --ssl-cert/--ssl-key.`,
+      ` Acceptable en local, MAIS ne pas exposer sur le réseau sans --ssl-cert/--ssl-key.`,
   );
 }
 
@@ -675,8 +682,15 @@ if (settingsPath || mcpPath) {
 // Les serveurs memory et postgresql tournent deja en singleton sur leurs ports,
 // Overmind se configure en client HTTP pour aggreguer les outils
 if (process.env.OVERMIND_HTTP_MODE === 'true') {
-  rootLogger.info('[Overmind] [HTTP] Mode singleton actif — memory sur port ' + (process.env.MEMORY_HTTP_PORT || '3099') + ', postgresql sur port ' + (process.env.POSTGRES_HTTP_PORT || '5433'));
-  rootLogger.info('[Overmind] [HTTP] Les outils sont exposés via la couche HTTP des serveurs distants');
+  rootLogger.info(
+    '[Overmind] [HTTP] Mode singleton actif — memory sur port ' +
+      (process.env.MEMORY_HTTP_PORT || '3099') +
+      ', postgresql sur port ' +
+      (process.env.POSTGRES_HTTP_PORT || '5433'),
+  );
+  rootLogger.info(
+    '[Overmind] [HTTP] Les outils sont exposés via la couche HTTP des serveurs distants',
+  );
   // En mode HTTP singleton, Overmind CLI ne démarre pas son propre serveur MCP
   // Il agit comme client pour les serveurs distants (memory + postgresql)
   // Les agents se connectent directement aux endpoints HTTP des serveurs distants
@@ -684,7 +698,13 @@ if (process.env.OVERMIND_HTTP_MODE === 'true') {
 }
 
 const server = createServer('OverMind-MCP', memoryOnly, memoryToolsOnly);
-rootLogger.info(memoryOnly ? '[Overmind] [START] Démarrage du serveur mémoire...' : (memoryToolsOnly ? '[Overmind] [START] Démarrage serveur (memory tools only)...' : '[Overmind] [START] Démarrage du serveur...'));
+rootLogger.info(
+  memoryOnly
+    ? '[Overmind] [START] Démarrage du serveur mémoire...'
+    : memoryToolsOnly
+      ? '[Overmind] [START] Démarrage serveur (memory tools only)...'
+      : '[Overmind] [START] Démarrage du serveur...',
+);
 
 if (transportType === 'httpStream') {
   const httpStreamConfig: {
@@ -715,8 +735,8 @@ if (transportType === 'httpStream') {
   // exiger "Authorization: Bearer *** sur chaque requête. Timing-safe
   // compare pour éviter les timing attacks.
   const origCreateServer = http.createServer.bind(http);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (http as { createServer: typeof http.createServer }).createServer = function (requestListener?: any) {
+
+  (http as Record<string, unknown>).createServer = function (requestListener?: unknown) {
     // Wrap avec auth middleware si token configuré
     const wrappedListener = mcpAuthToken
       ? (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -733,9 +753,14 @@ if (transportType === 'httpStream') {
             res.end(JSON.stringify({ error: 'Unauthorized', code: -32000 }));
             return;
           }
-          requestListener(req, res);
+          if (typeof requestListener === 'function') {
+            (requestListener as (req: http.IncomingMessage, res: http.ServerResponse) => void)(
+              req,
+              res,
+            );
+          }
         }
-      : requestListener;
+      : (requestListener as http.RequestListener | undefined);
 
     const hServer = origCreateServer(wrappedListener);
     hServer.requestTimeout = 0;
@@ -748,19 +773,25 @@ if (transportType === 'httpStream') {
 
   try {
     await server.start({ transportType: 'httpStream', httpStream: httpStreamConfig });
-    rootLogger.info(`[Overmind] [READY] Serveur HTTP${sslCert ? 'S' : ''} sur ${protocol}://${httpHost}:${httpPort}${httpEndpoint}`);
+    rootLogger.info(
+      `[Overmind] [READY] Serveur HTTP${sslCert ? 'S' : ''} sur ${protocol}://${httpHost}:${httpPort}${httpEndpoint}`,
+    );
   } catch (err) {
     rootLogger.error(
       { error: err instanceof Error ? err.message : String(err), port: httpPort, host: httpHost },
       `[Overmind] [ERREUR] Échec du démarrage HTTP sur ${httpHost}:${httpPort}.` +
-      ` Port déjà pris ? (EADDRINUSE)`,
+        ` Port déjà pris ? (EADDRINUSE)`,
     );
     process.exit(1);
   }
 } else {
   try {
     await server.start({ transportType: 'stdio' });
-    rootLogger.info(memoryOnly ? '[Overmind] [READY] Serveur mémoire prêt sur STDIO.' : '[Overmind] [READY] Serveur prêt sur STDIO.');
+    rootLogger.info(
+      memoryOnly
+        ? '[Overmind] [READY] Serveur mémoire prêt sur STDIO.'
+        : '[Overmind] [READY] Serveur prêt sur STDIO.',
+    );
   } catch (err) {
     rootLogger.error(
       { error: err instanceof Error ? err.message : String(err) },

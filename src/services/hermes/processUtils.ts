@@ -19,7 +19,10 @@ export function killProcessTree(child: ChildProcess): Promise<void> {
       return;
     }
     if (child.exitCode !== null || child.killed) {
-      logger.debug({ pid: child.pid, exitCode: child.exitCode, killed: child.killed }, '[KILL] Process is already dead or marked killed.');
+      logger.debug(
+        { pid: child.pid, exitCode: child.exitCode, killed: child.killed },
+        '[KILL] Process is already dead or marked killed.',
+      );
       resolve();
       return;
     }
@@ -32,7 +35,12 @@ export function killProcessTree(child: ChildProcess): Promise<void> {
       resolve();
     };
     child.once('exit', finish);
-    if (process.platform === 'win32' && child.pid && typeof child.pid === 'number' && child.pid > 0) {
+    if (
+      process.platform === 'win32' &&
+      child.pid &&
+      typeof child.pid === 'number' &&
+      child.pid > 0
+    ) {
       const cmd = `taskkill /F /T /PID ${child.pid}`;
       logger.debug({ cmd }, '[KILL] Executing Windows taskkill...');
       exec(cmd, (err, stdout, stderr) => {

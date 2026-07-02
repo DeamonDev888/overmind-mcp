@@ -112,7 +112,10 @@ export class GeminiRunner {
     if (options.agentName) {
       // Inline validation — prevents path traversal on settings_${agentName}.json
       if (!/^[a-zA-Z0-9_-]+$/.test(options.agentName)) {
-        return { result: '', error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.` };
+        return {
+          result: '',
+          error: `INVALID_AGENT_NAME: '${options.agentName}' contains invalid characters. Only [a-zA-Z0-9_-] allowed.`,
+        };
       }
     }
     const cwd = options.cwd || process.cwd();
