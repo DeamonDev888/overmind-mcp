@@ -18,7 +18,14 @@ die()  { echo -e "${R}[FAIL]${N} $*"; exit 1; }
 
 # ---------- Constantes ----------
 OM_USER="${SUDO_USER:-$(whoami)}"
-OM_HOME="$(getent passwd "$OM_USER" | cut -d: -f6)"
+# Multi-OS home resolution (Linux: getent, macOS: dscl, fallback: eval ~)
+if command -v getent >/dev/null 2>&1; then
+  OM_HOME="$(getent passwd "$OM_USER" | cut -d: -f6)"
+elif command -v dscl >/dev/null 2>&1; then
+  OM_HOME="$(dscl . -read "/Users/$OM_USER" NFSHomeDirectory | awk '{print $2}')"
+else
+  OM_HOME="$(eval echo "~$OM_USER")"
+fi
 OM_DIR="$OM_HOME/.overmind"
 LOG_DIR="$OM_DIR/logs"
 PG_DB="overmind_memory"

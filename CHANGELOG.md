@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.1.1] - 2026-07-02
+
+### Fixed
+- install-overmind-native.sh: getent macOS → multi-OS resolution (P0)
+- install-overmind-unix.sh: Node 25+ non détecté → warning + auto nvm 24 (P2)
+- postinstall.mjs: POSTGRES_DB → POSTGRES_DATABASE + password aléatoire (P0)
+- postinstall.mjs: POSTGRES_DB=overmind_memory dans Docker (P1)
+
+### Added
+- overmind-verify: outil de diagnostic (binaire, .env, PostgreSQL, MCP health)
+- overmind-keygen: inclus dans le package npm (bin entry + README doc)
+
 ## [3.1.0] - 2026-06-29
 
 ### Added

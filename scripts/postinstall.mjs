@@ -198,6 +198,7 @@ async function setupPostgreSQL() {
       '--name', 'overmind-postgres-pgvector',
       '-p', '5432:5432',
       '-e', 'POSTGRES_PASSWORD=overmind_temp_password_change_me',
+      '-e', 'POSTGRES_DB=overmind_memory',
       '-e', 'POSTGRES_USER=postgres',
       '-v', 'overmind_postgres_data:/var/lib/postgresql/data',
       '--restart', 'unless-stopped',
@@ -307,25 +308,38 @@ function createEnvConfig() {
 
   // Créer .env minimal si n'existe pas
   if (!existsSync(envFile)) {
-    const envContent = `# OverMind-MCP Environment Configuration
+    // Generate random password for security
+    const crypto = await import('crypto');
+    const randomPassword = crypto.randomBytes(18).toString('base64url');
+
+    const envContent = `# OverMind-MCP Environment Configuration (v3.1)
 # Généré automatiquement par npm install
 
-# PostgreSQL
+# PostgreSQL + pgvector
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=overmind_temp_password_change_me
-POSTGRES_DB=overmind_memory
+POSTGRES_PASSWORD=${randomPassword}
+POSTGRES_DATABASE=overmind_memory
 
 # OverMind
 OVERMIND_WORKSPACE=${INSTALL_DIR}
 OVERMIND_MEMORY_TYPE=postgres
+OVERMIND_LOG_LEVEL=info
+
+# Embeddings (Qwen 3 Embedding 8B - 4096D)
+OVERMIND_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
+OVERMIND_EMBEDDING_DIMENSIONS=4096
+# OVERMIND_EMBEDDING_URL=https://openrouter.ai/api/v1
+# OVERMIND_EMBEDDING_KEY=sk-or-v1-...
 
 # OpenTelemetry (optionnel)
 OTEL_ENABLED=false
 `;
     writeFileSync(envFile, envContent);
-    log(COLORS.green, '✅ Configuration .env créée: ' + envFile);
+    log(COLORS.green, '✅ .env créé: ' + envFile);
+    log(COLORS.yellow, '⚠️  Password généré automatiquement. Sauvegardez-le!');
+    log(COLORS.cyan, '   Éditez .env pour ajouter vos clés API LLM.');
   }
 
   // Créer .env.postgres pour overmind-postgres-mcp

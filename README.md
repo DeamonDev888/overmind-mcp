@@ -205,6 +205,45 @@ La migration est recommandée mais pas obligatoire immédiatement.
 
 ---
 
+## ✅ Vérification post-install
+
+```bash
+overmind-verify
+```
+
+Vérifie: binaire, .env, PostgreSQL, port 3099, MCP health, Hermes CLI.
+
+---
+
+## 🌐 Webhook Tunnel (ngrok, optionnel)
+
+```bash
+# Installer ngrok (facultatif)
+npm install -g ngrok
+
+# Démarrer un tunnel vers le bridge
+overmind-ngrok                          # bridge :3100, tous providers
+overmind-ngrok --port 3149              # bt-sms :3149
+overmind-ngrok --provider telegram      # URL Telegram seulement
+```
+
+---
+
+## 🔑 Ethereum Key Generator
+
+Génère des clés EVM utilisées comme secrets pour les helpers Overmind:
+
+```bash
+# Après npm install -g overmind-mcp
+pip3 install eth-account
+overmind-keygen --cli --count 10
+```
+
+Le script `overmind-keygen` est inclus dans le package npm (`bin/overmind_keygen2000.py`).
+Dépendance Python: `eth-account` (`pip3 install eth-account`).
+
+---
+
 ![Aperçu du Terminal](assets/terminal_preview.png)
 
 _Projet propulsé par DeaMoN888 — 2026_

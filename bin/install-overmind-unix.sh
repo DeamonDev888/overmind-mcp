@@ -44,10 +44,24 @@ if ! command -v node &> /dev/null; then
 fi
 
 echo -e "${GREEN}[OK] Node.js détecté:${NC}"
+NODE_MAJ=$(node -p "process.versions.node.split('.')[0]")
 node --version
 echo -e "${GREEN}[OK] NPM détecté:${NC}"
 npm --version
 echo ""
+
+# Check Node version compatibility (overmind-postgres-mcp requires <25)
+if [ "$NODE_MAJ" -ge 25 ]; then
+  echo -e "${YELLOW}[WARN] Node $NODE_MAJ détecté. overmind-postgres-mcp nécessite Node < 25.${NC}"
+  if [ -d "$HOME/.nvm" ]; then
+    echo -e "${YELLOW}[INFO] Bascule vers Node 24 via nvm...${NC}"
+    \. "$HOME/.nvm/nvm.sh" 2>/dev/null
+    nvm install 24 2>/dev/null && nvm use 24 2>/dev/null && hash -r || true
+    echo -e "${GREEN}[OK] Node $(node --version) actif${NC}"
+  else
+    echo -e "${YELLOW}[INFO] Installez Node 24: nvm install 24 && nvm use 24${NC}"
+  fi
+fi
 
 # ============================================================
 # STEP 2: Installer OverMind-MCP
