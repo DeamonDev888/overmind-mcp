@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.1.0] - 2026-06-29
+
+### Added
+- BridgeConfig.defaultMcpServers: tout agent créé via le bridge hérite automatiquement du MCP memory
+- create_agent: DEFAULT_MCP_SERVERS pour Hermes (memory MCP automatique)
+- WebhookAdapter: Telegram natif (multi-tenant, photo support, edited_message)
+- scripts/ngrok-webhook.mjs: tunnel ngrok unifié avec URLs préformatées par provider
+
+### Changed
+- BridgeProxy: getter defaultMcpServers
+- OverBridgeService.runAgent(): injecte mcp_servers dans chaque appel run_agent
+
 ## [3.0.4] - 2026-06-29
 
 ### Changed

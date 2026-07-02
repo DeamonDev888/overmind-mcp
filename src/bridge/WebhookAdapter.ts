@@ -5,11 +5,13 @@
  * ║   Normalise les webhooks de providers variés vers un format         ║
  * ║   uniforme consommable par l'API agent.run.                         ║
  * ║                                                                      ║
- * ║   PROVIDERS SUPPORTÉS                                                ║
- * ║   ────────────────────                                               ║
- * ║   - voipms    : VoIP.ms (from, to, message, id, date, media)        ║
- * ║   - twilio    : Twilio (From, To, Body, MessageSid, MediaUrl0)       ║
- * ║   - generic   : Format customisable (mapping field-by-field)         ║
+ *   PROVIDERS SUPPORTÉS                                                ║
+ *   ────────────────────                                               ║
+ *   - voipms    : VoIP.ms (from, to, message, id, date, media)        ║
+ *   - twilio    : Twilio (From, To, Body, MessageSid, MediaUrl0)       ║
+ *   - telegram  : Telegram Bot API (message.chat.id, message.from.id)  ║
+ *   - discord   : Discord-like (channelId, userId, content)            ║
+ *   - generic   : Format customisable (mapping field-by-field)         ║
  * ║                                                                      ║
  * ║   Chaque adapter retourne un NormalizedWebhook qui contient :        ║
  * ║     - externalKey : clé pour SessionStore (phone, user, etc.)       ║
@@ -35,7 +37,7 @@ export interface NormalizedWebhook {
   metadata: Record<string, unknown>;
 }
 
-export type WebhookProvider = 'voipms' | 'twilio' | 'generic' | 'discord';
+export type WebhookProvider = 'voipms' | 'twilio' | 'telegram' | 'generic' | 'discord';
 
 export interface WebhookAdapterConfig {
   /** Nom du provider (default: 'voipms') */
@@ -80,6 +82,8 @@ export class WebhookAdapter {
         return this.adaptVoipMs(rawPayload);
       case 'twilio':
         return this.adaptTwilio(rawPayload);
+      case 'telegram':
+        return this.adaptTelegram(rawPayload);
       case 'discord':
         return this.adaptDiscord(rawPayload);
       case 'generic':
@@ -164,6 +168,52 @@ export class WebhookAdapter {
       prompt: promptParts.join('\n'),
       mediaUrls,
       metadata: { provider: 'twilio', from, to, messageSid, numMedia },
+    };
+  }
+
+  /**
+   * Telegram Bot API format.
+   * Payload: { message: { chat: { id }, from: { id, username }, text, photo: [{ file_id }] } }
+   */
+  private adaptTelegram(raw: Record<string, unknown>): NormalizedWebhook {
+    const message = (raw.message ?? raw.edited_message) as Record<string, unknown> | undefined;
+    const chat = (message?.chat ?? {}) as { id?: unknown; title?: unknown };
+    const from = (message?.from ?? {}) as { id?: unknown; username?: unknown; first_name?: unknown };
+
+    const chatId = stringOr(chat.id, '');
+    const userId = stringOr(from.id, '');
+    const username = stringOr(from.username ?? from.first_name, 'unknown');
+    const text = stringOr(message?.text, '');
+    const messageId = stringOr(message?.message_id, '');
+
+    // Photos/media: Telegram sends arrays of PhotoSize with file_id
+    const mediaUrls: string[] = [];
+    const photo = message?.photo as Array<{ file_id?: string }> | undefined;
+    if (Array.isArray(photo) && photo.length > 0) {
+      // Largest photo is last in array
+      const largest = photo[photo.length - 1];
+      if (largest?.file_id) mediaUrls.push(`telegram://file/${largest.file_id}`);
+    }
+
+    const promptParts: string[] = [];
+    if (this.config.promptPrefix) promptParts.push(this.config.promptPrefix);
+    promptParts.push(`[Telegram]`);
+    promptParts.push(`From: @${username} (${userId})`);
+    promptParts.push(`Chat: ${chatId}`);
+    if (messageId) promptParts.push(`MessageId: ${messageId}`);
+    promptParts.push('---');
+    promptParts.push(text);
+    if (mediaUrls.length > 0) {
+      promptParts.push('---');
+      promptParts.push(`Médias (${mediaUrls.length}):`);
+      for (const url of mediaUrls) promptParts.push(`- ${url}`);
+    }
+
+    return {
+      externalKey: `telegram:${chatId}:${userId}`,
+      prompt: promptParts.join('\n'),
+      mediaUrls,
+      metadata: { provider: 'telegram', chatId, userId, username, messageId },
     };
   }
 

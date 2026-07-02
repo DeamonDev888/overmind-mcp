@@ -101,6 +101,10 @@ export class BridgeProxy {
     return this.config.agentTimeoutMs;
   }
 
+  get defaultMcpServers(): import('./types.js').McpServerSpec[] {
+    return this.config.defaultMcpServers;
+  }
+
   get circuitState(): CircuitState {
     return this.circuit.currentState;
   }

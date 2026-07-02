@@ -130,6 +130,14 @@ export interface EditPromptOptions {
   replace: string;
 }
 
+// ─── MCP Server Spec (héritage mémoire) ─────────────────────────────────────
+
+export interface McpServerSpec {
+  name: string;
+  transport: string;
+  url: string;
+}
+
 // ─── Bridge Config ─────────────────────────────────────────────────────────
 
 export interface BridgeConfig {
@@ -143,6 +151,8 @@ export interface BridgeConfig {
   maxRetries: number;
   /** Délai entre les retry en ms (default: 2_000) */
   retryDelayMs: number;
+  /** MCP servers injectés par défaut dans chaque run_agent (héritage mémoire) */
+  defaultMcpServers: McpServerSpec[];
 }
 
 export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
@@ -151,6 +161,9 @@ export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
   agentTimeoutMs: 3_600_000, // 1h
   maxRetries: 2,
   retryDelayMs: 2_000,
+  defaultMcpServers: [
+    { name: 'memory', transport: 'httpStream', url: 'http://localhost:3099/mcp' },
+  ],
 };
 
 // ─── Circuit Breaker ───────────────────────────────────────────────────────

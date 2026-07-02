@@ -4,6 +4,12 @@ import { fileURLToPath } from 'url';
 
 import { AgentManager } from '../services/AgentManager.js';
 
+/**
+ * MCP servers injectés par défaut lors de la création d'un agent Hermes.
+ * Garantit que tout nouvel agent a accès au MCP memory (héritage mémoire).
+ */
+const DEFAULT_MCP_SERVERS = ['memory'];
+
 export const createAgentSchema = z.object({
   name: z
     .string()
@@ -74,6 +80,19 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>) {
     mode,
     cliPath,
   );
+
+  // Pour les agents Hermes, s'assurer que le MCP memory est configuré
+  if (runner === 'hermes') {
+    try {
+      const { HermesProfileManager } = await import('../services/HermesProfileManager.js');
+      const profilePath = await HermesProfileManager.getProfilePath(name);
+      if (profilePath) {
+        await HermesProfileManager.setMcpServers(name, DEFAULT_MCP_SERVERS, profilePath);
+      }
+    } catch {
+      // silent fail — l'agent est créé, les MCP servers sont optionnels
+    }
+  }
 
   if (result.error === 'INVALID_NAME') {
     return {

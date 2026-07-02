@@ -143,6 +143,8 @@ export class OverBridgeService {
   /**
    * Exécute un agent via `run_agent`.
    * Gère automatiquement la session continuity.
+   * Injecte les defaultMcpServers du BridgeProxy si l'appelant n'en fournit pas
+   * (héritage mémoire — l'agent a toujours accès au MCP memory).
    */
   async runAgent(options: RunAgentOptions): Promise<AgentResult> {
     validatePrompt(options.prompt);
@@ -155,6 +157,8 @@ export class OverBridgeService {
       sessionId: this.session.currentSessionId || undefined,
       autoResume: options.autoResume ?? (this.session.currentSessionId ? false : true),
       silent: options.silent ?? false,
+      // Héritage mémoire: injecter les MCP servers par défaut du proxy
+      mcp_servers: this.proxy.defaultMcpServers,
     };
     if (options.path) args.path = options.path;
     if (options.model) args.model = options.model;
