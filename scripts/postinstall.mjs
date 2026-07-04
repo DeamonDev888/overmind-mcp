@@ -197,8 +197,11 @@ async function setupPostgreSQL() {
       'Téléchargement image'
     );
 
-    // Remove existing if stopped
-    runCommand('docker rm -f overmind-postgres-pgvector', { stdio: 'pipe' });
+    // Remove existing ONLY if stopped (never kill a running container)
+    const existingStopped = runCommand('docker ps -a --filter "name=overmind-postgres-pgvector" --filter "status=exited" --format "{{.Names}}"', { stdio: 'pipe' });
+    if (existingStopped) {
+      runCommand('docker rm -f overmind-postgres-pgvector', { stdio: 'pipe' });
+    }
 
     const runCmd = [
       'docker', 'run', '-d',

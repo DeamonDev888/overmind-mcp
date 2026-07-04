@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.2.6] - 2026-07-04
+
+### Fixed
+- postgres-manager.mjs: runCommand() crash (running.trim is not a function) — stdio inherit retournait Buffer/null, maintenant encoding utf8 + fallback string vide
+- install-overmind-native.sh: brew install postgresql@18 échoue — scan intelligent @18→@17→@16→@15→postgresql
+- install-overmind-native.sh: pgvector fallback compilation source (git clone + make) si brew échoue
+- install-overmind-native.sh: createdb échouait car PG pas prêt — wait-for-ready loop 10×2s (macOS: psql -U $(whoami), Linux: sudo -u postgres psql)
+
 ## [3.2.5] - 2026-07-04
 
 ### Added

@@ -148,15 +148,27 @@ if [ "$OS" = "Darwin" ]; then
     track_warn "Homebrew non trouvé — installez: https://brew.sh"
     track_warn "Bypass: installez Docker et utilisez overmind-postgres-mcp up"
   else
-    # PostgreSQL
-    if brew list postgresql@18 >/dev/null 2>&1; then
-      ok "postgresql@18 déjà installé"
-    else
-      log "Installation postgresql@18 via brew..."
-      brew install postgresql@18 2>/dev/null || {
-        track_warn "postgresql@18 non disponible, fallback postgresql@16"
-        brew install postgresql@16 2>/dev/null || track_error "brew install postgresql a échoué"
+    # PostgreSQL — brew a postgresql@17 en stable, @18 peut ne pas exister encore
+    PG_BREW_VER=""
+    for pgver in postgresql@18 postgresql@17 postgresql@16 postgresql@15 postgresql@14 postgresql; do
+      if brew list "$pgver" >/dev/null 2>&1; then
+        PG_BREW_VER="$pgver"
+        ok "$pgver déjà installé"
+        break
+      fi
+    done
+    if [ -z "$PG_BREW_VER" ]; then
+      log "Installation PostgreSQL via brew (dernière version stable)..."
+      brew install postgresql 2>/dev/null && PG_BREW_VER="postgresql" || {
+        # Fallback: essayer les versions numérotées
+        for pgver in postgresql@17 postgresql@16 postgresql@15; do
+          log "Tentative $pgver..."
+          brew install "$pgver" 2>/dev/null && PG_BREW_VER="$pgver" && break
+        done
       }
+      if [ -z "$PG_BREW_VER" ]; then
+        track_error "brew install postgresql a échoué"
+      fi
     fi
 
     # pgvector
@@ -164,14 +176,22 @@ if [ "$OS" = "Darwin" ]; then
       ok "pgvector déjà installé"
     else
       log "Installation pgvector via brew..."
-      brew install pgvector 2>/dev/null || track_warn "pgvector non disponible via brew — installez manuellement"
+      brew install pgvector 2>/dev/null || {
+        track_warn "pgvector non disponible via brew — compilation depuis source..."
+        (
+          cd /tmp && git clone --depth 1 https://github.com/pgvector/pgvector.git 2>/dev/null && \
+          cd pgvector && make 2>/dev/null && make install 2>/dev/null
+        ) && ok "pgvector compilé depuis source" || track_warn "pgvector compilation échouée"
+      }
     fi
 
     # Démarrer le service
-    brew services start postgresql@18 2>/dev/null || brew services start postgresql@16 2>/dev/null || true
-    sleep 3
-    PG_INSTALLED=true
-    ok "Service PostgreSQL démarré via brew"
+    if [ -n "$PG_BREW_VER" ]; then
+      brew services start "$PG_BREW_VER" 2>/dev/null || true
+      sleep 3
+      PG_INSTALLED=true
+      ok "Service $PG_BREW_VER démarré via brew"
+    fi
   fi
 
 elif [ "$OS" = "Linux" ]; then
@@ -239,7 +259,27 @@ fi
 step "Base de données + pgvector"
 
 if [ "$PG_INSTALLED" = "true" ]; then
-  sleep 2  # Laisser PG démarrer
+  # Wait for PostgreSQL to be ready (max 15s)
+  log "Attente démarrage PostgreSQL..."
+  PG_READY=false
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    if [ "$OS" = "Darwin" ]; then
+      if psql -U "$PG_SUPERUSER" -d postgres -c "SELECT 1" >/dev/null 2>&1; then
+        PG_READY=true; break
+      fi
+    else
+      if $SUDO -u postgres psql -c "SELECT 1" >/dev/null 2>&1; then
+        PG_READY=true; break
+      fi
+    fi
+    sleep 2
+  done
+
+  if [ "$PG_READY" = "true" ]; then
+    ok "PostgreSQL prêt"
+  else
+    track_warn "PostgreSQL ne répond pas après 20s"
+  fi
 
   # Créer la DB si elle n'existe pas
   DB_EXISTS=false
@@ -454,6 +494,67 @@ UNIT
   fi
 
   $SUDO systemctl daemon-reload
+
+  # ─── Gestion des conflits de port ────────────────────────────
+  # Tue UNIQUEMENT les zombies/doublons, jamais un service sain.
+  for port in $MCP_PORT_CORE $MCP_PORT_PG; do
+    # Récupérer TOUS les PIDs sur ce port
+    PIDS_ON_PORT=$(lsof -tiTCP:$port -sTCP:LISTEN 2>/dev/null || ss -tlnp 2>/dev/null | grep ":$port " | grep -oP 'pid=\K[0-9]+' | head -5)
+
+    if [ -n "$PIDS_ON_PORT" ]; then
+      PID_COUNT=$(echo "$PIDS_ON_PORT" | wc -w)
+
+      for pid in $PIDS_ON_PORT; do
+        [ -z "$pid" ] && continue
+
+        # Vérifier si c'est un process zombie (Z état)
+        PID_STATE=$(ps -o stat= -p "$pid" 2>/dev/null | head -1)
+        PID_CMD=$(ps -o args= -p "$pid" 2>/dev/null | head -1)
+
+        # Cas 1: Zombie → kill certain
+        if echo "$PID_STATE" | grep -q 'Z'; then
+          warn "Port :$port — PID $pid est un ZOMBIE → kill"
+          kill -9 "$pid" 2>/dev/null || $SUDO kill -9 "$pid" 2>/dev/null || true
+          sleep 1
+          continue
+        fi
+
+        # Cas 2: Pas un process overmind/node → doublon parasite → kill
+        if ! echo "$PID_CMD" | grep -qE 'overmind|cli\.js|dist/index\.js'; then
+          warn "Port :$port — PID $pid est un doublon parasite ($PID_CMD) → kill"
+          kill "$pid" 2>/dev/null || $SUDO kill "$pid" 2>/dev/null || true
+          sleep 2
+          continue
+        fi
+
+        # Cas 3: Doublon (plusieurs process overmind sur le même port)
+        if [ "$PID_COUNT" -gt 1 ]; then
+          warn "Port :$port — doublon détecté ($PID_COUNT process) → kill du plus ancien ($pid)"
+          kill "$pid" 2>/dev/null || $SUDO kill "$pid" 2>/dev/null || true
+          sleep 2
+          continue
+        fi
+
+        # Cas 4: Process overmind unique et sain → on garde, systemd fera un restart
+        ok "Port :$port — PID $pid (overmind sain) — préservé, systemd takeover"
+      done
+
+      # Vérification finale
+      sleep 1
+      PID_AFTER=$(lsof -tiTCP:$port -sTCP:LISTEN 2>/dev/null | head -1)
+      if [ -n "$PID_AFTER" ]; then
+        AFTER_CMD=$(ps -o args= -p "$PID_AFTER" 2>/dev/null | head -1)
+        if echo "$AFTER_CMD" | grep -qE 'overmind|cli\.js|dist/index\.js'; then
+          ok "Port :$port — process overmind sain conservé (PID $PID_AFTER)"
+        else
+          track_warn "Port :$port — toujours occupé par un process non-overmind"
+        fi
+      else
+        ok "Port :$port libéré"
+      fi
+    fi
+  done
+
   $SUDO systemctl enable --now overmind-mcp.service 2>/dev/null || track_warn "systemctl enable overmind-mcp"
   ok "overmind-mcp.service: $($SUDO systemctl is-active overmind-mcp.service 2>/dev/null || echo '?')"
 
@@ -502,6 +603,53 @@ elif [ "$OS" = "Darwin" ]; then
 PLIST
     launchctl bootout gui/$(id -u) "$plist" 2>/dev/null || true
     launchctl bootstrap gui/$(id -u) "$plist" 2>/dev/null || true
+
+    # ─── Gestion des conflits de port (macOS) ───────────────────
+    # Tue UNIQUEMENT zombies/doublons, jamais un process overmind sain.
+    PIDS_ON_PORT=$(lsof -tiTCP:$port -sTCP:LISTEN 2>/dev/null)
+    if [ -n "$PIDS_ON_PORT" ]; then
+      PID_COUNT=$(echo "$PIDS_ON_PORT" | wc -w)
+      for pid in $PIDS_ON_PORT; do
+        [ -z "$pid" ] && continue
+        PID_STATE=$(ps -o stat= -p "$pid" 2>/dev/null | head -1)
+        PID_CMD=$(ps -o args= -p "$pid" 2>/dev/null | head -1)
+
+        # Cas 1: Zombie → kill
+        if echo "$PID_STATE" | grep -q 'Z'; then
+          warn "Port :$port — PID $pid est un ZOMBIE → kill"
+          kill -9 "$pid" 2>/dev/null || true
+          sleep 1
+          continue
+        fi
+
+        # Cas 2: Process non-overmind → parasite → kill
+        if ! echo "$PID_CMD" | grep -qE 'overmind|cli\.js|dist/index\.js'; then
+          warn "Port :$port — PID $pid parasite ($PID_CMD) → kill"
+          kill "$pid" 2>/dev/null || true
+          sleep 2
+          continue
+        fi
+
+        # Cas 3: Doublon overmind
+        if [ "$PID_COUNT" -gt 1 ]; then
+          warn "Port :$port — doublon ($PID_COUNT process) → kill $pid"
+          kill "$pid" 2>/dev/null || true
+          sleep 2
+          continue
+        fi
+
+        # Cas 4: overmind sain unique → préservé
+        ok "Port :$port — PID $pid (overmind sain) préservé"
+      done
+
+      sleep 1
+      PID_AFTER=$(lsof -tiTCP:$port -sTCP:LISTEN 2>/dev/null | head -1)
+      if [ -z "$PID_AFTER" ]; then
+        ok "Port :$port libéré"
+        # Re-bootstrap après libération
+        launchctl bootstrap gui/$(id -u) "$plist" 2>/dev/null || true
+      fi
+    fi
     ok "launchd: com.overmind.${name} chargé"
   }
 

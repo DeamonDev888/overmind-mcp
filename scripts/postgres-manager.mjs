@@ -43,9 +43,10 @@ function logSection(title) {
 
 function runCommand(cmd, options = {}) {
   try {
-    return execSync(cmd, { stdio: 'inherit', ...options });
-  } catch (error) {
-    return null;
+    const result = execSync(cmd, { stdio: 'pipe', encoding: 'utf8', ...options });
+    return typeof result === 'string' ? result : String(result ?? '');
+  } catch {
+    return '';
   }
 }
 
@@ -82,8 +83,14 @@ function commandUp() {
   const pgDb = getEnvVar('POSTGRES_DATABASE') || getEnvVar('POSTGRES_DB') || 'overmind_memory';
   const pgPort = getEnvVar('POSTGRES_PORT') || '5432';
 
-  // Remove ancien container stopped
-  runCommand('docker rm -f overmind-postgres-pgvector 2>/dev/null', { stdio: 'pipe' });
+  // Remove ancien container SEULEMENT s'il est stopped (jamais un running)
+  const isRunning = runCommand('docker ps --filter "name=overmind-postgres-pgvector" --format "{{.Names}}"', { stdio: 'pipe' });
+  if (!isRunning || isRunning.trim().length === 0) {
+    const isStopped = runCommand('docker ps -a --filter "name=overmind-postgres-pgvector" --filter "status=exited" --format "{{.Names}}"', { stdio: 'pipe' });
+    if (isStopped && isStopped.trim().length > 0) {
+      runCommand('docker rm -f overmind-postgres-pgvector 2>/dev/null', { stdio: 'pipe' });
+    }
+  }
 
   console.log('🚀 Démarrage PostgreSQL + pgvector...');
   const result = runCommand(
