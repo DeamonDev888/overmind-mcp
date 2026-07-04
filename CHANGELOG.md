@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.2.4] - 2026-07-04
+
+### Changed
+- install-overmind-native.sh: refonte complète — 8 steps, 5 package managers (brew/apt/dnf/pacman/apk), compilation pgvector fallback
+- install-overmind-native.sh: macOS launchd LaunchAgents + KeepAlive au lieu de systemctl
+- install-overmind-native.sh: idempotent — détecte si déjà installé avant d'installer
+- install-overmind-native.sh: anti-cassure — set -uo pipefail, track_error()/track_warn(), compteur ERRORS+WARNINGS
+
+### Added
+- install-overmind-native.sh: .env auto avec openssl rand, chmod 600, POSTGRES_SSL=false, POSTGRES_HOST=127.0.0.1
+- install-overmind-native.sh: validation finale HTTP ping + SQL test
+- install-overmind-native.sh: fallback postgresql@18 → postgresql@16 si non disponible
+
 ## [3.2.3] - 2026-07-04
 
 ### Fixed

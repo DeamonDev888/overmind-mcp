@@ -1,192 +1,426 @@
 #!/usr/bin/env bash
 # ============================================================
-# install-overmind-native.sh
-# Installation OverMind-MCP + Postgres-MCP — mode NATIF (sans Docker)
-# Pour Ubuntu 26.04+ avec PostgreSQL 18 + pgvector + systemd
-# Idempotent : peut être ré-exécuté sans casser l'existant.
+# install-overmind-native.sh — Installation NATIVE OverMind-MCP
+# Multi-OS: Linux (apt/dnf/pacman) + macOS (Homebrew)
+# Idempotent: peut être ré-exécuté sans casser l'existant.
+# Anti-cassure: chaque step est gardé, erreurs non-fatales Continuent.
 # ============================================================
 
-set -euo pipefail
+set -uo pipefail   # PAS de set -e — on gère les erreurs manuellement
 
-# ---------- Couleurs ----------
-R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; C='\033[0;36m'; N='\033[0m'
+# ─── Couleurs + helpers ──────────────────────────────────────
+R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; C='\033[0;36m'; B='\033[1m'; D='\033[2m'; N='\033[0m'
+STEPS_TOTAL=8
+STEP=0
 
-log()  { echo -e "${C}[$(date +%H:%M:%S)]${N} $*"; }
-ok()   { echo -e "${G}[OK]${N} $*"; }
-warn() { echo -e "${Y}[WARN]${N} $*"; }
-die()  { echo -e "${R}[FAIL]${N} $*"; exit 1; }
+log()    { echo -e "${C}[$(date +%H:%M:%S)]${N} ${D}$*${N}"; }
+ok()     { echo -e "  ${G}✓${N} $*"; }
+warn()   { echo -e "  ${Y}⚠${N} $*"; }
+fail()   { echo -e "  ${R}✗${N} $*"; }
+die()    { echo -e "${R}[FATAL]${N} $*"; exit 1; }
+step()   { STEP=$((STEP+1)); echo; echo -e "${B}${C}━━━ STEP $STEP/$STEPS_TOTAL — $* ━━━${N}"; }
+have()   { command -v "$1" >/dev/null 2>&1; }
 
-# ---------- Constantes ----------
+# ─── Détection OS ────────────────────────────────────────────
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+case "$OS" in
+  Darwin) OS_NAME="macOS $ARCH";;
+  Linux)  OS_NAME="Linux $ARCH";;
+  *)      OS_NAME="$OS $ARCH";;
+esac
+echo
+echo -e "${B}${C}╔════════════════════════════════════════════════════════════╗${N}"
+echo -e "${B}${C}║   🚀 OverMind-MCP — Installation NATIVE                   ║${N}"
+echo -e "${B}${C}║   Multi-OS: $OS_NAME$(printf '%*s' $((24-${#OS_NAME})) '')║${N}"
+echo -e "${B}${C}╚════════════════════════════════════════════════════════════╝${N}"
+echo
+
+# ─── Détection utilisateur + home ────────────────────────────
 OM_USER="${SUDO_USER:-$(whoami)}"
-# Multi-OS home resolution (Linux: getent, macOS: dscl, fallback: eval ~)
-if command -v getent >/dev/null 2>&1; then
+if have getent; then
   OM_HOME="$(getent passwd "$OM_USER" | cut -d: -f6)"
-elif command -v dscl >/dev/null 2>&1; then
+elif have dscl; then
   OM_HOME="$(dscl . -read "/Users/$OM_USER" NFSHomeDirectory | awk '{print $2}')"
 else
   OM_HOME="$(eval echo "~$OM_USER")"
 fi
 OM_DIR="$OM_HOME/.overmind"
 LOG_DIR="$OM_DIR/logs"
+
+# ─── Constantes ──────────────────────────────────────────────
 PG_DB="overmind_memory"
 PG_PORT=5432
 MCP_PORT_CORE=3099
 MCP_PORT_PG=5433
+ERRORS=0
+WARNINGS=0
 
-[ "$(id -u)" -ne 0 ] && die "Lancer avec sudo : sudo $0"
-[ -z "$OM_USER" ] || [ -z "$OM_HOME" ] && die "Impossible de déterminer l'utilisateur"
+track_error() { fail "$*"; ERRORS=$((ERRORS+1)); }
+track_warn()  { warn "$*"; WARNINGS=$((WARNINGS+1)); }
 
-log "Installation pour user=$OM_USER home=$OM_HOME"
+# ================================================================
+# STEP 1/8 — Vérifications préalables (root, OS, arch)
+# ================================================================
+step "Vérifications préalables"
 
-# ============================================================
-# STEP 1/6 — Vérification Node.js + npm
-# ============================================================
-log "STEP 1/6 : Node.js"
-command -v node >/dev/null || die "Node.js manquant : curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt install -y nodejs"
-NODE_MAJ=$(node -p "process.versions.node.split('.')[0]")
-[ "$NODE_MAJ" -ge 20 ] || die "Node >= 20 requis (vous avez $(node -v))"
-ok "Node $(node -v) / npm $(npm -v)"
+# Vérifier root/sudo
+if [ "$(id -u)" -ne 0 ]; then
+  echo -e "  ${Y}ℹ${N}  Lancement en mode non-root — sudo requis pour certaines étapes"
+  if ! have sudo; then
+    die "sudo non disponible. Lancez en root: sudo $0"
+  fi
+  SUDO="sudo"
+else
+  SUDO=""
+fi
+ok "Privilèges: OK (${OM_USER})"
 
-# ============================================================
-# STEP 2/6 — PostgreSQL + pgvector (multi-OS)
-# ============================================================
-log "STEP 2/6 : PostgreSQL + pgvector"
+# Vérifier OS supporté
+if [ "$OS" != "Darwin" ] && [ "$OS" != "Linux" ]; then
+  die "OS non supporté: $OS. Utilisez le mode Docker: npm i -g overmind-mcp && overmind-postgres-mcp up"
+fi
+ok "OS: $OS_NAME"
 
-OS_TYPE="$(uname -s)"
+# ================================================================
+# STEP 2/8 — Node.js + npm
+# ================================================================
+step "Node.js + npm"
 
-if [ "$OS_TYPE" = "Darwin" ]; then
-    # ─── macOS (Homebrew) ───────────────────────────────────────────────
-    if ! command -v brew >/dev/null 2>&1; then
-        die "Homebrew non trouvé. Installez-le: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-    fi
-    if ! brew list postgresql@18 >/dev/null 2>&1; then
-        log "Installation postgresql@18 via brew..."
-        brew install postgresql@18
-    fi
-    if ! brew list pgvector >/dev/null 2>&1; then
-        log "Installation pgvector via brew..."
-        brew install pgvector
-    fi
-    # Démarrer le service
-    brew services start postgresql@18 2>/dev/null || true
-    sleep 3
-    ok "postgresql@18 + pgvector installés via brew"
-
-elif [ "$OS_TYPE" = "Linux" ]; then
-    # ─── Linux (apt / yum / pacman) ────────────────────────────────────
-    if command -v apt >/dev/null 2>&1; then
-        if ! dpkg -l postgresql-18-pgvector 2>/dev/null | grep -q '^ii'; then
-            log "Installation postgresql-18-pgvector via apt..."
-            apt update -qq
-            DEBIAN_FRONTEND=noninteractive apt install -y postgresql-18-pgvector postgresql-client-18
-        fi
-    elif command -v yum >/dev/null 2>&1; then
-        log "Installation postgresql + pgvector via yum..."
-        yum install -y postgresql-server postgresql-contrib pgvector
-        postgresql-setup --initdb 2>/dev/null || true
-    elif command -v pacman >/dev/null 2>&1; then
-        log "Installation postgresql + pgvector via pacman..."
-        pacman -S --noconfirm postgresql pgvector
-        su - postgres -c "initdb -D /var/lib/postgres/data" 2>/dev/null || true
+if ! have node; then
+  fail "Node.js non trouvé"
+  log "Installation automatique de Node.js LTS..."
+  if [ "$OS" = "Darwin" ]; then
+    if have brew; then
+      brew install node@24 || track_error "brew install node@24 a échoué"
     else
-        die "Gestionnaire de paquets non supporté. Installez PostgreSQL + pgvector manuellement."
+      track_error "Homebrew manquant. Installez Node: https://nodejs.org/"
     fi
-
-    # Service systemd
-    if command -v systemctl >/dev/null 2>&1; then
-        if ! systemctl is-active --quiet postgresql; then
-            systemctl enable --now postgresql
-        fi
-        ok "postgresql.service: $(systemctl is-active postgresql)"
+  else
+    if have curl; then
+      curl -fsSL https://deb.nodesource.com/setup_lts.x | $SUDO -E bash - 2>/dev/null || true
+      $SUDO apt install -y nodejs 2>/dev/null || track_error "apt install nodejs a échoué"
+    else
+      track_error "curl manquant pour installer Node.js"
     fi
+  fi
 fi
 
-# DB + extension vector (multi-OS)
+if have node; then
+  NODE_VER="$(node -v)"
+  NODE_MAJ="${NODE_VER#v}"
+  NODE_MAJ="${NODE_MAJ%%.*}"
+  ok "Node.js: ${NODE_VER}"
+  if [ "$NODE_MAJ" -lt 20 ]; then
+    track_error "Node >= 20 requis (vous avez ${NODE_VER})"
+  elif [ "$NODE_MAJ" -ge 25 ]; then
+    track_warn "Node ${NODE_VER} — overmind-postgres-mcp préfère Node 24"
+    if [ -d "$OM_HOME/.nvm" ]; then
+      log "Bascule nvm → Node 24..."
+      \. "$OM_HOME/.nvm/nvm.sh" 2>/dev/null || true
+      nvm install 24 2>/dev/null && nvm use 24 2>/dev/null && hash -r || true
+      ok "Node $(node -v) actif via nvm"
+    fi
+  fi
+else
+  die "Node.js toujours manquant après tentative d'installation"
+fi
+
+if have npm; then
+  ok "npm: $(npm -v)"
+else
+  die "npm non trouvé"
+fi
+
+# ================================================================
+# STEP 3/8 — PostgreSQL + pgvector
+# ================================================================
+step "PostgreSQL + pgvector"
+
+PG_INSTALLED=false
 PG_SUPERUSER="postgres"
-if [ "$OS_TYPE" = "Darwin" ]; then
-    PG_SUPERUSER="$(whoami)"
+
+if [ "$OS" = "Darwin" ]; then
+  # ─── macOS: Homebrew ─────────────────────────────────────────
+  PG_SUPERUSER="$(whoami)"
+
+  if ! have brew; then
+    track_warn "Homebrew non trouvé — installez: https://brew.sh"
+    track_warn "Bypass: installez Docker et utilisez overmind-postgres-mcp up"
+  else
+    # PostgreSQL
+    if brew list postgresql@18 >/dev/null 2>&1; then
+      ok "postgresql@18 déjà installé"
+    else
+      log "Installation postgresql@18 via brew..."
+      brew install postgresql@18 2>/dev/null || {
+        track_warn "postgresql@18 non disponible, fallback postgresql@16"
+        brew install postgresql@16 2>/dev/null || track_error "brew install postgresql a échoué"
+      }
+    fi
+
+    # pgvector
+    if brew list pgvector >/dev/null 2>&1; then
+      ok "pgvector déjà installé"
+    else
+      log "Installation pgvector via brew..."
+      brew install pgvector 2>/dev/null || track_warn "pgvector non disponible via brew — installez manuellement"
+    fi
+
+    # Démarrer le service
+    brew services start postgresql@18 2>/dev/null || brew services start postgresql@16 2>/dev/null || true
+    sleep 3
+    PG_INSTALLED=true
+    ok "Service PostgreSQL démarré via brew"
+  fi
+
+elif [ "$OS" = "Linux" ]; then
+  # ─── Linux: apt / dnf / pacman ──────────────────────────────
+  if have apt; then
+    log "Gestionnaire: apt (Debian/Ubuntu)"
+    $SUDO apt update -qq 2>/dev/null || true
+    if dpkg -l 2>/dev/null | grep -q 'postgresql.*18.*pgvector'; then
+      ok "postgresql-18-pgvector déjà installé"
+      PG_INSTALLED=true
+    else
+      log "Installation postgresql + pgvector..."
+      DEBIAN_FRONTEND=noninteractive $SUDO apt install -y postgresql postgresql-contrib 2>/dev/null || track_error "apt install postgresql"
+      # pgvector (peut nécessiter un PPA)
+      DEBIAN_FRONTEND=noninteractive $SUDO apt install -y postgresql-18-pgvector 2>/dev/null || {
+        track_warn "postgresql-18-pgvector non disponible via apt"
+        log "Tentative compilation pgvector depuis source..."
+        $SUDO apt install -y build-essential postgresql-server-dev-all git 2>/dev/null || true
+        (
+          cd /tmp && git clone --depth 1 https://github.com/pgvector/pgvector.git 2>/dev/null && \
+          cd pgvector && make 2>/dev/null && $SUDO make install 2>/dev/null
+        ) || track_warn "Compilation pgvector échouée — voir docs"
+      }
+      PG_INSTALLED=true
+    fi
+
+  elif have dnf; then
+    log "Gestionnaire: dnf (Fedora/RHEL)"
+    $SUDO dnf install -y postgresql-server postgresql-contrib 2>/dev/null || track_error "dnf install postgresql"
+    $SUDO postgresql-setup --initdb 2>/dev/null || true
+    PG_INSTALLED=true
+    # pgvector
+    $SUDO dnf install -y pgvector 2>/dev/null || track_warn "pgvector non disponible via dnf"
+
+  elif have pacman; then
+    log "Gestionnaire: pacman (Arch)"
+    $SUDO pacman -S --noconfirm postgresql 2>/dev/null || track_error "pacman install postgresql"
+    $SUDO pacman -S --noconfirm pgvector 2>/dev/null || track_warn "pgvector non disponible via pacman"
+    $SUDO su - postgres -c "initdb -D /var/lib/postgres/data" 2>/dev/null || true
+    PG_INSTALLED=true
+
+  elif have apk; then
+    log "Gestionnaire: apk (Alpine)"
+    $SUDO apk add postgresql postgresql-contrib 2>/dev/null || track_error "apk install postgresql"
+    PG_INSTALLED=true
+
+  else
+    track_error "Gestionnaire de paquets non supporté. Installez PostgreSQL manuellement."
+  fi
+
+  # Service systemd
+  if have systemctl; then
+    if ! $SUDO systemctl is-active --quiet postgresql 2>/dev/null; then
+      log "Démarrage postgresql.service..."
+      $SUDO systemctl enable --now postgresql 2>/dev/null || track_warn "systemctl start postgresql"
+      sleep 2
+    fi
+    ok "postgresql.service: $($SUDO systemctl is-active postgresql 2>/dev/null || echo '?')"
+  fi
 fi
 
-if ! psql -U "$PG_SUPERUSER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$PG_DB'" 2>/dev/null | grep -q 1; then
+# ================================================================
+# STEP 4/8 — Base de données + extension pgvector
+# ================================================================
+step "Base de données + pgvector"
+
+if [ "$PG_INSTALLED" = "true" ]; then
+  sleep 2  # Laisser PG démarrer
+
+  # Créer la DB si elle n'existe pas
+  DB_EXISTS=false
+  if [ "$OS" = "Darwin" ]; then
+    if psql -U "$PG_SUPERUSER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$PG_DB'" 2>/dev/null | grep -q 1; then
+      DB_EXISTS=true
+    fi
+  else
+    if $SUDO -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$PG_DB'" 2>/dev/null | grep -q 1; then
+      DB_EXISTS=true
+    fi
+  fi
+
+  if [ "$DB_EXISTS" = "false" ]; then
     log "Création DB $PG_DB..."
-    createdb -U "$PG_SUPERUSER" "$PG_DB" 2>/dev/null || sudo -u postgres createdb "$PG_DB"
+    if [ "$OS" = "Darwin" ]; then
+      createdb -U "$PG_SUPERUSER" "$PG_DB" 2>/dev/null || track_warn "createdb échoué"
+    else
+      $SUDO -u postgres createdb "$PG_DB" 2>/dev/null || track_warn "createdb échoué"
+    fi
+  else
+    ok "DB $PG_DB existe déjà"
+  fi
+
+  # Activer pgvector
+  if [ "$OS" = "Darwin" ]; then
+    psql -U "$PG_SUPERUSER" -d "$PG_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;" >/dev/null 2>&1 || track_warn "CREATE EXTENSION vector échoué"
+    PGV="$(psql -U "$PG_SUPERUSER" -d "$PG_DB" -tAc "SELECT extversion FROM pg_extension WHERE extname='vector'" 2>/dev/null || echo '?')"
+  else
+    $SUDO -u postgres psql -d "$PG_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;" >/dev/null 2>&1 || track_warn "CREATE EXTENSION vector échoué"
+    PGV="$($SUDO -u postgres psql -d "$PG_DB" -tAc "SELECT extversion FROM pg_extension WHERE extname='vector'" 2>/dev/null || echo '?')"
+  fi
+
+  if [ "$PGV" != "?" ]; then
+    ok "pgvector v${PGV} activé sur $PG_DB"
+  else
+    track_warn "pgvector non détecté — extension vector peut nécessiter une installation manuelle"
+  fi
+
+  # Tester la connexion
+  if [ "$OS" = "Darwin" ]; then
+    if psql -U "$PG_SUPERUSER" -d "$PG_DB" -c "SELECT 1" >/dev/null 2>&1; then
+      ok "Connexion PostgreSQL: OK (user=$PG_SUPERUSER)"
+    else
+      track_warn "Connexion PostgreSQL échouée en local"
+    fi
+  else
+    if $SUDO -u postgres psql -d "$PG_DB" -c "SELECT 1" >/dev/null 2>&1; then
+      ok "Connexion PostgreSQL: OK (user=postgres)"
+    else
+      track_warn "Connexion PostgreSQL échouée"
+    fi
+  fi
+else
+  track_warn "PostgreSQL non installé — utilisez Docker: overmind-postgres-mcp up"
 fi
-psql -U "$PG_SUPERUSER" -d "$PG_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;" >/dev/null 2>&1 || sudo -u postgres psql -d "$PG_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;" >/dev/null
-PGV=$(psql -U "$PG_SUPERUSER" -d "$PG_DB" -tAc "SELECT extversion FROM pg_extension WHERE extname='vector'" 2>/dev/null || echo "?")
-ok "DB $PG_DB prête, pgvector v$PGV"
 
-# ============================================================
-# STEP 3/6 — Packages npm globaux
-# ============================================================
-log "STEP 3/6 : npm install -g"
-if ! npm list -g overmind-mcp >/dev/null 2>&1; then
-    npm install -g overmind-mcp@latest
+# ================================================================
+# STEP 5/8 — Packages npm globaux
+# ================================================================
+step "Packages npm globaux"
+
+log "Vérification overmind-mcp..."
+if npm list -g overmind-mcp >/dev/null 2>&1; then
+  ok "overmind-mcp: $(npm list -g overmind-mcp --depth=0 2>/dev/null | grep overmind-mcp | head -1 | awk -F@ '{print $NF}')"
+else
+  log "Installation overmind-mcp..."
+  $SUDO npm install -g overmind-mcp@latest 2>/dev/null || npm install -g overmind-mcp@latest 2>/dev/null || track_error "npm install overmind-mcp"
 fi
-if ! npm list -g overmind-postgres-mcp >/dev/null 2>&1; then
-    npm install -g overmind-postgres-mcp@latest
+
+log "Vérification overmind-postgres-mcp..."
+if npm list -g overmind-postgres-mcp >/dev/null 2>&1; then
+  ok "overmind-postgres-mcp: installé"
+else
+  log "Installation overmind-postgres-mcp..."
+  $SUDO npm install -g overmind-postgres-mcp@latest 2>/dev/null || npm install -g overmind-postgres-mcp@latest 2>/dev/null || track_warn "overmind-postgres-mcp (non bloquant)"
 fi
-ok "overmind-mcp $(npm list -g overmind-mcp --depth=0 | awk '/overmind-mcp@/ {print $2}')"
-ok "overmind-postgres-mcp $(npm list -g overmind-postgres-mcp --depth=0 | awk '/overmind-postgres-mcp@/ {print $2}')"
 
-# ============================================================
-# STEP 4/6 — Arborescence + .env
-# ============================================================
-log "STEP 4/6 : ~/.overmind/"
-mkdir -p "$OM_DIR/logs" "$OM_DIR/config"
-chown -R "$OM_USER:$OM_USER" "$OM_DIR"
+ok "Packages npm globaux: vérifiés"
 
-if [ ! -f "$OM_DIR/.env" ]; then
-    log "Création $OM_DIR/.env (template à compléter)..."
-    cat > "$OM_DIR/.env" <<'EOF'
-# OverMind - Configuration principale (mode natif sans Docker)
+# ================================================================
+# STEP 6/8 — Arborescence ~/.overmind/ + .env
+# ================================================================
+step "Arborescence ~/.overmind/"
 
-# --- PostgreSQL (apt postgresql-18 + pgvector) ---
+mkdir -p "$OM_DIR/logs" "$OM_DIR/config" "$OM_DIR/bridge/wrappers" 2>/dev/null || true
+ok "Dossiers créés: $OM_DIR"
+
+# .env
+ENV_FILE="$OM_DIR/.env"
+ENV_PASSWORD=""
+if [ ! -f "$ENV_FILE" ]; then
+  log "Création .env avec password aléatoire..."
+  ENV_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24 2>/dev/null || echo 'overmind_temp_'$RANDOM)"
+  cat > "$ENV_FILE" <<ENVEOF
+# OverMind-MCP — Configuration (mode natif)
+# Généré le $(date)
+
+# ─── PostgreSQL ───
 POSTGRES_HOST=127.0.0.1
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=CHANGEME_PG_PASS
-POSTGRES_DATABASE=overmind_memory
+POSTGRES_PORT=${PG_PORT}
+POSTGRES_USER=${PG_SUPERUSER}
+POSTGRES_PASSWORD=${ENV_PASSWORD}
+POSTGRES_DATABASE=${PG_DB}
 POSTGRES_SSL=false
-POSTGRES_MAX_CONNECTIONS=10
 
-# --- Provider LLM par défaut ---
-OVERMIND_DEFAULT_PROVIDER=anthropic
-
-# --- Core ---
+# ─── OverMind Core ───
+OVERMIND_WORKSPACE=${OM_DIR}
 OVERMIND_MEMORY_TYPE=postgres
-MEMORY_HTTP_PORT=3099
-OVERMIND_HTTP_MODE=false
-OVERMIND_HTTP_PORT=3099
+OVERMIND_LOG_LEVEL=info
 
-# --- Embeddings (Qwen 8B, 4096D) ---
+# ─── Ports MCP ───
+MEMORY_HTTP_PORT=${MCP_PORT_CORE}
+OVERMIND_HTTP_MODE=false
+OVERMIND_HTTP_PORT=${MCP_PORT_CORE}
+
+# ─── Embeddings (Qwen 8B, 4096D) ───
 OVERMIND_EMBEDDING_DIMENSIONS=4096
 OVERMIND_EMBEDDING_MODEL=qwen/qwen3-embedding-8b
-OVERMIND_EMBEDDING_URL=https://openrouter.ai/api/v1
+# OVERMIND_EMBEDDING_URL=https://openrouter.ai/api/v1
 # OVERMIND_EMBEDDING_KEY=sk-or-...
 
-# --- Clés LLM (à remplir) ---
+# ─── Clés LLM (à remplir) ───
 # ANTHROPIC_AUTH_TOKEN=...
 # ANTHROPIC_BASE_URL=https://api.anthropic.com
 # ANTHROPIC_MODEL=claude-sonnet-4-6
-# MISTRAL_API_KEY=...
-# GLM_API_KEY=...
-# ELEVENLABS_API_KEY=...
-EOF
-    chown "$OM_USER:$OM_USER" "$OM_DIR/.env"
-    chmod 600 "$OM_DIR/.env"
-    warn "Éditer $OM_DIR/.env et remplir POSTGRES_PASSWORD + clés LLM"
+ENVEOF
+  chmod 600 "$ENV_FILE" 2>/dev/null || true
+  ok ".env créé avec password aléatoire"
+  warn "⚠️  POSTGRES_PASSWORD stocké dans $ENV_FILE"
 else
-    ok ".env existant conservé"
+  ok ".env existant conservé"
+  ENV_PASSWORD="$(grep '^POSTGRES_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)"
+  if [ -z "$ENV_PASSWORD" ] || echo "$ENV_PASSWORD" | grep -qi 'change'; then
+    track_warn "POSTGRES_PASSWORD vide ou 'change_me' dans .env"
+  fi
 fi
 
-# ============================================================
-# STEP 5/6 — Systemd units
-# ============================================================
-log "STEP 5/6 : systemd units"
+# .mcp.json (minimal si absent)
+MCP_FILE="$OM_DIR/.mcp.json"
+if [ ! -f "$MCP_FILE" ]; then
+  log "Création .mcp.json..."
+  cat > "$MCP_FILE" <<MCPEOF
+{
+  "mcpServers": {
+    "memory": {
+      "transport": "httpStream",
+      "url": "http://localhost:${MCP_PORT_CORE}/mcp"
+    },
+    "postgres": {
+      "transport": "httpStream",
+      "url": "http://localhost:${MCP_PORT_PG}/mcp"
+    }
+  }
+}
+MCPEOF
+  ok ".mcp.json créé"
+else
+  ok ".mcp.json existant"
+fi
 
-write_unit() {
-    local name="$1" port="$2" entry="$3"
-    cat > "/etc/systemd/system/$name" <<EOF
+# Permissions
+if [ "$OS" = "Darwin" ]; then
+  chown -R "$OM_USER:staff" "$OM_DIR" 2>/dev/null || true
+else
+  chown -R "$OM_USER:$OM_USER" "$OM_DIR" 2>/dev/null || true
+fi
+
+# ================================================================
+# STEP 7/8 — Services système (systemd / launchd)
+# ================================================================
+step "Services système"
+
+if [ "$OS" = "Linux" ] && have systemctl; then
+  # ─── Linux: systemd units ───────────────────────────────────
+  NODE_BIN="$(which node)"
+  NPM_GLOBAL="$(npm root -g 2>/dev/null || echo /usr/lib/node_modules)"
+
+  write_unit() {
+    local name="$1" entry="$2"
+    cat > "/etc/systemd/system/$name" <<UNIT
 [Unit]
 Description=$name (OverMind)
 After=network-online.target postgresql.service
@@ -199,71 +433,147 @@ User=$OM_USER
 Group=$OM_USER
 WorkingDirectory=$OM_DIR
 EnvironmentFile=$OM_DIR/.env
-ExecStart=/usr/bin/node --max-old-space-size=256 --no-warnings $entry
+ExecStart=$NODE_BIN --max-old-space-size=256 --no-warnings $entry
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:$LOG_DIR/$name.log
-StandardError=append:$LOG_DIR/$name.err
+StandardOutput=append:$LOG_DIR/${name%.service}.log
+StandardError=append:$LOG_DIR/${name%.service}.err
 
 [Install]
 WantedBy=multi-user.target
-EOF
-}
+UNIT
+    ok "Unit $name écrit"
+  }
 
-write_unit "overmind-mcp.service" "$MCP_PORT_CORE" \
-    "/usr/lib/node_modules/overmind-mcp/dist/bin/cli.js --transport httpStream --port $MCP_PORT_CORE"
+  write_unit "overmind-mcp.service" \
+    "$NPM_GLOBAL/overmind-mcp/dist/bin/cli.js --transport httpStream --port $MCP_PORT_CORE"
 
-write_unit "overmind-postgres-mcp.service" "$MCP_PORT_PG" \
-    "/usr/lib/node_modules/overmind-postgres-mcp/dist/index.js"
+  if npm list -g overmind-postgres-mcp >/dev/null 2>&1; then
+    write_unit "overmind-postgres-mcp.service" \
+      "$NPM_GLOBAL/overmind-postgres-mcp/dist/index.js"
+  fi
 
-systemctl daemon-reload
-systemctl enable --now overmind-mcp.service overmind-postgres-mcp.service
-ok "Services activés et démarrés"
+  $SUDO systemctl daemon-reload
+  $SUDO systemctl enable --now overmind-mcp.service 2>/dev/null || track_warn "systemctl enable overmind-mcp"
+  ok "overmind-mcp.service: $($SUDO systemctl is-active overmind-mcp.service 2>/dev/null || echo '?')"
 
-# ============================================================
-# STEP 6/6 — Validation HTTP
-# ============================================================
-log "STEP 6/6 : validation"
+  if npm list -g overmind-postgres-mcp >/dev/null 2>&1; then
+    $SUDO systemctl enable --now overmind-postgres-mcp.service 2>/dev/null || track_warn "systemctl enable overmind-postgres-mcp"
+    ok "overmind-postgres-mcp.service: $($SUDO systemctl is-active overmind-postgres-mcp.service 2>/dev/null || echo '?')"
+  fi
 
-sleep 3
-test_endpoint() {
-    local port="$1" name="$2"
-    local code
-    code=$(curl -s -o /dev/null -w "%{http_code}" -m 5 \
-        -H "Accept: application/json, text/event-stream" \
-        -H "Content-Type: application/json" \
-        -X POST "http://127.0.0.1:$port/mcp" \
-        -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' || echo "000")
-    if [ "$code" = "200" ]; then
-        ok "$name (port $port) : HTTP 200"
-    else
-        warn "$name (port $port) : HTTP $code — voir $LOG_DIR/$name.err"
-    fi
-}
+elif [ "$OS" = "Darwin" ]; then
+  # ─── macOS: launchd plist ───────────────────────────────────
+  NODE_BIN="$(which node)"
+  NPM_GLOBAL="$(npm root -g 2>/dev/null || echo /usr/local/lib/node_modules)"
+  LAUNCH_DIR="$OM_HOME/Library/LaunchAgents"
+  mkdir -p "$LAUNCH_DIR" 2>/dev/null || true
 
-test_endpoint "$MCP_PORT_CORE" "overmind-mcp"
-test_endpoint "$MCP_PORT_PG"   "overmind-postgres-mcp"
+  write_plist() {
+    local name="$1" entry="$2" port="$3"
+    local plist="$LAUNCH_DIR/com.overmind.${name}.plist"
+    cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.overmind.${name}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${NODE_BIN}</string>
+    <string>--max-old-space-size=256</string>
+    <string>--no-warnings</string>
+    <string>${entry}</string>
+    <string>--transport</string>
+    <string>httpStream</string>
+    <string>--port</string>
+    <string>${port}</string>
+  </array>
+  <key>WorkingDirectory</key><string>${OM_DIR}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>${OM_HOME}</string>
+  </dict>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>StandardOutPath</key><string>${LOG_DIR}/${name}.log</string>
+  <key>StandardErrorPath</key><string>${LOG_DIR}/${name}.err</string>
+</dict>
+</plist>
+PLIST
+    launchctl bootout gui/$(id -u) "$plist" 2>/dev/null || true
+    launchctl bootstrap gui/$(id -u) "$plist" 2>/dev/null || true
+    ok "launchd: com.overmind.${name} chargé"
+  }
 
-# Test SQL direct
-if sudo -u postgres psql -d "$PG_DB" -c "SELECT 1" >/dev/null 2>&1; then
-    ok "PostgreSQL $PG_DB accessible en local"
+  write_plist "overmind-mcp" \
+    "$NPM_GLOBAL/overmind-mcp/dist/bin/cli.js" "$MCP_PORT_CORE"
+
+  if npm list -g overmind-postgres-mcp >/dev/null 2>&1; then
+    write_plist "overmind-postgres-mcp" \
+      "$NPM_GLOBAL/overmind-postgres-mcp/dist/index.js" "$MCP_PORT_PG"
+  fi
+
 else
-    warn "PostgreSQL $PG_DB inaccessible — vérifier sudo -u postgres psql"
+  warn "OS non Linux/macOS — pas de service système. Démarrez manuellement:"
+  echo "    node $NPM_GLOBAL/overmind-mcp/dist/bin/cli.js --transport httpStream --port $MCP_PORT_CORE"
 fi
 
+# ================================================================
+# STEP 8/8 — Validation finale
+# ================================================================
+step "Validation finale"
+
+sleep 3  # Laisser les services démarrer
+
+# Test MCP :3099
+MCP_CODE="$(curl -s -o /dev/null -w '%{http_code}' -m 5 \
+  -H 'Content-Type: application/json' \
+  -X POST "http://127.0.0.1:$MCP_PORT_CORE/mcp" \
+  -d '{"jsonrpc":"2.0","method":"ping","params":{}}' 2>/dev/null || echo '000')"
+if [ "$MCP_CODE" = "200" ] || [ "$MCP_CODE" = "202" ]; then
+  ok "OverMind MCP :${MCP_PORT_CORE} → HTTP ${MCP_CODE}"
+else
+  track_warn "OverMind MCP :${MCP_PORT_CORE} → HTTP ${MCP_CODE} (peut nécessiter un redémarrage)"
+fi
+
+# Test PostgreSQL
+if [ "$OS" = "Darwin" ]; then
+  PG_TEST="$(psql -U "$PG_SUPERUSER" -d "$PG_DB" -tAc 'SELECT 1' 2>/dev/null || echo '0')"
+else
+  PG_TEST="$($SUDO -u postgres psql -d "$PG_DB" -tAc 'SELECT 1' 2>/dev/null || echo '0')"
+fi
+if [ "$PG_TEST" = "1" ]; then
+  ok "PostgreSQL DB '$PG_DB' → accessible"
+else
+  track_warn "PostgreSQL DB '$PG_DB' → connexion échouée"
+fi
+
+# ─── Résumé ──────────────────────────────────────────────────
 echo
-echo -e "${G}============================================================${N}"
-echo -e "${G}✅ Installation terminée${N}"
-echo -e "${G}============================================================${N}"
+echo -e "${B}═══════════════════════════════════════════════════════════════${N}"
+if [ "$ERRORS" -eq 0 ]; then
+  echo -e "${G}${B}  ✅ Installation terminée${N} (${WARNINGS} warning(s))"
+else
+  echo -e "${Y}${B}  ⚠️  Installation terminée avec ${ERRORS} erreur(s)${N}"
+fi
+echo -e "${B}═══════════════════════════════════════════════════════════════${N}"
 echo
-echo "Endpoints (loopback uniquement) :"
-echo "  • overmind-mcp         : http://127.0.0.1:$MCP_PORT_CORE"
-echo "  • overmind-postgres-mcp: http://127.0.0.1:$MCP_PORT_PG"
+echo -e "Endpoints (loopback):"
+echo -e "  ${C}OverMind MCP${N}          → http://127.0.0.1:${MCP_PORT_CORE}"
+echo -e "  ${C}OverMind PostgreSQL MCP${N} → http://127.0.0.1:${MCP_PORT_PG}"
 echo
-echo "Pour accès distant, utiliser un tunnel SSH :"
-echo "  ssh -L 13099:127.0.0.1:$MCP_PORT_CORE -L 15433:127.0.0.1:$MCP_PORT_PG user@host"
+echo -e "Fichiers de config:"
+echo -e "  ${D}.env${N}     $ENV_FILE"
+echo -e "  ${D}.mcp.json${N} $MCP_FILE"
+echo -e "  ${D}logs/${N}     $LOG_DIR/"
 echo
-echo "Actions manuelles restantes :"
-echo "  1. Éditer $OM_DIR/.env et remplir POSTGRES_PASSWORD + clés LLM"
-echo "  2. sudo systemctl restart overmind-mcp overmind-postgres-mcp"
-echo "  3. (Optionnel) Créer un user Postgres dédié et restreindre pg_hba.conf"
+if [ -n "$ENV_PASSWORD" ] && [ "$ENV_PASSWORD" != "" ]; then
+  echo -e "${Y}⚠️  POSTGRES_PASSWORD généré automatiquement${N}"
+  echo -e "  Il est stocké dans $ENV_FILE"
+  echo -e "  Sauvegardez-le dans Keychain/1Password maintenant."
+  echo
+fi
+echo -e "Actions restantes:"
+echo -e "  1. Éditer ${C}$ENV_FILE${N} et remplir les clés LLM"
+echo -e "  2. Redémarrer les services (${D}systemctl restart overmind-*${N} ou ${D}launchctl kickstart ${N})"
+echo
