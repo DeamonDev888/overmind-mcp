@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.2.5] - 2026-07-04
+
+### Added
+- install-overmind-native.sh: Step 8 — CLIs runners (hermes, claude, kilo, gemini) vérif + MAJ
+- install-overmind-native.sh: Step 9 — MAJ packages npm overmind + deps
+- install-overmind-native.sh: Step 10 — Audit arborescence agents (config.yaml, SOUL.md, .env, profile.yaml, workspace.yaml, state.db, .mcp.json, skills/, memories/, auth.json stale)
+- install-overmind-native.sh: Step 11 — Validation finale étendue
+- install-overmind-native.sh: création auto dossiers manquants + nettoyage symlinks cassés
+
 ## [3.2.4] - 2026-07-04
 
 ### Changed

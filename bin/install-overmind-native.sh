@@ -10,7 +10,7 @@ set -uo pipefail   # PAS de set -e — on gère les erreurs manuellement
 
 # ─── Couleurs + helpers ──────────────────────────────────────
 R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; C='\033[0;36m'; B='\033[1m'; D='\033[2m'; N='\033[0m'
-STEPS_TOTAL=8
+STEPS_TOTAL=11
 STEP=0
 
 log()    { echo -e "${C}[$(date +%H:%M:%S)]${N} ${D}$*${N}"; }
@@ -519,7 +519,243 @@ else
 fi
 
 # ================================================================
-# STEP 8/8 — Validation finale
+# STEP 8/10 — Vérification + MAJ des CLIs runners
+# ================================================================
+step "CLIs runners (claude, kilo, hermes, gemini, etc.)"
+
+# ─── Hermes ───────────────────────────────────────────────────
+if have hermes; then
+  HERMES_VER="$(hermes version 2>/dev/null || echo '?')"
+  ok "Hermes: ${HERMES_VER}"
+  log "Vérification MAJ Hermes..."
+  hermes update 2>/dev/null && ok "Hermes mis à jour" || ok "Hermes déjà à jour"
+else
+  log "Installation Hermes..."
+  if have pip3; then
+    $SUDO pip3 install -U hermes-agent 2>/dev/null || pip3 install -U hermes-agent 2>/dev/null || track_warn "pip3 install hermes-agent"
+    ok "Hermes installé via pip3"
+  elif have pip; then
+    $SUDO pip install -U hermes-agent 2>/dev/null || pip install -U hermes-agent 2>/dev/null || track_warn "pip install hermes-agent"
+    ok "Hermes installé via pip"
+  else
+    track_warn "Hermes non installé — pip3 manquant (pip3 install hermes-agent)"
+  fi
+fi
+
+# ─── Claude CLI ───────────────────────────────────────────────
+if have claude; then
+  CLAUDE_VER="$(claude --version 2>/dev/null || echo '?')"
+  ok "Claude CLI: ${CLAUDE_VER}"
+  log "Vérification MAJ Claude..."
+  npm install -g @anthropic-ai/claude-code@latest 2>/dev/null && ok "Claude CLI mis à jour" || ok "Claude CLI déjà à jour"
+else
+  log "Claude CLI non détecté (optionnel — npm i -g @anthropic-ai/claude-code)"
+fi
+
+# ─── Kilo Code ────────────────────────────────────────────────
+if have kilo; then
+  KILO_VER="$(kilo --version 2>/dev/null || echo '?')"
+  ok "Kilo Code: ${KILO_VER}"
+else
+  log "Kilo Code non détecté (optionnel)"
+fi
+
+# ─── Gemini CLI (optionnel, pas affiché) ─────────────────────
+if have gemini; then
+  log "Gemini CLI détecté (optionnel)"
+fi
+
+# ─── Autres CLIs (optionnel, pas affiché) ────────────────────
+for cli in opencode openclaw cline qwencli; do
+  have "$cli" && log "${cli} détecté (optionnel)"
+done
+
+ok "CLIs runners vérifiés"
+
+# ================================================================
+# STEP 9/10 — MAJ overmind-mcp + dependencies npm
+# ================================================================
+step "MAJ packages npm (overmind + deps)"
+
+# Récupérer le path global npm
+NPM_GLOBAL="$(npm root -g 2>/dev/null || echo /usr/lib/node_modules)"
+NPM_BIN="$(npm bin -g 2>/dev/null || dirname "$(which npm)")"
+
+log "MAJ overmind-mcp..."
+npm install -g overmind-mcp@latest 2>/dev/null && ok "overmind-mcp mis à jour" || ok "overmind-mcp déjà à jour"
+
+log "MAJ overmind-postgres-mcp..."
+npm install -g overmind-postgres-mcp@latest 2>/dev/null && ok "overmind-postgres-mcp mis à jour" || ok "overmind-postgres-mcp déjà à jour"
+
+# Vérifier les versions installées
+OM_VER="$(npm list -g overmind-mcp --depth=0 2>/dev/null | grep 'overmind-mcp@' | awk -F@ '{print $NF}' || echo '?')"
+PGM_VER="$(npm list -g overmind-postgres-mcp --depth=0 2>/dev/null | grep 'overmind-postgres-mcp@' | awk -F@ '{print $NF}' || echo '?')"
+ok "overmind-mcp: v${OM_VER}"
+ok "overmind-postgres-mcp: v${PGM_VER}"
+
+# ================================================================
+# STEP 10/11 — Audit arborescence agents (~/.overmind/hermes/profiles/)
+# ================================================================
+step "Audit arborescence agents"
+
+PROFILES_DIR="$OM_DIR/hermes/profiles"
+
+if [ ! -d "$PROFILES_DIR" ]; then
+  warn "Dossier profiles/ absent — aucun agent configuré"
+  log "Création de la structure canonique..."
+  mkdir -p "$PROFILES_DIR" "$OM_DIR/hermes/distributions" "$OM_DIR/bridge/wrappers" 2>/dev/null || true
+  ok "Structure ~/.overmind/hermes/ créée"
+else
+  ok "Dossier profiles/ trouvé"
+fi
+
+# Lister les profils existants
+PROFILE_COUNT=0
+if [ -d "$PROFILES_DIR" ]; then
+  PROFILE_COUNT=$(find "$PROFILES_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+fi
+
+if [ "$PROFILE_COUNT" -eq 0 ]; then
+  warn "Aucun profil agent dans ~/.overmind/hermes/profiles/"
+  log "Créez un agent avec: overmind create-agent --name <name> --prompt '...' --runner hermes"
+else
+  log "Audit de $PROFILE_COUNT profil(s)..."
+  echo
+
+  # Pour chaque profil, vérifier les fichiers requis
+  for profile_path in "$PROFILES_DIR"/*/; do
+    [ -d "$profile_path" ] || continue
+    pname=$(basename "$profile_path")
+    echo -e "  ${C}▸ ${pname}${N}"
+
+    # Fichiers requis (v3.1)
+    PROFILE_OK=true
+
+    # config.yaml (OBLIGATOIRE)
+    if [ -f "${profile_path}config.yaml" ]; then
+      ok "${pname}/config.yaml"
+    else
+      fail "${pname}/config.yaml MANQUANT"
+      PROFILE_OK=false
+    fi
+
+    # SOUL.md (prompt système)
+    if [ -f "${profile_path}SOUL.md" ]; then
+      SOUL_SIZE=$(wc -c < "${profile_path}SOUL.md" 2>/dev/null | tr -d ' ')
+      if [ "$SOUL_SIZE" -lt 50 ]; then
+        track_warn "${pname}/SOUL.md trop petit (${SOUL_SIZE} bytes)"
+      else
+        ok "${pname}/SOUL.md (${SOUL_SIZE} bytes)"
+      fi
+    else
+      track_warn "${pname}/SOUL.md MANQUANT — l'agent n'a pas de prompt système"
+    fi
+
+    # .env (secrets du profil)
+    if [ -f "${profile_path}.env" ]; then
+      ok "${pname}/.env"
+    else
+      track_warn "${pname}/.env MANQUANT — clés LLM manquantes"
+    fi
+
+    # profile.yaml (kanban — OBLIGATOIRE v3.1)
+    if [ -f "${profile_path}profile.yaml" ]; then
+      ok "${pname}/profile.yaml"
+    else
+      track_warn "${pname}/profile.yaml MANQUANT — kanban router sera aveugle"
+    fi
+
+    # workspace.yaml
+    if [ -f "${profile_path}workspace.yaml" ]; then
+      ok "${pname}/workspace.yaml"
+    else
+      track_warn "${pname}/workspace.yaml MANQUANT — workspace kind inconnu"
+    fi
+
+    # state.db (sessions)
+    if [ -f "${profile_path}state.db" ]; then
+      ok "${pname}/state.db (sessions)"
+    else
+      log "${D}  ${pname}/state.db non créé (sera créé au premier run)${N}"
+    fi
+
+    # .mcp.json (MCP servers override)
+    if [ -f "${profile_path}.mcp.json" ]; then
+      ok "${pname}/.mcp.json (MCP override)"
+    else
+      log "${D}  ${pname}/.mcp.json absent (utilisera le global)${N}"
+    fi
+
+    # skills/ (optionnel)
+    if [ -d "${profile_path}skills" ]; then
+      SKILL_COUNT=$(find "${profile_path}skills" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
+      if [ "$SKILL_COUNT" -gt 0 ]; then
+        ok "${pname}/skills/ (${SKILL_COUNT} skill(s))"
+      fi
+    fi
+
+    # memories/ (optionnel)
+    if [ -f "${profile_path}memories/MEMORY.md" ]; then
+      ok "${pname}/memories/MEMORY.md"
+    fi
+
+    # auth.json (cache credentials — vérifier pas stale)
+    if [ -f "${profile_path}auth.json" ]; then
+      AUTH_AGE=$(($(date +%s) - $(stat -f %m "${profile_path}auth.json" 2>/dev/null || stat -c %Y "${profile_path}auth.json" 2>/dev/null || echo 0)))
+      if [ "$AUTH_AGE" -gt 604800 ]; then
+        track_warn "${pname}/auth.json stale (${AUTH_AGE}s — >7j). Peut causer des 401/429."
+      else
+        ok "${pname}/auth.json (récent)"
+      fi
+    fi
+
+    echo
+  done
+fi
+
+# Vérifier la structure globale ~/.overmind/
+echo -e "  ${C}Structure globale:${N}"
+for check_dir in "bridge" "logs" "hermes/profiles" "hermes/distributions"; do
+  if [ -d "$OM_DIR/$check_dir" ]; then
+    ok "~/.overmind/${check_dir}/"
+  else
+    track_warn "~/.overmind/${check_dir}/ MANQUANT"
+    mkdir -p "$OM_DIR/$check_dir" 2>/dev/null || true
+  fi
+done
+
+# Vérifier les symlinks cassés (runs/, agents/ legacy)
+for legacy_link in "hermes/runs" "hermes/agents" "hermes/sessions"; do
+  if [ -L "$OM_DIR/$legacy_link" ]; then
+    if [ ! -e "$OM_DIR/$legacy_link" ]; then
+      track_warn "Symlink cassé: ~/.overmind/${legacy_link} → suppression"
+      rm -f "$OM_DIR/$legacy_link" 2>/dev/null || true
+    else
+      ok "Symlink legacy: ~/.overmind/${legacy_link} → OK"
+    fi
+  fi
+done
+
+# Vérifier bridge/agents.json (sessions runtime)
+if [ -f "$OM_DIR/bridge/agents.json" ]; then
+  SESSION_COUNT=$(grep -c '"id"' "$OM_DIR/bridge/agents.json" 2>/dev/null || echo 0)
+  ok "bridge/agents.json (${SESSION_COUNT} session(s))"
+else
+  log "${D}bridge/agents.json absent (créé au premier run)${N}"
+fi
+
+# Vérifier .mcp.json global
+if [ -f "$OM_DIR/.mcp.json" ]; then
+  MCP_SERVERS=$(grep -c '"transport"' "$OM_DIR/.mcp.json" 2>/dev/null || echo 0)
+  ok ".mcp.json global (${MCP_SERVERS} serveur(s) MCP)"
+else
+  track_warn ".mcp.json global MANQUANT"
+fi
+
+ok "Audit arborescence terminé"
+
+# ================================================================
+# STEP 11/11 — Validation finale
 # ================================================================
 step "Validation finale"
 
