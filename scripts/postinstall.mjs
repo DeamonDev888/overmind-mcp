@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { randomBytes } from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -309,8 +310,7 @@ function createEnvConfig() {
   // Créer .env minimal si n'existe pas
   if (!existsSync(envFile)) {
     // Generate random password for security
-    const crypto = await import('crypto');
-    const randomPassword = crypto.randomBytes(18).toString('base64url');
+    const randomPassword = randomBytes(18).toString('base64url');
 
     const envContent = `# OverMind-MCP Environment Configuration (v3.1)
 # Généré automatiquement par npm install

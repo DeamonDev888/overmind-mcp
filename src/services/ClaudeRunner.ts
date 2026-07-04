@@ -498,11 +498,9 @@ export class ClaudeRunner {
           currentStderr = '';
           currentStdout = '';
 
-          const command = process.platform === 'win32' ? 'cmd.exe' : 'claude';
-          const spawnArgs =
-            process.platform === 'win32'
-              ? ['/c', 'claude', ...argsSpawn, '-p']
-              : ['claude', ...argsSpawn, '-p'];
+          // [V16-CLEAN] shell:true dans le spawn laisse Node résoudre 'claude' via le PATH
+          const command = 'claude';
+          const spawnArgs = [...argsSpawn, '-p'];
 
           if (!options.silent) {
             const tokenLabel = tokenInfo ? ` (token: ${tokenInfo.tokenEnvKey})` : '';
@@ -515,7 +513,7 @@ export class ClaudeRunner {
             cwd: options.cwd || process.cwd(),
             windowsHide: true,
             env: spawnEnv,
-            shell: false,
+            shell: true, // [V16-CLEAN] Résout claude via PATH
             signal: options.signal,
           });
 

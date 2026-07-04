@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.2.1] - 2026-07-02
+
+### Fixed
+- postinstall.mjs: await import('crypto') dans fonction sync → import statique (P0)
+- ClaudeRunner: shell:true pour résolution 'claude' via PATH
+- README: cleanup section migration v3.1
+
 ## [3.2.0] - 2026-07-02
 
 ### Breaking
