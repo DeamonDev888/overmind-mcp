@@ -589,6 +589,17 @@ async function main() {
 
   // Show final summary
   showSummary();
+
+  // Auto-verify to show user what's ready/missing
+  logSection('🔍 VÉRIFICATION POST-INSTALL');
+  try {
+    const verifyScript = join(__dirname, 'verify-install.mjs');
+    if (existsSync(verifyScript)) {
+      await runCommandAsync(`node "${verifyScript}"`, 'Smoke test');
+    }
+  } catch {
+    // Non-blocking
+  }
 }
 
 // Run main

@@ -48,29 +48,71 @@ NODE_MAJ=$(node -p "process.versions.node.split('.')[0]")
 ok "Node $(node -v) / npm $(npm -v)"
 
 # ============================================================
-# STEP 2/6 — PostgreSQL 18 + pgvector
+# STEP 2/6 — PostgreSQL + pgvector (multi-OS)
 # ============================================================
 log "STEP 2/6 : PostgreSQL + pgvector"
-if ! dpkg -l postgresql-18-pgvector 2>/dev/null | grep -q '^ii'; then
-    log "Installation postgresql-18-pgvector..."
-    apt update -qq
-    DEBIAN_FRONTEND=noninteractive apt install -y postgresql-18-pgvector postgresql-client-18
-fi
-ok "postgresql-18-pgvector $(dpkg -s postgresql-18-pgvector | awk '/Version:/ {print $2}')"
 
-# Service postgresql actif
-if ! systemctl is-active --quiet postgresql; then
-    systemctl enable --now postgresql
-fi
-ok "postgresql.service: $(systemctl is-active postgresql)"
+OS_TYPE="$(uname -s)"
 
-# DB + extension vector
-if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$PG_DB'" | grep -q 1; then
+if [ "$OS_TYPE" = "Darwin" ]; then
+    # ─── macOS (Homebrew) ───────────────────────────────────────────────
+    if ! command -v brew >/dev/null 2>&1; then
+        die "Homebrew non trouvé. Installez-le: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+    fi
+    if ! brew list postgresql@18 >/dev/null 2>&1; then
+        log "Installation postgresql@18 via brew..."
+        brew install postgresql@18
+    fi
+    if ! brew list pgvector >/dev/null 2>&1; then
+        log "Installation pgvector via brew..."
+        brew install pgvector
+    fi
+    # Démarrer le service
+    brew services start postgresql@18 2>/dev/null || true
+    sleep 3
+    ok "postgresql@18 + pgvector installés via brew"
+
+elif [ "$OS_TYPE" = "Linux" ]; then
+    # ─── Linux (apt / yum / pacman) ────────────────────────────────────
+    if command -v apt >/dev/null 2>&1; then
+        if ! dpkg -l postgresql-18-pgvector 2>/dev/null | grep -q '^ii'; then
+            log "Installation postgresql-18-pgvector via apt..."
+            apt update -qq
+            DEBIAN_FRONTEND=noninteractive apt install -y postgresql-18-pgvector postgresql-client-18
+        fi
+    elif command -v yum >/dev/null 2>&1; then
+        log "Installation postgresql + pgvector via yum..."
+        yum install -y postgresql-server postgresql-contrib pgvector
+        postgresql-setup --initdb 2>/dev/null || true
+    elif command -v pacman >/dev/null 2>&1; then
+        log "Installation postgresql + pgvector via pacman..."
+        pacman -S --noconfirm postgresql pgvector
+        su - postgres -c "initdb -D /var/lib/postgres/data" 2>/dev/null || true
+    else
+        die "Gestionnaire de paquets non supporté. Installez PostgreSQL + pgvector manuellement."
+    fi
+
+    # Service systemd
+    if command -v systemctl >/dev/null 2>&1; then
+        if ! systemctl is-active --quiet postgresql; then
+            systemctl enable --now postgresql
+        fi
+        ok "postgresql.service: $(systemctl is-active postgresql)"
+    fi
+fi
+
+# DB + extension vector (multi-OS)
+PG_SUPERUSER="postgres"
+if [ "$OS_TYPE" = "Darwin" ]; then
+    PG_SUPERUSER="$(whoami)"
+fi
+
+if ! psql -U "$PG_SUPERUSER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$PG_DB'" 2>/dev/null | grep -q 1; then
     log "Création DB $PG_DB..."
-    sudo -u postgres createdb "$PG_DB"
+    createdb -U "$PG_SUPERUSER" "$PG_DB" 2>/dev/null || sudo -u postgres createdb "$PG_DB"
 fi
-sudo -u postgres psql -d "$PG_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;" >/dev/null
-PGV=$(sudo -u postgres psql -d "$PG_DB" -tAc "SELECT extversion FROM pg_extension WHERE extname='vector'")
+psql -U "$PG_SUPERUSER" -d "$PG_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;" >/dev/null 2>&1 || sudo -u postgres psql -d "$PG_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;" >/dev/null
+PGV=$(psql -U "$PG_SUPERUSER" -d "$PG_DB" -tAc "SELECT extversion FROM pg_extension WHERE extname='vector'" 2>/dev/null || echo "?")
 ok "DB $PG_DB prête, pgvector v$PGV"
 
 # ============================================================

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.2.3] - 2026-07-04
+
+### Fixed
+- install-overmind-native.sh: multi-OS (Homebrew/apt/yum/pacman) + superuser auto (P0)
+- postgres-manager.mjs: docker run direct au lieu de docker-compose (P0)
+- postgres-manager.mjs: lecture password depuis ~/.overmind/.env + fallback POSTGRES_DATABASE
+- postinstall.mjs: require('minimist') ESM → process.argv.includes
+
 ## [3.2.2] - 2026-07-04
 
 ### Fixed
