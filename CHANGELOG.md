@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.2.2] - 2026-07-04
+
+### Fixed
+- postinstall.mjs: single source of truth pour PG_PASSWORD (randomBytes 1x au boot)
+- Docker setupPostgreSQL/startPostgreSQL utilisent le même password que .env
+- Ordre: createEnvConfig() avant setupPostgreSQL()
+- Summary: password masqué (substring 8 chars)
+
 ## [3.2.1] - 2026-07-02
 
 ### Fixed

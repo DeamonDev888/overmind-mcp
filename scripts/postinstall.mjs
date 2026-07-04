@@ -28,6 +28,12 @@ const INSTALL_DIR = join(
 );
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// GLOBAL PASSWORD — One single source of truth
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const PG_PASSWORD = randomBytes(18).toString('base64url');
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // COLORS
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -198,7 +204,7 @@ async function setupPostgreSQL() {
       'docker', 'run', '-d',
       '--name', 'overmind-postgres-pgvector',
       '-p', '5432:5432',
-      '-e', 'POSTGRES_PASSWORD=overmind_temp_password_change_me',
+      '-e', `POSTGRES_PASSWORD=${PG_PASSWORD}`,
       '-e', 'POSTGRES_DB=overmind_memory',
       '-e', 'POSTGRES_USER=postgres',
       '-v', 'overmind_postgres_data:/var/lib/postgresql/data',
@@ -309,8 +315,8 @@ function createEnvConfig() {
 
   // Créer .env minimal si n'existe pas
   if (!existsSync(envFile)) {
-    // Generate random password for security
-    const randomPassword = randomBytes(18).toString('base64url');
+    // Use global password (shared with Docker)
+    const randomPassword = PG_PASSWORD;
 
     const envContent = `# OverMind-MCP Environment Configuration (v3.1)
 # Généré automatiquement par npm install
@@ -355,7 +361,7 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DATABASE=overmind_memory
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=overmind_temp_password_change_me
+POSTGRES_PASSWORD=${PG_PASSWORD}
 
 # Additional PostgreSQL Settings
 POSTGRES_SSL=false
@@ -423,7 +429,7 @@ async function startPostgreSQL() {
     log(COLORS.yellow, '🚀 Création et démarrage PostgreSQL + pgvector...');
 
     await runCommandAsync(
-      'docker run -d --name overmind-postgres-pgvector -p 5432:5432 -e POSTGRES_PASSWORD=overmind_temp_password_change_me -e POSTGRES_USER=postgres -v overmind_postgres_data:/var/lib/postgresql/data --restart unless-stopped pgvector/pgvector:pg16',
+      `docker run -d --name overmind-postgres-pgvector -p 5432:5432 -e POSTGRES_PASSWORD=${PG_PASSWORD} -e POSTGRES_DB=overmind_memory -e POSTGRES_USER=postgres -v overmind_postgres_data:/var/lib/postgresql/data --restart unless-stopped pgvector/pgvector:pg16`,
       'Création PostgreSQL OverMind'
     );
 
@@ -475,7 +481,7 @@ function showSummary() {
   console.log('│ ' + COLORS.yellow + 'Détails de connexion:' + COLORS.reset + '                                            │');
   console.log('│   • Host: localhost:5432' + '                                          │');
   console.log('│   • User: postgres' + '                                                │');
-  console.log('│   • Password: overmind_temp_password_change_me (À CHANGER !)' + '    │');
+  console.log('│   • Password: ' + PG_PASSWORD.substring(0, 8) + '... (stocké dans ~/.overmind/.env)');
   console.log('│   • Extension: vector (pgvector)' + '                                    │');
   console.log('│   • Database: overmind_memory' + '                                         │');
   console.log('└─────────────────────────────────────────────────────────────────┘');
@@ -548,11 +554,11 @@ async function main() {
     return;
   }
 
-  // Step 2: Setup PostgreSQL
-  await setupPostgreSQL();
-
-  // Step 3: Setup .env et .mcp.json
+  // Step 2: Setup .env and .mcp.json (BEFORE Docker so password is shared)
   createEnvConfig();
+
+  // Step 3: Setup PostgreSQL (uses PG_PASSWORD)
+  await setupPostgreSQL();
 
   // Step 4: Download config files
   const downloaded = await setupConfigFiles();
