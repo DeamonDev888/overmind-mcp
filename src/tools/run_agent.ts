@@ -184,7 +184,8 @@ function validateMode(runner: string, mode?: string): void {
 }
 
 export async function runAgent(args: RunAgentInternalArgs) {
-  const { runner, mode, ...params } = args;
+  const { runner, ...params } = args;
+  const mode = params.mode;
 
   // Validation des modes
   validateMode(runner, mode);

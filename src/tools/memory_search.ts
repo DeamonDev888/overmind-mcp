@@ -16,39 +16,51 @@ export const memorySearchSchema = z.object({
 });
 
 export async function memorySearchTool(args: z.infer<typeof memorySearchSchema>) {
-  const provider = getMemoryProvider();
-  // Priorité à l'agent détecté (Privacy)
-  const effectiveAgentName = process.env.OVERMIND_AGENT_NAME || args.agent_name;
+  try {
+    const provider = getMemoryProvider();
+    // Priorité à l'agent détecté (Privacy)
+    const effectiveAgentName = process.env.OVERMIND_AGENT_NAME || args.agent_name;
 
-  const results = await provider.searchMemory({
-    query: args.query,
-    limit: args.limit,
-    includeRuns: args.include_runs,
-    agentName: effectiveAgentName,
-  });
+    const results = await provider.searchMemory({
+      query: args.query,
+      limit: args.limit,
+      includeRuns: args.include_runs,
+      agentName: effectiveAgentName,
+    });
 
-  if (results.length === 0) {
+    if (results.length === 0) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `🔍 Aucun souvenir trouvé pour : _"${args.query}"_\n\nUtilisez \`memory_store\` pour ajouter des connaissances.`,
+          },
+        ],
+      };
+    }
+
+    const lines = results.map(
+      (r, i) =>
+        `**${i + 1}.** [${r.source}] (score: ${r.score.toFixed(3)}) — ${new Date(r.created_at).toISOString().slice(0, 10)}\n${r.text.slice(0, 500)}`,
+    );
+
     return {
       content: [
         {
           type: 'text' as const,
-          text: `🔍 Aucun souvenir trouvé pour : _"${args.query}"_\n\nUtilisez \`memory_store\` pour ajouter des connaissances.`,
+          text: `🧠 **${results.length} résultat(s) trouvé(s) pour "${args.query}"**\n\n${lines.join('\n\n---\n\n')}`,
         },
       ],
     };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `❌ Erreur memory_search: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+      isError: true,
+    };
   }
-
-  const lines = results.map(
-    (r, i) =>
-      `**${i + 1}.** [${r.source}] (score: ${r.score.toFixed(3)}) — ${new Date(r.created_at).toISOString().slice(0, 10)}\n${r.text.slice(0, 500)}`,
-  );
-
-  return {
-    content: [
-      {
-        type: 'text' as const,
-        text: `🧠 **${results.length} résultat(s) trouvé(s) pour "${args.query}"**\n\n${lines.join('\n\n---\n\n')}`,
-      },
-    ],
-  };
 }

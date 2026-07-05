@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.3.1] - 2026-07-05
+
+### Fixed
+- config_example.ts: refonte complète v3.3 (profiles/, MCP 'overmind', config.yaml, enum nettoyé)
+- run_agent.ts: mode extrait avant spread → kilo/cline reçoivent le mode correctement
+- memory_search.ts: try/catch sur provider.searchMemory() — DB down retourne erreur MCP au lieu de crash
+- manage_agents.ts: update_agent_config exemple mcpServers ['postgresql','news'] → ['overmind']
+
 ## [3.3.0] - 2026-07-05
 
 ### Added

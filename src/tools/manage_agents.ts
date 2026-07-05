@@ -40,7 +40,7 @@ export const updateAgentConfigSchema = z.object({
     .array(z.string())
     .optional()
     .describe(
-      "Liste complète des serveurs MCP à activer (remplace la liste existante). Ex: ['postgresql', 'news']",
+      "Liste complète des serveurs MCP à activer (remplace la liste existante). Ex: ['overmind']",
     ),
   env: z
     .record(z.string(), z.string())
