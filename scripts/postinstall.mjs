@@ -494,16 +494,9 @@ function showSummary() {
   console.log("   • ~/.overmind/.env.postgres (Configuration PostgreSQL MCP)");
   console.log("   • ~/.overmind/.mcp.json (Configuration serveurs MCP)");
   console.log('');
-  log(COLORS.yellow, "🗂️  HERMES_HOME par agent (NOUVEAU en 2.8.27):");
-  console.log("   • Linux/Mac:  ~/.overmind/hermes/agent_<name>/.hermes");
-  console.log("   • Windows:    %LOCALAPPDATA%\\overmind\\hermes\\agent_<name>\\.hermes");
-  console.log("   • Override:   export OVERMIND_AGENT_HOME=/path/to/agent/home");
-  console.log("   • Migration:  node scripts/migrate-hermes-home.mjs");
-  console.log('');
   log(COLORS.yellow, "🔧 SERVEURS MCP ACTIFS:");
-  console.log("   • overmind (Orchestration d'agents)");
-  console.log("   • memory (Gestion mémoire vectorielle)");
-  console.log("   • overmind-postgres (PostgreSQL vectoriel)");
+  console.log("   • memory (Orchestration + mémoire vectorielle — :3099)");
+  console.log("   • postgres (PostgreSQL vectoriel — :5433)");
   console.log('');
   log(COLORS.yellow, "📚 DOCUMENTATION:");
   console.log("   • https://github.com/DeamonDev888/overmind-mcp");
@@ -513,7 +506,7 @@ function showSummary() {
   log(COLORS.yellow, "🎉 PROCHAINE ÉTAPE:");
   console.log("   • Créez votre premier agent: overmind create-agent");
   console.log("   • Ou listez les agents: overmind list-agents");
-  console.log("   • Gestion PostgreSQL: overmind-postgres up/status/down");
+  console.log("   • Gestion PostgreSQL: overmind-postgres-mcp up/status/down");
   console.log('');
 }
 

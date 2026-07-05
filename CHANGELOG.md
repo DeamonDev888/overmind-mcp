@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.2.8] - 2026-07-04
+
+### Fixed
+- config.ts: getWorkspaceDir() expand ~/ et ~ avec os.homedir() — Node produisait <cwd>/~/.overmind
+- config.ts: loadEnvQuietly(~/.overmind/.env) appelé AVANT la lecture de OVERMIND_WORKSPACE
+- .env.example: POSTGRES_PASSWORD devinable → CHANGEME_USE_OVERMIND_SETUP_TO_GENERATE
+- .env.example: OVERMIND_WORKSPACE tilde → chemin absolu + commentaire d'avertissement
+- postinstall.mjs: summary obsolète nettoyé (memory :3099, postgres :5433)
+
 ## [3.2.7] - 2026-07-04
 
 ### Fixed

@@ -499,9 +499,11 @@ export class ClaudeRunner {
           currentStdout = '';
 
           // [V16-NOPOPUP] Spawn claude.exe directly — no cmd.exe, no popup
-          const claudeExe = process.platform === 'win32'
-            ? (process.env.CLAUDE_BIN || 'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe')
-            : 'claude';
+          const claudeExe =
+            process.platform === 'win32'
+              ? process.env.CLAUDE_BIN ||
+                'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe'
+              : 'claude';
           const command = claudeExe;
           const spawnArgs = [...argsSpawn, '-p'];
 

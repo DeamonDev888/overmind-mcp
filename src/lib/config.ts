@@ -94,9 +94,28 @@ export function getWorkspaceDir(): string {
   if (cachedWorkspaceDir && process.env.NODE_ENV !== 'test') return cachedWorkspaceDir;
 
   let workspaceDir = '';
+
+  // 1. Explicit env var (systemd, shell, or already loaded)
   if (process.env.OVERMIND_WORKSPACE) {
     workspaceDir = path.resolve(process.env.OVERMIND_WORKSPACE);
   } else {
+    // 2. Try loading ~/.overmind/.env to find OVERMIND_WORKSPACE
+    const homeDir = os.homedir();
+    const overmindEnvPath = path.join(homeDir, '.overmind', '.env');
+    loadEnvQuietly(overmindEnvPath);
+    // Expand tilde if present (Node.js does NOT auto-expand ~)
+    const rawWs = process.env.OVERMIND_WORKSPACE;
+    if (rawWs) {
+      workspaceDir = rawWs.startsWith('~/')
+        ? path.join(homeDir, rawWs.slice(2))
+        : rawWs.startsWith('~')
+          ? path.join(homeDir, rawWs.slice(1))
+          : path.resolve(rawWs);
+    }
+  }
+
+  // 3. Still not found — search CWD and parents for .mcp.json
+  if (!workspaceDir) {
     const cwd = process.cwd();
     if (
       fs.existsSync(path.join(cwd, '.mcp.json')) ||
