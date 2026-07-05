@@ -498,8 +498,11 @@ export class ClaudeRunner {
           currentStderr = '';
           currentStdout = '';
 
-          // [V16-CLEAN] shell:true dans le spawn laisse Node résoudre 'claude' via le PATH
-          const command = 'claude';
+          // [V16-NOPOPUP] Spawn claude.exe directly — no cmd.exe, no popup
+          const claudeExe = process.platform === 'win32'
+            ? (process.env.CLAUDE_BIN || 'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe')
+            : 'claude';
+          const command = claudeExe;
           const spawnArgs = [...argsSpawn, '-p'];
 
           if (!options.silent) {

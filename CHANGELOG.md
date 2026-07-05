@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.2.7] - 2026-07-04
+
+### Fixed
+- ClaudeRunner.ts: spawn claude.exe directement (win32) sans shell:true ni cmd.exe — fini les popups Windows
+
 ## [3.2.6] - 2026-07-04
 
 ### Fixed
