@@ -425,7 +425,7 @@ if [ ! -f "$MCP_FILE" ]; then
   cat > "$MCP_FILE" <<MCPEOF
 {
   "mcpServers": {
-    "memory": {
+    "overmind": {
       "transport": "httpStream",
       "url": "http://localhost:${MCP_PORT_CORE}/mcp"
     },

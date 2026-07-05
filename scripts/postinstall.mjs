@@ -495,7 +495,7 @@ function showSummary() {
   console.log("   • ~/.overmind/.mcp.json (Configuration serveurs MCP)");
   console.log('');
   log(COLORS.yellow, "🔧 SERVEURS MCP ACTIFS:");
-  console.log("   • memory (Orchestration + mémoire vectorielle — :3099)");
+  console.log("   • overmind (Orchestration + mémoire vectorielle — :3099)");
   console.log("   • postgres (PostgreSQL vectoriel — :5433)");
   console.log('');
   log(COLORS.yellow, "📚 DOCUMENTATION:");

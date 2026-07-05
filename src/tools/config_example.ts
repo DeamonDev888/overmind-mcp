@@ -168,8 +168,8 @@ ${interpolationNotice}`;
 \`\`\`
 
 ### Ce que le runner fait au spawn (auto-détection token)
-- Token Z.AI = 32hex (\`c78a134949fc4c369911c24e9fa4b84c.OZhHX5Obs6qF1ISt\`) ou
-  32hex simple (\`5f650035e5a845549e4765184d8179b1\`)
+- Token Z.AI = 32hex (\`xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.yyyyyyyyyyyyyyyy\`) ou
+  32hex simple (\`xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\`)
 - Runner seed automatiquement :
   - \`ZAI_ANTHROPIC_FALLBACK_KEY\` (= valeur du token)
   - \`GLM_API_KEY\` (= valeur du token)

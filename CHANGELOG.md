@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.2.9] - 2026-07-05
+
+### Security
+- config_example.ts: 2 vrais tokens Z.AI remplacés par placeholders xxx (fuite historique)
+
+### Changed
+- MCP server par défaut renommé 'memory' → 'overmind' (:3099, 14 tools complets)
+- Nouveau serveur 'memory' restreint (:3098, --memory-only, 3 tools)
+- .mcp.json.example: version 3.1.0 → 3.3.0
+- DEFAULT_MCP_SERVERS: 'memory' → 'overmind'
+- install-overmind-native.sh: génère 'overmind' au lieu de 'memory' dans .mcp.json
+
 ## [3.2.8] - 2026-07-04
 
 ### Fixed
