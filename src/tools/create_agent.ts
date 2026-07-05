@@ -86,12 +86,45 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>) {
   );
 
   // Pour les agents Hermes, s'assurer que le MCP memory est configuré
+  // et injecter les instructions memory dans SOUL.md
   if (runner === 'hermes') {
     try {
       const { HermesProfileManager } = await import('../services/HermesProfileManager.js');
       const profilePath = await HermesProfileManager.getProfilePath(name);
       if (profilePath) {
+        // 1. Configurer les MCP servers (overmind :3099)
         await HermesProfileManager.setMcpServers(name, DEFAULT_MCP_SERVERS, profilePath);
+
+        // 2. Injecter le bloc instructions memory dans SOUL.md
+        const fs = await import('fs');
+        const soulPath = `${profilePath}/SOUL.md`;
+        const existingSoul = fs.readFileSync(soulPath, 'utf-8');
+
+        // Ne pas dupliquer si déjà présent
+        if (!existingSoul.includes('## Mémoire Overmind')) {
+          const memoryBlock = [
+            '',
+            '---',
+            '',
+            '## Mémoire Overmind',
+            '',
+            `Tu es l'agent **${name}**. Ta mémoire est isolée dans une DB dédiée.`,
+            '',
+            '### Outils mémoire disponibles (via MCP overmind :3099):',
+            '- **memory_search**: Recherche sémantique dans ta mémoire',
+            '- **memory_store**: Mémorise une connaissance/décision',
+            "- **memory_runs**: Consulte l'historique de tes runs",
+            '',
+            '### Utilisation:',
+            "Quand tu apprends quelque chose d'important, utilise memory_store.",
+            'Quand tu as besoin de contexte passé, utilise memory_search.',
+            '',
+            'Ton agent_name est automatiquement détecté (OVERMIND_AGENT_NAME).',
+            "Tu n'as pas besoin de le préciser dans les appels.",
+            '',
+          ].join('\n');
+          fs.writeFileSync(soulPath, existingSoul.trimEnd() + '\n' + memoryBlock, 'utf-8');
+        }
       }
     } catch {
       // silent fail — l'agent est créé, les MCP servers sont optionnels

@@ -249,6 +249,8 @@ export class HermesRunner {
         windowsHide: true,
         env: {
           ...process.env,
+          // Tell the child which agent it is — used by memory_search/store for DB isolation
+          OVERMIND_AGENT_NAME: agentName || process.env.OVERMIND_AGENT_NAME || '',
           // Ensure Python uses UTF-8 (avoids Windows encoding crashes)
           PYTHONIOENCODING: 'utf-8',
           PYTHONUNBUFFERED: '1',

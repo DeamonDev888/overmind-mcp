@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.3.0] - 2026-07-05
+
+### Added
+- HermesRunner.ts: OVERMIND_AGENT_NAME injecté dans l'env du child process — l'agent sait QUI il est automatiquement
+- create_agent.ts: bloc "## Mémoire Overmind" injecté dans SOUL.md (memory_search/store/runs + agent_name auto-détecté)
+
+### Changed
+- Isolation DB automatique: memory_search.ts lit process.env.OVERMIND_AGENT_NAME → PostgresMemoryProvider.getDbName() → DB isolée par agent sans paramètre manuel
+
 ## [3.2.9] - 2026-07-05
 
 ### Security
