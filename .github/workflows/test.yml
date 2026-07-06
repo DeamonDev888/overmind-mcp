@@ -1,13 +1,14 @@
-name: Unit Tests
+name: CI
 
 on:
   push:
-    branches: ['main', 'master']
+    branches: ['main']
   pull_request:
-    branches: ['main', 'master']
+    branches: ['main']
 
 jobs:
   test:
+    name: Build & Tests
     runs-on: ubuntu-latest
 
     services:
@@ -27,15 +28,28 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Use Node.js
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.0
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+          node-version: '24'
+          cache: 'pnpm'
+
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
-      - name: Run unit tests
+
+      - name: Build (tsc)
+        run: pnpm run rebuild
+
+      - name: Lint (eslint)
+        run: pnpm run lint
+
+      - name: Unit tests (vitest)
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
