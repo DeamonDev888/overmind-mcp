@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.3.2] - 2026-07-05
+
+### Added
+- Test unitaire `secret_guard.test.ts`: scan anti-secret (12 patterns: OpenRouter, Anthropic, OpenAI, GitHub, MiniMax, xAI, AWS, Z.AI, PEM, Discord, Telegram, Bearer) + scan chemins privés (Windows/Unix/MSYS)
+- Le test bloque le build si un vrai token fuite ou si un chemin absolu privé est codé en dur
+
+### Fixed
+- ClaudeRunner.ts: chemin `C:\Users\Deamon\...` codé en dur → `path.join(os.homedir(), ...)` dynamique
+- create_agent.ts: chemin `/home/demon/` codé en dur → `/home/<user>/` placeholder
+
 ## [3.3.1] - 2026-07-05
 
 ### Fixed

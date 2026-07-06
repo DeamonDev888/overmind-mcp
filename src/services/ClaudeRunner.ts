@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import { spawn, ChildProcess, exec } from 'child_process';
 import { CONFIG, resolveConfigPath, getWorkspaceDir } from '../lib/config.js';
@@ -502,7 +503,15 @@ export class ClaudeRunner {
           const claudeExe =
             process.platform === 'win32'
               ? process.env.CLAUDE_BIN ||
-                'C:\\Users\\Deamon\\AppData\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe'
+                path.join(
+                  process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
+                  'npm',
+                  'node_modules',
+                  '@anthropic-ai',
+                  'claude-code',
+                  'bin',
+                  'claude.exe',
+                )
               : 'claude';
           const command = claudeExe;
           const spawnArgs = [...argsSpawn, '-p'];

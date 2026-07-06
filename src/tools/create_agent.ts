@@ -148,7 +148,7 @@ export async function createAgent(args: z.infer<typeof createAgentSchema>) {
       content: [
         {
           type: 'text' as const,
-          text: `❌ **Authentification impossible**\n\n${result.error}\n\n**Fix :** ajoutez dans le .env du service OverMind (ex. \`/home/demon/.overmind/.env\`) :\n\n\`\`\`\nANTHROPIC_AUTH_TOKEN=sk-...\n\`\`\`\n\nPuis \`sudo systemctl restart overmind-mcp.service\`.`,
+          text: `❌ **Authentification impossible**\n\n${result.error}\n\n**Fix :** ajoutez dans le .env du service OverMind (ex. \`/home/<user>/.overmind/.env\`) :\n\n\`\`\`\nANTHROPIC_AUTH_TOKEN=sk-...\n\`\`\`\n\nPuis \`sudo systemctl restart overmind-mcp.service\`.`,
         },
       ],
       isError: true,

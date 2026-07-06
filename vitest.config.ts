@@ -20,14 +20,10 @@ export default defineConfig({
       'plans/**',
       'scratch/**',
     ],
-    // CI fix (2026-06-29): use forks, NOT threads. Test agentHermesHome.test.ts
-    // calls process.chdir() (line 165) which throws "not supported in workers"
-    // under vitest v4 threads pool. Local dev was masking it because vitest
-    // auto-selected forks when no config was present.
+    // CI fix: use forks, NOT threads. Test agentHermesHome.test.ts
+    // calls process.chdir() which throws under vitest v4 threads pool.
     pool: 'forks',
-    poolOptions: {
-      forks: { singleFork: false },
-    },
+    singleFork: false,
     testTimeout: 30_000,
     hookTimeout: 30_000,
   },
