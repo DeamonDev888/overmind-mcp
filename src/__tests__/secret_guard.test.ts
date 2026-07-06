@@ -294,6 +294,101 @@ const SECRET_PATTERNS: SecretPattern[] = [
       return results;
     },
   },
+  {
+    name: 'NVIDIA NIM API Key',
+    check: (content) => {
+      const results: { line: number; snippet: string }[] = [];
+      const re = /nvapi-([a-zA-Z0-9_-]{40,})/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(content)) !== null) {
+        if (!isPlaceholder(m[0])) {
+          const lineNum = content.substring(0, m.index).split('\n').length;
+          results.push({ line: lineNum, snippet: 'nvapi-' + m[1].substring(0, 12) + '...' });
+        }
+      }
+      return results;
+    },
+  },
+  {
+    name: 'ElevenLabs API Key (sk_)',
+    check: (content) => {
+      const results: { line: number; snippet: string }[] = [];
+      // sk_ with underscore (not sk- with dash), followed by 20+ chars
+      const re = /sk_([a-zA-Z0-9]{20,})/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(content)) !== null) {
+        if (!isPlaceholder(m[0])) {
+          const lineNum = content.substring(0, m.index).split('\n').length;
+          results.push({ line: lineNum, snippet: 'sk_' + m[1].substring(0, 12) + '...' });
+        }
+      }
+      return results;
+    },
+  },
+  {
+    name: 'DeepSeek API Key',
+    check: (content) => {
+      const results: { line: number; snippet: string }[] = [];
+      // sk- followed by 32+ hex chars (NOT sk-or, sk-ant, sk-cp, sk-mm, sk-proj)
+      const re = /sk-(?!or|ant|cp|mm|proj)([a-f0-9]{20,})/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(content)) !== null) {
+        if (!isPlaceholder(m[0])) {
+          const lineNum = content.substring(0, m.index).split('\n').length;
+          results.push({ line: lineNum, snippet: 'sk-' + m[1].substring(0, 8) + '...' });
+        }
+      }
+      return results;
+    },
+  },
+  {
+    name: 'MiniMax JWT Token',
+    check: (content) => {
+      const results: { line: number; snippet: string }[] = [];
+      // JWT tokens start with eyJ (base64-encoded {"alg...)
+      const re = /eyJ([a-zA-Z0-9_-]{10,})\.([a-zA-Z0-9_-]{10,})/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(content)) !== null) {
+        if (!isPlaceholder(m[0])) {
+          const lineNum = content.substring(0, m.index).split('\n').length;
+          results.push({ line: lineNum, snippet: 'eyJ' + m[1].substring(0, 8) + '...' });
+        }
+      }
+      return results;
+    },
+  },
+  {
+    name: 'Generic ENV assignment with real secret value',
+    check: (content) => {
+      const results: { line: number; snippet: string }[] = [];
+      const lines = content.split('\n');
+      // Match VARNAME=VALUE where VARNAME suggests a secret
+      // Catches: *_API_KEY, *_TOKEN, *_SECRET, *_PASSWORD, *_AUTH, *_KEY
+      const re = /^([A-Z][A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|AUTH_TOKEN|_KEY|_PASS))\s*=\s*(\S+)/gm;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(content)) !== null) {
+        const varName = m[1];
+        const value = m[2].replace(/^["']|["']$/g, '').replace(/`/g, '');
+        // Skip if it's a process.env reference
+        if (value.startsWith('process.env')) continue;
+        // Skip placeholders
+        if (isPlaceholder(value)) continue;
+        // Skip if value is too short
+        if (value.length < 12) continue;
+        // Skip if it's a variable reference (${VAR}, $VAR)
+        if (/^\$/.test(value)) continue;
+        const lineNum = content.substring(0, m.index).split('\n').length;
+        const lineIdx = lineNum - 1;
+        const line = lines[lineIdx] || '';
+        // Skip comments
+        if (line.trim().startsWith('//') || line.trim().startsWith('*') || line.trim().startsWith('#')) continue;
+        // Skip if the line contains process.env (it's code reading the var, not hardcoding)
+        if (line.includes('process.env')) continue;
+        results.push({ line: lineNum, snippet: `${varName}=${value.substring(0, 15)}...` });
+      }
+      return results;
+    },
+  },
 ];
 
 // ─── Private path detection ────────────────────────────────────────────────
@@ -449,6 +544,11 @@ describe('🔒 Secret Guard — Anti-Secret Protection', () => {
         { value: 'sk-or-v1-abcdef1234567890abcdef1234567890abcdef12', patternName: 'OpenRouter API Key' },
         { value: 'sk-ant-api03-abcdef1234567890abcdef1234567890abcdef123456', patternName: 'Anthropic API Key' },
         { value: 'ghp_1234567890abcdefghijklmnopqrstuvwxyz1234', patternName: 'GitHub Token (ghp_)' },
+        { value: 'nvapi-GE_uEb0rx-MPAtSedgcqPybOIdWCa2tgs7smHrvImZ8YPyX2EqbPysSy', patternName: 'NVIDIA NIM API Key' },
+        { value: 'sk_083abcdef1234567890ABCDEF6ee1', patternName: 'ElevenLabs API Key (sk_)' },
+        { value: 'sk-e8eabcdef1234567890abcdefb2f0', patternName: 'DeepSeek API Key' },
+        { value: 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkw', patternName: 'MiniMax JWT Token' },
+        { value: 'MY_API_KEY=4jW2wIOToye2GUqfDjbpwinvYWe9r48a', patternName: 'Generic ENV assignment with real secret value' },
       ];
       for (const tc of testCases) {
         const pattern = SECRET_PATTERNS.find((p) => p.name === tc.patternName)!;

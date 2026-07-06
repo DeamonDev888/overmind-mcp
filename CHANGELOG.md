@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.3.3] - 2026-07-05
+
+### Changed
+- secret_guard.test.ts: 6 nouveaux patterns ajoutés pour matcher les vrais formats du .env
+  - NVIDIA NIM (`nvapi-`), ElevenLabs (`sk_` underscore), DeepSeek (`sk-` hex)
+  - MiniMax JWT (`eyJ...`), Mistral (via détection générique ENV)
+  - Détecteur générique: toute variable `*_API_KEY=*** `*_TOKEN=*** `*_SECRET=*** `*_PASSWORD=*** avec valeur réelle
+- 18 patterns total au lieu de 12
+
 ## [3.3.2] - 2026-07-05
 
 ### Added
