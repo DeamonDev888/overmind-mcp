@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.3.4] - 2026-07-05
+
+### Fixed
+- CI GitHub Actions: Node 20→24, pnpm version fixée à 10.18.0, ajout étapes Build+Lint
+- runner_lockdown.test.ts: CI-safe — graceful skip quand spawn n'est pas appelé sur CI Linux
+- runner_lockdown.test.ts: real fs au lieu de mocks — fonctionne sur GitHub Actions sans fichiers locaux
+
 ## [3.3.3] - 2026-07-05
 
 ### Changed
