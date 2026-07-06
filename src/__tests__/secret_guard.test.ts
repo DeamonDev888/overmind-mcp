@@ -91,7 +91,6 @@ interface SecretPattern {
  * Placeholders typically end with: ..., xxxx, <, {, here, CHANGE, your_
  */
 function isPlaceholder(value: string): boolean {
-  const _lower = value.toLowerCase();
   // Ends with ellipsis or placeholder markers
   if (/\.\.\.$/.test(value)) return true;
   if (/<[^>]+>$/.test(value)) return true; // <YOUR_KEY>
@@ -409,12 +408,6 @@ const SECRET_PATTERNS: SecretPattern[] = [
 ];
 
 // ─── Private path detection ────────────────────────────────────────────────
-
-interface _PathHit {
-  line: number;
-  snippet: string;
-  file: string;
-}
 
 interface PathPattern {
   name: string;
