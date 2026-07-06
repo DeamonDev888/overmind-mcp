@@ -31,8 +31,15 @@ interface ScannedFile {
 function collectFiles(dirs: string[], extensions: string[]): ScannedFile[] {
   const files: ScannedFile[] = [];
   const skipDirs = new Set([
-    'node_modules', 'dist', '.git', '__archive__', 'coverage',
-    '.vscode', '.idea', 'scratch', 'backup',
+    'node_modules',
+    'dist',
+    '.git',
+    '__archive__',
+    'coverage',
+    '.vscode',
+    '.idea',
+    'scratch',
+    'backup',
   ]);
 
   function walk(dir: string) {
@@ -84,13 +91,14 @@ interface SecretPattern {
  * Placeholders typically end with: ..., xxxx, <, {, here, CHANGE, your_
  */
 function isPlaceholder(value: string): boolean {
-  const lower = value.toLowerCase();
+  const _lower = value.toLowerCase();
   // Ends with ellipsis or placeholder markers
   if (/\.\.\.$/.test(value)) return true;
-  if (/<[^>]+>$/.test(value)) return true;       // <YOUR_KEY>
-  if (/\{[^}]+\}$/.test(value)) return true;     // {key}
+  if (/<[^>]+>$/.test(value)) return true; // <YOUR_KEY>
+  if (/\{[^}]+\}$/.test(value)) return true; // {key}
   // Contains placeholder keywords
-  if (/(your_|change|placeholder|example|xxxx|here\b|redacted|dummy|sample)/i.test(value)) return true;
+  if (/(your_|change|placeholder|example|xxxx|here\b|redacted|dummy|sample)/i.test(value))
+    return true;
   // Too short to be real (real keys are 30+ chars)
   if (value.length < 25) return true;
   return false;
@@ -227,7 +235,10 @@ const SECRET_PATTERNS: SecretPattern[] = [
       while ((m = re.exec(content)) !== null) {
         if (!isPlaceholder(m[0])) {
           const lineNum = content.substring(0, m.index).split('\n').length;
-          results.push({ line: lineNum, snippet: m[1].substring(0, 8) + '...' + m[2].substring(0, 4) + '...' });
+          results.push({
+            line: lineNum,
+            snippet: m[1].substring(0, 8) + '...' + m[2].substring(0, 4) + '...',
+          });
         }
       }
       return results;
@@ -364,7 +375,8 @@ const SECRET_PATTERNS: SecretPattern[] = [
       const lines = content.split('\n');
       // Match VARNAME=VALUE where VARNAME suggests a secret
       // Catches: *_API_KEY, *_TOKEN, *_SECRET, *_PASSWORD, *_AUTH, *_KEY
-      const re = /^([A-Z][A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|AUTH_TOKEN|_KEY|_PASS))\s*=\s*(\S+)/gm;
+      const re =
+        /^([A-Z][A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|AUTH_TOKEN|_KEY|_PASS))\s*=\s*(\S+)/gm;
       let m: RegExpExecArray | null;
       while ((m = re.exec(content)) !== null) {
         const varName = m[1];
@@ -381,7 +393,12 @@ const SECRET_PATTERNS: SecretPattern[] = [
         const lineIdx = lineNum - 1;
         const line = lines[lineIdx] || '';
         // Skip comments
-        if (line.trim().startsWith('//') || line.trim().startsWith('*') || line.trim().startsWith('#')) continue;
+        if (
+          line.trim().startsWith('//') ||
+          line.trim().startsWith('*') ||
+          line.trim().startsWith('#')
+        )
+          continue;
         // Skip if the line contains process.env (it's code reading the var, not hardcoding)
         if (line.includes('process.env')) continue;
         results.push({ line: lineNum, snippet: `${varName}=${value.substring(0, 15)}...` });
@@ -393,7 +410,7 @@ const SECRET_PATTERNS: SecretPattern[] = [
 
 // ─── Private path detection ────────────────────────────────────────────────
 
-interface PathHit {
+interface _PathHit {
   line: number;
   snippet: string;
   file: string;
@@ -401,7 +418,7 @@ interface PathHit {
 
 interface PathPattern {
   name: string;
-  check: (content: string, filePath: string) => { line: number; snippet: string }[];
+  check: (content: string, _filePath: string) => { line: number; snippet: string }[];
 }
 
 /**
@@ -415,7 +432,8 @@ function isAllowedPathContext(lines: string[], lineIdx: number): boolean {
   const context = lines.slice(Math.max(0, lineIdx - 2), lineIdx + 3).join(' ');
   if (/os\.(homedir|tmpdir)\(\)/.test(context)) return true;
   if (/path\.(join|resolve|dirname)\(/.test(context)) return true;
-  if (/process\.env\.(HOME|USERPROFILE|LOCALAPPDATA|APPDATA|OVERMIND_WORKSPACE)/.test(context)) return true;
+  if (/process\.env\.(HOME|USERPROFILE|LOCALAPPDATA|APPDATA|OVERMIND_WORKSPACE)/.test(context))
+    return true;
   if (/__dirname|import\.meta\.url/.test(context)) return true;
   return false;
 }
@@ -423,7 +441,7 @@ function isAllowedPathContext(lines: string[], lineIdx: number): boolean {
 const PATH_PATTERNS: PathPattern[] = [
   {
     name: 'Windows private home path',
-    check: (content, filePath) => {
+    check: (content, _filePath) => {
       const results: { line: number; snippet: string }[] = [];
       const lines = content.split('\n');
       // Match C:\Users\<name>\ or C:/Users/<name>/ or C:\\Users\\<name>\\
@@ -437,7 +455,12 @@ const PATH_PATTERNS: PathPattern[] = [
         if (isAllowedPathContext(lines, lineIdx)) continue;
         // Allow comments and documentation
         const line = lines[lineIdx] || '';
-        if (line.trim().startsWith('//') || line.trim().startsWith('*') || line.trim().startsWith('#')) continue;
+        if (
+          line.trim().startsWith('//') ||
+          line.trim().startsWith('*') ||
+          line.trim().startsWith('#')
+        )
+          continue;
         results.push({ line: lineNum, snippet: line.trim().substring(0, 80) });
       }
       return results;
@@ -445,7 +468,7 @@ const PATH_PATTERNS: PathPattern[] = [
   },
   {
     name: 'Unix private home path (/home/<user>)',
-    check: (content, filePath) => {
+    check: (content, _filePath) => {
       const results: { line: number; snippet: string }[] = [];
       const lines = content.split('\n');
       // Match /home/<username>/ but NOT /home/USER (placeholder)
@@ -454,12 +477,18 @@ const PATH_PATTERNS: PathPattern[] = [
       while ((m = re.exec(content)) !== null) {
         const username = m[1].toLowerCase();
         // Skip generic placeholders
-        if (['user', 'username', 'name', 'your', 'app', 'node', 'postgres'].includes(username)) continue;
+        if (['user', 'username', 'name', 'your', 'app', 'node', 'postgres'].includes(username))
+          continue;
         const lineNum = content.substring(0, m.index).split('\n').length;
         const lineIdx = lineNum - 1;
         if (isAllowedPathContext(lines, lineIdx)) continue;
         const line = lines[lineIdx] || '';
-        if (line.trim().startsWith('//') || line.trim().startsWith('*') || line.trim().startsWith('#')) continue;
+        if (
+          line.trim().startsWith('//') ||
+          line.trim().startsWith('*') ||
+          line.trim().startsWith('#')
+        )
+          continue;
         results.push({ line: lineNum, snippet: line.trim().substring(0, 80) });
       }
       return results;
@@ -467,7 +496,7 @@ const PATH_PATTERNS: PathPattern[] = [
   },
   {
     name: 'MSYS/Git-Bash private path (/c/Users/<user>)',
-    check: (content, filePath) => {
+    check: (content, _filePath) => {
       const results: { line: number; snippet: string }[] = [];
       const lines = content.split('\n');
       const re = /\/c\/Users\/([A-Za-z]+)\//g;
@@ -477,7 +506,12 @@ const PATH_PATTERNS: PathPattern[] = [
         const lineIdx = lineNum - 1;
         if (isAllowedPathContext(lines, lineIdx)) continue;
         const line = lines[lineIdx] || '';
-        if (line.trim().startsWith('//') || line.trim().startsWith('*') || line.trim().startsWith('#')) continue;
+        if (
+          line.trim().startsWith('//') ||
+          line.trim().startsWith('*') ||
+          line.trim().startsWith('#')
+        )
+          continue;
         results.push({ line: lineNum, snippet: line.trim().substring(0, 80) });
       }
       return results;
@@ -501,9 +535,7 @@ describe('🔒 Secret Guard — Anti-Secret Protection', () => {
         const hits = pattern.check(file.content);
         if (hits.length > 0) {
           for (const hit of hits) {
-            allHits.push(
-              `  [${pattern.name}] ${file.relPath}:${hit.line} → ${hit.snippet}`,
-            );
+            allHits.push(`  [${pattern.name}] ${file.relPath}:${hit.line} → ${hit.snippet}`);
           }
         }
       }
@@ -512,8 +544,8 @@ describe('🔒 Secret Guard — Anti-Secret Protection', () => {
     if (allHits.length > 0) {
       expect.fail(
         `🚨 SECRET LEAK DETECTED — ${allHits.length} real secret(s) found:\n\n` +
-        allHits.join('\n') +
-        '\n\n❌ BLOCKING PUBLISH. Replace real keys with placeholders (xxx...).',
+          allHits.join('\n') +
+          '\n\n❌ BLOCKING PUBLISH. Replace real keys with placeholders (xxx...).',
       );
     }
   });
@@ -541,19 +573,40 @@ describe('🔒 Secret Guard — Anti-Secret Protection', () => {
 
     it('DOES flag real-looking secrets', () => {
       const testCases: { value: string; patternName: string }[] = [
-        { value: 'sk-or-v1-abcdef1234567890abcdef1234567890abcdef12', patternName: 'OpenRouter API Key' },
-        { value: 'sk-ant-api03-abcdef1234567890abcdef1234567890abcdef123456', patternName: 'Anthropic API Key' },
-        { value: 'ghp_1234567890abcdefghijklmnopqrstuvwxyz1234', patternName: 'GitHub Token (ghp_)' },
-        { value: 'nvapi-GE_uEb0rx-MPAtSedgcqPybOIdWCa2tgs7smHrvImZ8YPyX2EqbPysSy', patternName: 'NVIDIA NIM API Key' },
+        {
+          value: 'sk-or-v1-abcdef1234567890abcdef1234567890abcdef12',
+          patternName: 'OpenRouter API Key',
+        },
+        {
+          value: 'sk-ant-api03-abcdef1234567890abcdef1234567890abcdef123456',
+          patternName: 'Anthropic API Key',
+        },
+        {
+          value: 'ghp_1234567890abcdefghijklmnopqrstuvwxyz1234',
+          patternName: 'GitHub Token (ghp_)',
+        },
+        {
+          value: 'nvapi-GE_uEb0rx-MPAtSedgcqPybOIdWCa2tgs7smHrvImZ8YPyX2EqbPysSy',
+          patternName: 'NVIDIA NIM API Key',
+        },
         { value: 'sk_083abcdef1234567890ABCDEF6ee1', patternName: 'ElevenLabs API Key (sk_)' },
         { value: 'sk-e8eabcdef1234567890abcdefb2f0', patternName: 'DeepSeek API Key' },
-        { value: 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkw', patternName: 'MiniMax JWT Token' },
-        { value: 'MY_API_KEY=4jW2wIOToye2GUqfDjbpwinvYWe9r48a', patternName: 'Generic ENV assignment with real secret value' },
+        {
+          value: 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkw',
+          patternName: 'MiniMax JWT Token',
+        },
+        {
+          value: 'MY_API_KEY=4jW2wIOToye2GUqfDjbpwinvYWe9r48a',
+          patternName: 'Generic ENV assignment with real secret value',
+        },
       ];
       for (const tc of testCases) {
         const pattern = SECRET_PATTERNS.find((p) => p.name === tc.patternName)!;
         const hits = pattern.check(tc.value);
-        expect(hits.length, `"${tc.value.substring(0, 20)}..." should match "${tc.patternName}"`).toBeGreaterThan(0);
+        expect(
+          hits.length,
+          `"${tc.value.substring(0, 20)}..." should match "${tc.patternName}"`,
+        ).toBeGreaterThan(0);
       }
     });
   });
@@ -576,9 +629,7 @@ describe('🛡️ Secret Guard — Private Path Protection', () => {
         const hits = pattern.check(file.content, file.relPath);
         if (hits.length > 0) {
           for (const hit of hits) {
-            allHits.push(
-              `  [${pattern.name}] ${file.relPath}:${hit.line} → ${hit.snippet}`,
-            );
+            allHits.push(`  [${pattern.name}] ${file.relPath}:${hit.line} → ${hit.snippet}`);
           }
         }
       }
@@ -587,8 +638,8 @@ describe('🛡️ Secret Guard — Private Path Protection', () => {
     if (allHits.length > 0) {
       expect.fail(
         `🚨 PRIVATE PATH LEAK DETECTED — ${allHits.length} hardcoded path(s) found:\n\n` +
-        allHits.join('\n') +
-        '\n\n❌ BLOCKING PUBLISH. Use os.homedir(), path.join(), or process.env instead.',
+          allHits.join('\n') +
+          '\n\n❌ BLOCKING PUBLISH. Use os.homedir(), path.join(), or process.env instead.',
       );
     }
   });
@@ -604,7 +655,9 @@ describe('🛡️ Secret Guard — Private Path Protection', () => {
       const hits = pattern.check(codeWithDynamicPath, 'fake.ts');
       // The comment line should be skipped, dynamic paths should be skipped
       const realHits = hits.filter((h) => !h.snippet.trim().startsWith('//'));
-      expect(realHits.length, `"${pattern.name}" should not flag dynamic paths or comments`).toBe(0);
+      expect(realHits.length, `"${pattern.name}" should not flag dynamic paths or comments`).toBe(
+        0,
+      );
     }
   });
 });
