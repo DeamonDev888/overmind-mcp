@@ -28,6 +28,7 @@ _Orchestrateur universel agents IA multi-modèles via MCP. Pilote Hermes, Claude
 - 🌉 **Bridge HTTP JSON-RPC** : Orchestration A2A, scénarios, webhooks, sessions multi-tenant
 - 🛡️ **Anti-Zombie** : 1 seul process HTTP partagé, processRegistry avec TTL + cleanup auto
 - 📋 **14 Outils MCP** : run_agent, create_agent, memory_search/store, agent_control, etc.
+- 🧠 **Mémoire par défaut** : tout agent créé via Overmind reçoit automatiquement le MCP `memory` (3 tools: memory_search/store/runs sur :3099). Pour l'accès complet 14 tools, utiliser `overmind` explicitement.
 - 🅾️ **HTTP Singleton** : FastMCP httpStream — 1 serveur, tous les agents
 
 ---

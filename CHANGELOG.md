@@ -21,6 +21,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.4.0] — 2025-07-07
+
+### Added
+- **5 nouvelles méthodes A2A RPC** dans `OverBridgeServer` pour la communication inter-agents:
+  - `agent.broadcast` — 1 agent → tous les agents online (race=true: premier qui répond / race=false: attend tous)
+  - `agent.pipeline` — chaîne séquentielle A→B→C avec accumulation de contexte, deadline global, stop on failure
+  - `agent.fanout` — 1→N parallèle avec merge (concat / best / vote / first_success)
+  - `agent.delegate` — async fire-and-forget + callback HTTP, persisté dans MessageLog
+  - `agent.query` — query multi-agents read-only optimisé, timeout par agent
+- Helper `buildA2aPrompt()` avec header standardisé `[A2A — METHOD]` (FROM, TIMESTAMP)
+- Architecture stateless, scale horizontalement — supporte des dizaines d'agents
+
+---
+
 ## SÉRIE v3 — VUE D'ENSEMBLE
 
 La série v3 représente la refonte majeure d'Overmind MCP: architecture profiles/, isolation mémoire par agent, sécurité anti-secrets, installateur multi-OS robuste, et intégration Hermes native via HERMES_HOME.

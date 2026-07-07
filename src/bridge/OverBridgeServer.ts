@@ -90,6 +90,90 @@ const A2AParams = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+// ─── A2A Extended Schemas ──────────────────────────────────────────────────
+
+/** agent.broadcast — Un agent → tous les agents (fan-out global) */
+const BroadcastParams = z.object({
+  fromAgent: z.string().min(1),
+  runner: z.string().min(1),
+  prompt: z.string().min(1),
+  /** Liste des agents cibles. Si absent → tous les agents online. */
+  targets: z.array(z.string().min(1)).optional(),
+  /** Si true, retourne dès qu'un agent répond (default: false = attend tous) */
+  race: z.boolean().optional().default(false),
+  /** Timeout par agent en ms (default: 60_000) */
+  agentTimeoutMs: z.number().int().min(1000).max(3_600_000).optional().default(120_000),
+  model: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+/** agent.pipeline — Chaîne séquentielle A→B→C (output de l'un = input du suivant) */
+const PipelineParams = z.object({
+  /** Agent qui initie la chaîne (fromAgent) */
+  initiator: z.string().min(1),
+  runner: z.string().min(1),
+  /** Prompt initial */
+  prompt: z.string().min(1),
+  /** Étapes de la pipeline — chaque step reçoit le output du précédent */
+  steps: z
+    .array(
+      z.object({
+        agentName: z.string().min(1),
+        /** Prompt prefix optionnel (le output précédent est appended) */
+        promptPrefix: z.string().optional(),
+        model: z.string().optional(),
+      }),
+    )
+    .min(1),
+  /** Si true, chaque step reçoit TOUS les outputs précédents (default: false = juste le dernier) */
+  accumulateContext: z.boolean().optional().default(false),
+  /** Timeout total en ms (default: 3_600_000 = 1h) */
+  totalTimeoutMs: z.number().int().min(10_000).max(86_400_000).optional().default(3_600_000),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+/** agent.fanout — Un agent → plusieurs en parallèle + merge */
+const FanoutParams = z.object({
+  fromAgent: z.string().min(1),
+  runner: z.string().min(1),
+  prompt: z.string().min(1),
+  targets: z.array(z.string().min(1)).min(1),
+  /** Stratégie de merge des résultats */
+  mergeStrategy: z.enum(['concat', 'best', 'vote', 'first_success']).optional().default('concat'),
+  /** Critère pour 'best' (default: le plus long) */
+  bestCriterion: z.string().optional(),
+  /** Timeout par agent en ms (default: 120_000) */
+  agentTimeoutMs: z.number().int().min(1000).max(3_600_000).optional().default(120_000),
+  model: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+/** agent.delegate — Délégation async (fire-and-forget avec ID de tracking) */
+const DelegateParams = z.object({
+  fromAgent: z.string().min(1),
+  toAgent: z.string().min(1),
+  runner: z.string().min(1),
+  prompt: z.string().min(1),
+  model: z.string().optional(),
+  /** Si fourni, callback URL appelée quand l'agent termine (POST result) */
+  callbackUrl: z.string().url().optional(),
+  /** Si true, retourne immédiatement avec un taskId (default: true) */
+  async: z.boolean().optional().default(true),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+/** agent.query — Query multi-agents, retourne toutes les réponses */
+const QueryParams = z.object({
+  fromAgent: z.string().min(1),
+  runner: z.string().min(1),
+  prompt: z.string().min(1),
+  targets: z.array(z.string().min(1)).min(1),
+  /** Timeout par agent en ms (default: 30_000) */
+  agentTimeoutMs: z.number().int().min(1000).max(3_600_000).optional().default(30_000),
+  model: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
 const AgentStatusParams = z.object({
   agentName: z.string().min(1),
   runner: z.string().optional(),
@@ -645,6 +729,16 @@ export class OverBridgeServer {
           return this.methodAgentRun(req);
         case 'agent.a2a':
           return this.methodAgentA2A(req);
+        case 'agent.broadcast':
+          return this.methodAgentBroadcast(req);
+        case 'agent.pipeline':
+          return this.methodAgentPipeline(req);
+        case 'agent.fanout':
+          return this.methodAgentFanout(req);
+        case 'agent.delegate':
+          return this.methodAgentDelegate(req);
+        case 'agent.query':
+          return this.methodAgentQuery(req);
         case 'agent.status':
           return this.methodAgentStatus(req);
         case 'agent.list':
@@ -928,6 +1022,508 @@ export class OverBridgeServer {
     });
 
     return { jsonrpc: '2.0', id: req.id ?? null, result };
+  }
+
+  // ─── A2A Extended Methods ────────────────────────────────────────────────
+
+  /**
+   * agent.broadcast — Un agent → tous les agents (fan-out global).
+   * Si race=true, retourne dès qu'un agent répond.
+   * Si race=false (default), attend tous et retourne les résultats.
+   */
+  private async methodAgentBroadcast(req: JsonRpcRequest): Promise<JsonRpcResponse> {
+    const params = this.validateParams(BroadcastParams, req.params, req.id);
+    if (!params.ok) return params.response;
+    const { fromAgent, runner, prompt, targets, race, model } = params.data;
+    const validatedFrom = validateAgentName(fromAgent);
+    const reqId = (req.params as { __reqId?: string } | undefined)?.__reqId;
+
+    // Determine target list
+    let targetAgents: string[];
+    if (targets && targets.length > 0) {
+      targetAgents = targets.map(validateAgentName);
+    } else {
+      // All online agents (excluding fromAgent)
+      const onlineAgents = this.registry
+        .list({ status: 'online' })
+        .map((a) => a.name)
+        .filter((name) => name !== validatedFrom);
+      if (onlineAgents.length === 0) {
+        return {
+          jsonrpc: '2.0',
+          id: req.id ?? null,
+          error: { code: -32005, message: 'No online agents to broadcast to' },
+        };
+      }
+      targetAgents = onlineAgents;
+    }
+
+    this.log.info(
+      `[reqId=${reqId}] 📡 Broadcast from ${validatedFrom} → ${targetAgents.length} agents (race=${race})`,
+    );
+
+    // Register + increment counters
+    this.registry.register(validatedFrom, runner as RunnerType);
+    this.registry.incrementA2aSent(validatedFrom);
+    for (const t of targetAgents) {
+      this.registry.register(t, runner as RunnerType);
+      this.registry.incrementA2aReceived(t);
+    }
+
+    const enrichedPrompt = this.buildA2aPrompt(validatedFrom, 'BROADCAST', prompt);
+
+    // Run agents
+    const runOne = async (agentName: string) => {
+      try {
+        const result = await this.service.runAgent({
+          runner: runner as RunnerType,
+          prompt: enrichedPrompt,
+          agentName,
+          model,
+        });
+        return {
+          agentName,
+          success: !result.isError,
+          content: result.content,
+          sessionId: result.sessionId,
+        };
+      } catch (err) {
+        return {
+          agentName,
+          success: false,
+          error: (err as Error).message,
+          content: [],
+        };
+      }
+    };
+
+    let results;
+    if (race) {
+      // Return first successful result
+      const promises = targetAgents.map((t) => runOne(t));
+      const first = await Promise.race(promises);
+      results = [first];
+    } else {
+      results = await Promise.all(targetAgents.map((t) => runOne(t)));
+    }
+
+    const successCount = results.filter((r) => r.success).length;
+    this.log.info(`[reqId=${reqId}] 📡 Broadcast done: ${successCount}/${results.length} success`);
+
+    return {
+      jsonrpc: '2.0',
+      id: req.id ?? null,
+      result: {
+        from: validatedFrom,
+        targets: targetAgents,
+        total: results.length,
+        successCount,
+        race,
+        results,
+      },
+    };
+  }
+
+  /**
+   * agent.pipeline — Chaîne séquentielle A→B→C.
+   * Le output de chaque step est injecté dans le prompt du suivant.
+   */
+  private async methodAgentPipeline(req: JsonRpcRequest): Promise<JsonRpcResponse> {
+    const params = this.validateParams(PipelineParams, req.params, req.id);
+    if (!params.ok) return params.response;
+    const { initiator, runner, prompt, steps, accumulateContext, totalTimeoutMs } = params.data;
+    const validatedInitiator = validateAgentName(initiator);
+    const reqId = (req.params as { __reqId?: string } | undefined)?.__reqId;
+
+    this.log.info(
+      `[reqId=${reqId}] 🔗 Pipeline: ${validatedInitiator} → ${steps.map((s) => s.agentName).join(' → ')}`,
+    );
+
+    const deadline = Date.now() + totalTimeoutMs;
+    const outputs: Array<{ agentName: string; output: string; success: boolean }> = [];
+    let currentPrompt = prompt;
+
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      if (Date.now() > deadline) {
+        this.log.warn(`[reqId=${reqId}] ⏱️ Pipeline timeout at step ${i}/${steps.length}`);
+        break;
+      }
+
+      const validatedAgent = validateAgentName(step.agentName);
+      this.registry.register(validatedAgent, runner as RunnerType);
+
+      // Build prompt for this step
+      const stepPrompt =
+        (step.promptPrefix ? step.promptPrefix + '\n\n' : '') +
+        `[Pipeline Step ${i + 1}/${steps.length} — Input from previous]\n${currentPrompt}`;
+
+      try {
+        const result = await this.service.runAgent({
+          runner: runner as RunnerType,
+          prompt: stepPrompt,
+          agentName: validatedAgent,
+          model: step.model,
+        });
+
+        const outputText = result.content.map((c) => c.text).join('\n');
+        const success = !result.isError;
+
+        outputs.push({ agentName: validatedAgent, output: outputText, success });
+
+        if (!success) {
+          this.log.warn(
+            `[reqId=${reqId}] ❌ Pipeline step ${i + 1} (${validatedAgent}) failed — stopping`,
+          );
+          break;
+        }
+
+        // Next step gets: just the last output, or all accumulated outputs
+        if (accumulateContext) {
+          currentPrompt = outputs.map((o) => `[${o.agentName}]: ${o.output}`).join('\n\n---\n\n');
+        } else {
+          currentPrompt = outputText;
+        }
+      } catch (err) {
+        this.log.error(
+          `[reqId=${reqId}] 💥 Pipeline step ${i + 1} (${validatedAgent}) error: ${(err as Error).message}`,
+        );
+        outputs.push({
+          agentName: validatedAgent,
+          output: '',
+          success: false,
+        });
+        break;
+      }
+    }
+
+    return {
+      jsonrpc: '2.0',
+      id: req.id ?? null,
+      result: {
+        initiator: validatedInitiator,
+        totalSteps: steps.length,
+        executedSteps: outputs.length,
+        allSuccess: outputs.every((o) => o.success),
+        outputs,
+        finalOutput: outputs.length > 0 ? outputs[outputs.length - 1].output : '',
+      },
+    };
+  }
+
+  /**
+   * agent.fanout — Un agent → plusieurs en parallèle + merge.
+   * mergeStrategy: concat | best | vote | first_success
+   */
+  private async methodAgentFanout(req: JsonRpcRequest): Promise<JsonRpcResponse> {
+    const params = this.validateParams(FanoutParams, req.params, req.id);
+    if (!params.ok) return params.response;
+    const { fromAgent, runner, prompt, targets, mergeStrategy, model } = params.data;
+    const validatedFrom = validateAgentName(fromAgent);
+    const reqId = (req.params as { __reqId?: string } | undefined)?.__reqId;
+
+    const targetAgents = targets.map(validateAgentName);
+    this.log.info(
+      `[reqId=${reqId}] 🌐 Fanout from ${validatedFrom} → ${targetAgents.length} agents (merge=${mergeStrategy})`,
+    );
+
+    const enrichedPrompt = this.buildA2aPrompt(validatedFrom, 'FANOUT', prompt);
+
+    // Run all targets in parallel
+    const results = await Promise.all(
+      targetAgents.map(async (agentName) => {
+        try {
+          const result = await this.service.runAgent({
+            runner: runner as RunnerType,
+            prompt: enrichedPrompt,
+            agentName,
+            model,
+          });
+          return {
+            agentName,
+            success: !result.isError,
+            text: result.content.map((c) => c.text).join('\n'),
+            sessionId: result.sessionId,
+          };
+        } catch (err) {
+          return {
+            agentName,
+            success: false,
+            text: (err as Error).message,
+            sessionId: undefined,
+          };
+        }
+      }),
+    );
+
+    // Merge results
+    let merged: string;
+    let winner: string | undefined;
+
+    switch (mergeStrategy) {
+      case 'first_success': {
+        const first = results.find((r) => r.success);
+        merged = first ? first.text : 'All agents failed';
+        winner = first?.agentName;
+        break;
+      }
+      case 'best': {
+        // Default: longest response
+        const sorted = [...results]
+          .filter((r) => r.success)
+          .sort((a, b) => b.text.length - a.text.length);
+        merged = sorted.length > 0 ? sorted[0].text : 'All agents failed';
+        winner = sorted[0]?.agentName;
+        break;
+      }
+      case 'vote': {
+        // Simple vote: count similar responses (by length bucket)
+        const buckets = new Map<number, Array<{ agentName: string; text: string }>>();
+        for (const r of results.filter((r) => r.success)) {
+          const bucket = Math.floor(r.text.length / 100) * 100;
+          if (!buckets.has(bucket)) buckets.set(bucket, []);
+          buckets.get(bucket)!.push({ agentName: r.agentName, text: r.text });
+        }
+        const sortedBuckets = [...buckets.entries()].sort((a, b) => b[1].length - a[1].length);
+        merged = sortedBuckets.length > 0 ? sortedBuckets[0][1][0].text : 'No votes';
+        winner = sortedBuckets[0]?.[1]?.[0]?.agentName;
+        break;
+      }
+      case 'concat':
+      default: {
+        merged = results
+          .map((r) => `### ${r.agentName}${r.success ? '' : ' (FAILED)'}\n${r.text}`)
+          .join('\n\n---\n\n');
+        break;
+      }
+    }
+
+    return {
+      jsonrpc: '2.0',
+      id: req.id ?? null,
+      result: {
+        from: validatedFrom,
+        targets: targetAgents,
+        mergeStrategy,
+        winner,
+        totalResults: results.length,
+        successCount: results.filter((r) => r.success).length,
+        results,
+        merged,
+      },
+    };
+  }
+
+  /**
+   * agent.delegate — Délégation async (fire-and-forget avec taskId).
+   * Si async=true (default), retourne immédiatement avec un taskId.
+   * Si callbackUrl fourni, POST le résultat quand l'agent termine.
+   */
+  private async methodAgentDelegate(req: JsonRpcRequest): Promise<JsonRpcResponse> {
+    const params = this.validateParams(DelegateParams, req.params, req.id);
+    if (!params.ok) return params.response;
+    const {
+      fromAgent,
+      toAgent,
+      runner,
+      prompt,
+      model,
+      callbackUrl,
+      async: isAsync,
+      metadata,
+    } = params.data;
+    const validatedFrom = validateAgentName(fromAgent);
+    const validatedTo = validateAgentName(toAgent);
+    const reqId = (req.params as { __reqId?: string } | undefined)?.__reqId;
+
+    const taskId = crypto.randomUUID();
+    this.log.info(
+      `[reqId=${reqId}] 🤝 Delegate ${validatedFrom} → ${validatedTo} (taskId=${taskId}, async=${isAsync})`,
+    );
+
+    const enrichedPrompt = this.buildA2aPrompt(validatedFrom, 'DELEGATE', prompt);
+
+    // Persist
+    let messageId: string | undefined;
+    if (this.messageLog) {
+      messageId = await this.messageLog.create({
+        fromAgent: validatedFrom,
+        toAgent: validatedTo,
+        runner: runner as RunnerType,
+        prompt: enrichedPrompt,
+        metadata: { ...(metadata ?? {}), taskId, delegate: true },
+      });
+    }
+
+    // Run async (fire-and-forget)
+    const runAsync = async () => {
+      try {
+        const result = await this.service.runAgent({
+          runner: runner as RunnerType,
+          prompt: enrichedPrompt,
+          agentName: validatedTo,
+          model,
+        });
+
+        const responseText = result.content.map((c) => c.text).join('\n');
+        if (messageId && this.messageLog) {
+          await this.messageLog.markDone(messageId, responseText, result.sessionId);
+        }
+
+        // Callback si URL fournie
+        if (callbackUrl) {
+          try {
+            await fetch(callbackUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                taskId,
+                from: validatedFrom,
+                to: validatedTo,
+                success: !result.isError,
+                content: result.content,
+                sessionId: result.sessionId,
+              }),
+            });
+          } catch (err) {
+            this.log.warn(
+              `[reqId=${reqId}] ⚠️ Callback ${callbackUrl} failed: ${(err as Error).message}`,
+            );
+          }
+        }
+      } catch (err) {
+        const errorMsg = (err as Error).message;
+        if (messageId && this.messageLog) {
+          await this.messageLog.markFailed(messageId, errorMsg);
+        }
+        this.log.error(`[reqId=${reqId}] 💥 Delegate ${taskId} failed: ${errorMsg}`);
+      }
+    };
+
+    if (isAsync) {
+      // Fire-and-forget — return immediately with taskId
+      void runAsync();
+      return {
+        jsonrpc: '2.0',
+        id: req.id ?? null,
+        result: {
+          taskId,
+          from: validatedFrom,
+          to: validatedTo,
+          status: 'delegated',
+          message: `Task delegated to ${validatedTo}. Use agent.status to check progress.`,
+          messageId,
+        },
+      };
+    }
+
+    // Sync mode — wait for result
+    try {
+      await runAsync();
+      // Read the result from MessageLog
+      if (messageId && this.messageLog) {
+        const msg = await this.messageLog.getById(messageId);
+        return {
+          jsonrpc: '2.0',
+          id: req.id ?? null,
+          result: {
+            taskId,
+            from: validatedFrom,
+            to: validatedTo,
+            status: msg?.status ?? 'unknown',
+            content: msg?.response ? [{ type: 'text', text: msg.response }] : [],
+            messageId,
+          },
+        };
+      }
+      return {
+        jsonrpc: '2.0',
+        id: req.id ?? null,
+        result: { taskId, status: 'done', messageId },
+      };
+    } catch (err) {
+      return {
+        jsonrpc: '2.0',
+        id: req.id ?? null,
+        error: { code: -32603, message: `Delegate failed: ${(err as Error).message}` },
+      };
+    }
+  }
+
+  /**
+   * agent.query — Query multi-agents, retourne toutes les réponses rapidement.
+   * Comme fanout mais optimisé pour le read-only (courte réponse rapide).
+   */
+  private async methodAgentQuery(req: JsonRpcRequest): Promise<JsonRpcResponse> {
+    const params = this.validateParams(QueryParams, req.params, req.id);
+    if (!params.ok) return params.response;
+    const { fromAgent, runner, prompt, targets, agentTimeoutMs, model } = params.data;
+    const validatedFrom = validateAgentName(fromAgent);
+    const reqId = (req.params as { __reqId?: string } | undefined)?.__reqId;
+
+    const targetAgents = targets.map(validateAgentName);
+    this.log.info(
+      `[reqId=${reqId}] ❓ Query from ${validatedFrom} → ${targetAgents.length} agents`,
+    );
+
+    const enrichedPrompt = this.buildA2aPrompt(validatedFrom, 'QUERY', prompt);
+
+    // Run all in parallel with timeout
+    const results = await Promise.all(
+      targetAgents.map(async (agentName) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), agentTimeoutMs);
+        try {
+          const result = await this.service.runAgent({
+            runner: runner as RunnerType,
+            prompt: enrichedPrompt,
+            agentName,
+            model,
+          });
+          clearTimeout(timer);
+          return {
+            agentName,
+            success: !result.isError,
+            text: result.content.map((c) => c.text).join('\n'),
+            responseTimeMs: 0, // Could track if needed
+          };
+        } catch (err) {
+          clearTimeout(timer);
+          return {
+            agentName,
+            success: false,
+            text: (err as Error).message,
+            responseTimeMs: agentTimeoutMs,
+          };
+        }
+      }),
+    );
+
+    return {
+      jsonrpc: '2.0',
+      id: req.id ?? null,
+      result: {
+        from: validatedFrom,
+        totalQueried: targetAgents.length,
+        successCount: results.filter((r) => r.success).length,
+        results,
+      },
+    };
+  }
+
+  // ─── A2A Helpers ──────────────────────────────────────────────────────────
+
+  /**
+   * Construit un prompt A2A standardisé avec header.
+   */
+  private buildA2aPrompt(fromAgent: string, kind: string, prompt: string): string {
+    return [
+      `[A2A — ${kind}]`,
+      `FROM: ${fromAgent}`,
+      `TIMESTAMP: ${new Date().toISOString()}`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      prompt,
+    ].join('\n');
   }
 
   /**

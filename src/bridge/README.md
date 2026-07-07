@@ -62,6 +62,8 @@ HTTP client → POST /rpc → OverBridgeServer
                             BridgeProxy.call (retry + circuit)
                               ↓
                             Overmind MCP :3099 (run_agent tool)
+                              ↓
+                            Agent reçoit 'memory' MCP (3 tools, héritage par défaut)
 ```
 
 ## Résumé express
