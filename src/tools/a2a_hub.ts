@@ -1,28 +1,22 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * A2A Hub — Outil MCP unifié pour la communication Agent-to-Agent
+ * A2A Hub — Outil MCP pour la communication Agent-to-Agent
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Cet outil donne aux agents une vue complète du système multi-agents:
+ * Architecture distribuee — chaque worker est un serveur HTTP independant:
  *
- *   - LISTER tous les agents persistants (Hermes profiles + live registry)
- *   - VOIR ce que chaque agent fait en temps réel (status, busy/idle, dernière activité)
- *   - DELEGUER une tâche à un autre agent (async avec callback)
- *   - PIPELINE chainé (A→B→C avec passing de contexte)
- *   - FANOUT parallèle (1→N + merge des résultats)
- *   - QUERY multi-agents (poser une question à plusieurs agents simultanément)
- *   - BROADCAST (message global à tous les agents online)
+ *   discord-master (:discord) → routes !trade → TV Analyst :3002
+ *                             → routes !sniper → Sniperbot :3001
  *
- * L'agent qui appelle cet outil découvre AUTOMATIQUEMENT:
- *   - Quels agents existent sur le système (profiles Hermes)
- *   - Leur status (online/busy/idle/offline)
- *   - Leur runner (hermes, claude, kilo, etc.)
- *   - Leur modèle LLM
- *   - Leur dernière activité
- *   - Le compteur A2A (combien de messages envoyés/reçus)
+ *   a2a_hub parle DIRECTEMENT aux workers HTTP:
+ *     POST :300X/send  → message synchrone
+ *     GET  :300X/health → status live
  *
- * Aucune configuration manuelle — l'outil scanne ~/.overmind/hermes/profiles/
- * et croise avec le registry live du bridge.
+ * Decouverte automatique:
+ *   1. Scan ports 3001-3020 (workers connus)
+ *   2. Scan ~/.overmind/hermes/profiles/ (agents Hermes)
+ *   3. Cross-reference: profile ↔ worker port
+ *   4. Lit ~/.overmind/bridge/workers.json si present
  */
 
 import { z } from 'zod';
@@ -33,44 +27,151 @@ import os from 'os';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
+interface WorkerInfo {
+  port: number;
+  url: string;
+  online: boolean;
+  agentName: string;
+  health?: Record<string, unknown>;
+}
+
 interface AgentInfo {
   name: string;
-  runner: string;
   model: string;
-  status: 'online' | 'busy' | 'idle' | 'offline' | 'unknown';
   provider: string;
-  lastActivity: string | null;
+  status: 'online' | 'offline' | 'unknown';
+  workerPort: number | null;
+  workerUrl: string | null;
   description: string;
   skillsCount: number;
   hasMemory: boolean;
-  a2aCapabilities: string[];
+  lastActivity: string | null;
 }
 
-interface A2ADiscovery {
+interface Discovery {
   totalAgents: number;
-  onlineAgents: number;
-  busyAgents: number;
+  onlineWorkers: number;
   agents: AgentInfo[];
+  workers: WorkerInfo[];
   selfAgent: string | null;
-  bridgeUrl: string;
-  bridgeOnline: boolean;
 }
 
-// ─── Discovery: scan profiles + live status ────────────────────────────────
+// ─── HTTP Helper (curl synchrone) ──────────────────────────────────────────
 
-function discoverAgents(): A2ADiscovery {
+function httpGet(url: string, timeoutMs = 5000): Record<string, unknown> | null {
+  try {
+    const result = execSync(`curl -s -m ${Math.floor(timeoutMs / 1000)} "${url}" 2>/dev/null`, {
+      encoding: 'utf8',
+      timeout: timeoutMs + 1000,
+    });
+    return JSON.parse(result) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function httpPost(
+  url: string,
+  body: Record<string, unknown>,
+  timeoutMs = 300000,
+): Record<string, unknown> | null {
+  const payload = JSON.stringify(body);
+  try {
+    const escapedPayload = payload.replace(/'/g, "'\\''");
+    const result = execSync(
+      `curl -s -m ${Math.floor(timeoutMs / 1000)} -X POST "${url}" -H "Content-Type: application/json" -d '${escapedPayload}' 2>/dev/null`,
+      { encoding: 'utf8', timeout: timeoutMs + 1000, maxBuffer: 50 * 1024 * 1024 },
+    );
+    return JSON.parse(result) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Worker Discovery ──────────────────────────────────────────────────────
+
+function discoverWorkers(): WorkerInfo[] {
+  const workers: WorkerInfo[] = [];
+  const workersJsonPath = path.join(os.homedir(), '.overmind', 'bridge', 'workers.json');
+
+  // 1. Try reading workers registry
+  let knownPorts: Array<{ port: number; agentName: string }> = [];
+  if (fs.existsSync(workersJsonPath)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(workersJsonPath, 'utf8'));
+      if (Array.isArray(data.workers)) {
+        knownPorts = data.workers.map((w: { port: number; agentName: string }) => ({
+          port: w.port,
+          agentName: w.agentName || 'unknown',
+        }));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. Fallback: scan ports 3001-3020
+  if (knownPorts.length === 0) {
+    knownPorts = [];
+    for (let port = 3001; port <= 3020; port++) {
+      knownPorts.push({ port, agentName: '' });
+    }
+  }
+
+  // 3. Probe each port
+  for (const { port, agentName } of knownPorts) {
+    const url = `http://localhost:${port}`;
+    const health = httpGet(`${url}/health`, 3000);
+
+    if (health) {
+      // Worker is online — extract agent name from health
+      const detectedAgent =
+        agentName ||
+        (health.agent as string) ||
+        (health.agentName as string) ||
+        (health.service as string) ||
+        'unknown';
+
+      workers.push({
+        port,
+        url,
+        online: true,
+        agentName: detectedAgent,
+        health,
+      });
+    } else {
+      // Check if port is listening at all
+      workers.push({
+        port,
+        url,
+        online: false,
+        agentName: agentName || '',
+      });
+    }
+  }
+
+  return workers;
+}
+
+// ─── Agent Discovery ───────────────────────────────────────────────────────
+
+function discoverAgents(): Discovery {
   const home = os.homedir();
-  const profilesDir =
-    process.platform === 'win32'
-      ? path.join(home, '.overmind', 'hermes', 'profiles')
-      : path.join(home, '.overmind', 'hermes', 'profiles');
-
-  const bridgeUrl = process.env.OVERMIND_BRIDGE_URL || 'http://localhost:3100/rpc';
+  const profilesDir = path.join(home, '.overmind', 'hermes', 'profiles');
   const selfAgent = process.env.OVERMIND_AGENT_NAME || null;
 
   const agents: AgentInfo[] = [];
+  const workers = discoverWorkers();
 
-  // 1. Scan Hermes profiles
+  // Build worker lookup: agentName → worker
+  const workerByAgent = new Map<string, WorkerInfo>();
+  for (const w of workers) {
+    if (w.online && w.agentName && w.agentName !== 'unknown') {
+      workerByAgent.set(w.agentName, w);
+    }
+  }
+
+  // Scan Hermes profiles
   if (fs.existsSync(profilesDir)) {
     const entries = fs.readdirSync(profilesDir, { withFileTypes: true });
     for (const entry of entries) {
@@ -83,10 +184,10 @@ function discoverAgents(): A2ADiscovery {
       let provider = 'unknown';
       if (fs.existsSync(configPath)) {
         const config = fs.readFileSync(configPath, 'utf8');
-        const modelMatch = config.match(/model:\s*(.+)/);
-        const providerMatch = config.match(/provider:\s*(.+)/);
-        if (modelMatch) model = modelMatch[1].trim();
-        if (providerMatch) provider = providerMatch[1].trim();
+        const modelMatch = config.match(/^\s*model:\s*(?!provider)(.+)/m);
+        const providerMatch = config.match(/^\s*provider:\s*(.+)/m);
+        if (modelMatch) model = modelMatch[1].trim().replace(/['"]/g, '');
+        if (providerMatch) provider = providerMatch[1].trim().replace(/['"]/g, '');
       }
 
       // Read profile.yaml for description
@@ -123,100 +224,88 @@ function discoverAgents(): A2ADiscovery {
       // Check memory
       const hasMemory = fs.existsSync(path.join(profilePath, 'memories', 'MEMORY.md'));
 
-      // Last activity (state.db mtime)
+      // Last activity
       let lastActivity: string | null = null;
       const stateDb = path.join(profilePath, 'state.db');
       if (fs.existsSync(stateDb)) {
         try {
-          const stat = fs.statSync(stateDb);
-          lastActivity = stat.mtime.toISOString();
+          lastActivity = fs.statSync(stateDb).mtime.toISOString();
         } catch {
           // ignore
         }
       }
 
+      // Cross-reference with workers
+      const worker = workerByAgent.get(entry.name);
+
       agents.push({
         name: entry.name,
-        runner: 'hermes',
         model,
-        status: 'unknown', // Will be enriched from bridge if available
         provider,
-        lastActivity,
+        status: worker ? 'online' : 'offline',
+        workerPort: worker?.port ?? null,
+        workerUrl: worker?.url ?? null,
         description,
         skillsCount,
         hasMemory,
-        a2aCapabilities: ['delegate', 'pipeline', 'fanout', 'query', 'broadcast', 'a2a'],
+        lastActivity,
       });
     }
   }
 
-  // 2. Try to get live status from bridge
-  let bridgeOnline = false;
-  try {
-    const healthUrl = bridgeUrl.replace('/rpc', '/health');
-    const result = execSync(`curl -s -m 3 "${healthUrl}" 2>/dev/null || echo '{}'`, {
-      encoding: 'utf8',
-      timeout: 5000,
-    });
-    const health = JSON.parse(result);
-    bridgeOnline = health.status === 'online' || health.status === 'degraded';
-
-    // Enrich agents with live status from registry
-    if (health.agents && Array.isArray(health.agents)) {
-      for (const liveAgent of health.agents) {
-        const found = agents.find((a) => a.name === liveAgent.name);
-        if (found) {
-          found.status = liveAgent.status;
-        }
-      }
-    }
-  } catch {
-    // Bridge not reachable — agents keep 'unknown' status
-  }
-
-  // Default 'offline' for agents we couldn't reach
-  for (const a of agents) {
-    if (a.status === 'unknown') a.status = 'offline';
-  }
-
   return {
     totalAgents: agents.length,
-    onlineAgents: agents.filter((a) => a.status === 'online').length,
-    busyAgents: agents.filter((a) => a.status === 'busy').length,
+    onlineWorkers: workers.filter((w) => w.online).length,
     agents,
+    workers,
     selfAgent,
-    bridgeUrl,
-    bridgeOnline,
   };
 }
 
-// ─── RPC Helper ────────────────────────────────────────────────────────────
+// ─── Send message to a worker ──────────────────────────────────────────────
 
-function rpcCall(method: string, params: Record<string, unknown>): unknown {
-  const bridgeUrl = process.env.OVERMIND_BRIDGE_URL || 'http://localhost:3100/rpc';
-  const payload = JSON.stringify({
-    jsonrpc: '2.0',
-    id: Date.now(),
-    method,
-    params,
-  });
+function sendToWorker(
+  port: number,
+  message: string,
+  opts: {
+    model?: string;
+    timeoutMs?: number;
+  } = {},
+): { success: boolean; text: string; raw: Record<string, unknown> | null } {
+  const url = `http://localhost:${port}/send`;
+  const body: Record<string, unknown> = {
+    message,
+    userId: `a2a_${process.env.OVERMIND_AGENT_NAME || 'system'}`,
+    username: process.env.OVERMIND_AGENT_NAME || 'A2A Hub',
+    channelId: 'a2a',
+  };
+  if (opts.model) body.model = opts.model;
 
-  try {
-    const result = execSync(
-      `curl -s -m 300 -X POST "${bridgeUrl}" -H "Content-Type: application/json" -d '${payload.replace(/'/g, "'\\''")}' 2>/dev/null`,
-      { encoding: 'utf8', timeout: 310000, maxBuffer: 50 * 1024 * 1024 },
-    );
-    const response = JSON.parse(result);
-    if (response.error) {
-      return {
-        error: response.error.message,
-        code: response.error.code,
-      };
-    }
-    return response.result;
-  } catch (err) {
-    return { error: (err as Error).message };
+  const response = httpPost(url, body, opts.timeoutMs ?? 300000);
+
+  if (response === null) {
+    return { success: false, text: `Worker :${port} injoignable`, raw: null };
   }
+
+  if (response.error) {
+    return {
+      success: false,
+      text: `Erreur :${port}: ${response.error}`,
+      raw: response,
+    };
+  }
+
+  // Workers may return { result, content, response, output }
+  const text =
+    (response.result as string) ||
+    (response.response as string) ||
+    (response.output as string) ||
+    (Array.isArray(response.content)
+      ? (response.content as Array<{ text?: string }>).map((c) => c.text || '').join('\n')
+      : '') ||
+    JSON.stringify(response);
+
+  return { success: true, text, raw: response };
 }
 
 // ─── Schema ────────────────────────────────────────────────────────────────
@@ -225,38 +314,32 @@ export const a2aHubSchema = z.object({
   action: z
     .enum(['discover', 'status', 'send', 'delegate', 'pipeline', 'fanout', 'query', 'broadcast'])
     .describe(
-      "Action à effectuer: discover=liste tous les agents, status=état d'un agent, send=message synchrone, delegate=async+callback, pipeline=chaîne A→B→C, fanout=1→N parallèle+merge, query=question multi-agents, broadcast=message global",
+      "Action: discover=liste tous les agents+workers, status=état d'un worker, send=message synchrone, delegate=async, pipeline=chaîne A→B→C, fanout=1→N+merge, query=multi-agents, broadcast=global",
     ),
 
-  // ─── Target (for send/delegate/status) ──────────────────────────────────
-  target: z.string().optional().describe("Nom de l'agent cible (ex: 'sniperbot_analyst')"),
+  target: z
+    .string()
+    .optional()
+    .describe("Nom de l'agent cible (ex: 'sniperbot_analyst') OU port du worker (ex: '3001')"),
 
-  // ─── Message ─────────────────────────────────────────────────────────────
   message: z.string().optional().describe('Le message/prompt à envoyer aux agents'),
 
-  // ─── Targets (for fanout/query/broadcast/pipeline) ──────────────────────
   targets: z
     .array(z.string())
     .optional()
-    .describe(
-      'Liste des agents cibles (pour fanout/query). Si absent pour broadcast → tous les agents online',
-    ),
+    .describe('Liste des agents cibles (noms ou ports) pour fanout/query/broadcast'),
 
-  // ─── Pipeline steps ──────────────────────────────────────────────────────
   steps: z
     .array(
       z.object({
-        agentName: z.string(),
+        agentName: z
+          .string()
+          .describe("Nom de l'agent ou port (ex: 'sniperbot_analyst' ou '3001')"),
         promptPrefix: z.string().optional(),
       }),
     )
     .optional()
     .describe('Étapes de la pipeline (pour action=pipeline)'),
-
-  // ─── Options ─────────────────────────────────────────────────────────────
-  runner: z.string().optional().default('hermes').describe('Runner à utiliser (default: hermes)'),
-
-  model: z.string().optional().describe('Modèle LLM à utiliser (override)'),
 
   mergeStrategy: z
     .enum(['concat', 'best', 'vote', 'first_success'])
@@ -268,265 +351,271 @@ export const a2aHubSchema = z.object({
     .boolean()
     .optional()
     .default(false)
-    .describe("Pour broadcast: si true, retourne dès qu'un agent répond"),
+    .describe('Pour broadcast: si true, premier qui répond gagne'),
 
   async: z
     .boolean()
     .optional()
     .default(true)
-    .describe('Pour delegate: si true (default), retourne immédiatement avec un taskId'),
-
-  callbackUrl: z
-    .string()
-    .optional()
-    .describe("Pour delegate: URL appelée quand l'agent termine (POST result)"),
+    .describe('Pour delegate: si true (default), retourne immédiatement'),
 
   accumulateContext: z
     .boolean()
     .optional()
     .default(false)
-    .describe('Pour pipeline: si true, chaque step reçoit tous les outputs précédents'),
+    .describe('Pour pipeline: chaque step reçoit tous les outputs précédents'),
 
   timeoutMs: z
     .number()
     .int()
-    .min(1000)
-    .max(3600000)
+    .min(5000)
+    .max(600000)
     .optional()
-    .describe('Timeout en ms (défaut selon action)'),
+    .describe('Timeout par agent en ms (default: 300000 = 5min)'),
+
+  model: z.string().optional().describe('Modèle LLM override'),
 });
+
+// ─── Resolve agent name to worker port ─────────────────────────────────────
+
+function resolveTarget(
+  target: string,
+  discovery: Discovery,
+): { port: number | null; agentName: string } {
+  // If target is a port number
+  const portMatch = target.match(/^(\d{4,5})$/);
+  if (portMatch) {
+    const port = parseInt(portMatch[1], 10);
+    const worker = discovery.workers.find((w) => w.port === port);
+    return { port, agentName: worker?.agentName || target };
+  }
+
+  // If target is an agent name, find its worker
+  const agent = discovery.agents.find((a) => a.name === target);
+  if (agent?.workerPort) {
+    return { port: agent.workerPort, agentName: target };
+  }
+
+  // Try online workers
+  const worker = discovery.workers.find((w) => w.online && w.agentName === target);
+  if (worker) {
+    return { port: worker.port, agentName: target };
+  }
+
+  return { port: null, agentName: target };
+}
 
 // ─── Execute ───────────────────────────────────────────────────────────────
 
 export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
   const selfAgent = process.env.OVERMIND_AGENT_NAME || 'unknown';
-  const { action } = args;
+  const timeout = args.timeoutMs ?? 300000;
 
   try {
-    switch (action) {
+    switch (args.action) {
       // ═══════════════════════════════════════════════════════════════════════
-      // DISCOVER — Liste TOUS les agents + leur status temps réel
+      // DISCOVER
       // ═══════════════════════════════════════════════════════════════════════
       case 'discover': {
-        const discovery = discoverAgents();
+        const d = discoverAgents();
 
         const lines: string[] = [
           `🌐 **A2A Hub — Découverte du système multi-agents**`,
           ``,
-          `**Self:** ${discovery.selfAgent || '(inconnu)'}`,
-          `**Bridge:** ${discovery.bridgeUrl} (${discovery.bridgeOnline ? '✅ online' : '❌ offline'})`,
-          `**Total agents:** ${discovery.totalAgents} | **Online:** ${discovery.onlineAgents} | **Busy:** ${discovery.busyAgents}`,
+          `**Self:** ${d.selfAgent || '(inconnu)'}`,
+          `**Workers online:** ${d.onlineWorkers}`,
+          `**Total agents:** ${d.totalAgents}`,
+          ``,
+          `### Workers HTTP`,
           ``,
         ];
 
-        if (discovery.agents.length === 0) {
-          lines.push('Aucun agent trouvé dans ~/.overmind/hermes/profiles/');
+        const onlineWorkers = d.workers.filter((w) => w.online);
+        if (onlineWorkers.length === 0) {
+          lines.push('Aucun worker HTTP en ligne.');
         } else {
-          lines.push('| Agent | Status | Model | Provider | Skills | Description |');
-          lines.push('|-------|--------|-------|----------|--------|-------------|');
-          for (const a of discovery.agents) {
-            const statusIcon =
-              a.status === 'online'
-                ? '🟢'
-                : a.status === 'busy'
-                  ? '🟡'
-                  : a.status === 'idle'
-                    ? '⚪'
-                    : '🔴';
-            lines.push(
-              `| ${a.name === selfAgent ? '**' + a.name + ' (self)**' : a.name} | ${statusIcon} ${a.status} | ${a.model} | ${a.provider} | ${a.skillsCount} | ${a.description.slice(0, 40)} |`,
-            );
+          lines.push('| Port | Agent | Status | URL |');
+          lines.push('|------|-------|--------|-----|');
+          for (const w of onlineWorkers) {
+            lines.push(`| :${w.port} | ${w.agentName} | 🟢 online | ${w.url} |`);
           }
-
-          lines.push('');
-          lines.push('**Capacités A2A disponibles:**');
-          lines.push('  • `send` — Message synchrone A→B');
-          lines.push('  • `delegate` — Tâche async + callback');
-          lines.push('  • `pipeline` — Chaîne A→B→C');
-          lines.push('  • `fanout` — 1→N parallèle + merge');
-          lines.push('  • `query` — Question multi-agents');
-          lines.push('  • `broadcast` — Message global');
         }
 
-        return {
-          content: [{ type: 'text' as const, text: lines.join('\n') }],
-        };
+        lines.push('');
+        lines.push('### Agents Hermes');
+        lines.push('');
+
+        if (d.agents.length === 0) {
+          lines.push('Aucun agent trouvé dans ~/.overmind/hermes/profiles/');
+        } else {
+          lines.push('| Agent | Status | Worker | Model | Provider | Skills | Description |');
+          lines.push('|-------|--------|--------|-------|----------|--------|-------------|');
+          for (const a of d.agents) {
+            const statusIcon = a.status === 'online' ? '🟢' : '🔴';
+            const workerInfo = a.workerPort ? `:${a.workerPort}` : '—';
+            const nameDisplay = a.name === selfAgent ? `**${a.name} (self)**` : a.name;
+            lines.push(
+              `| ${nameDisplay} | ${statusIcon} ${a.status} | ${workerInfo} | ${a.model} | ${a.provider} | ${a.skillsCount} | ${a.description.slice(0, 40)} |`,
+            );
+          }
+        }
+
+        lines.push('');
+        lines.push('**Actions disponibles:** send, delegate, pipeline, fanout, query, broadcast');
+        lines.push(
+          '**Exemple:** a2a_hub(action: "send", target: "sniperbot_analyst", message: "Analyse BTC")',
+        );
+
+        return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // STATUS — État détaillé d'un agent
+      // STATUS
       // ═══════════════════════════════════════════════════════════════════════
       case 'status': {
         if (!args.target) {
           return {
-            content: [
-              {
-                type: 'text' as const,
-                text: '❌ Paramètre `target` requis pour action=status',
-              },
-            ],
+            content: [{ type: 'text' as const, text: '❌ `target` requis (nom ou port)' }],
             isError: true,
           };
         }
 
-        const result = rpcCall('agent.status', {
-          agentName: args.target,
-          runner: args.runner,
-          action: 'status',
-        });
+        const d = discoverAgents();
+        const { port, agentName } = resolveTarget(args.target, d);
 
-        const r = result as Record<string, unknown>;
-        if (r.error) {
+        if (!port) {
           return {
             content: [
-              {
-                type: 'text' as const,
-                text: `❌ Erreur status ${args.target}: ${r.error}`,
-              },
+              { type: 'text' as const, text: `❌ Worker pour "${args.target}" introuvable` },
             ],
             isError: true,
           };
         }
 
-        const local = (r.local || (r.result as Record<string, unknown>)?.local) as
-          Record<string, unknown> | undefined;
-        const lines: string[] = [`📊 **Status: ${args.target}**`, ``];
-
-        if (local) {
-          lines.push(`**État local:** ${local.status || 'unknown'}`);
-          lines.push(`**Runner:** ${local.runner || 'unknown'}`);
-          lines.push(`**Total runs:** ${local.totalRuns || 0}`);
-          lines.push(`**Erreurs:** ${local.totalErrors || 0}`);
-          lines.push(`**A2A reçus:** ${local.a2aReceived || 0}`);
-          lines.push(`**A2A envoyés:** ${local.a2aSent || 0}`);
-          if (local.currentSessionId) {
-            lines.push(`**Session:** ${local.currentSessionId}`);
-          }
-          if (local.lastActivityAt) {
-            lines.push(
-              `**Dernière activité:** ${new Date(local.lastActivityAt as number).toISOString()}`,
-            );
-          }
+        const health = httpGet(`http://localhost:${port}/health`);
+        if (!health) {
+          return {
+            content: [{ type: 'text' as const, text: `❌ Worker :${port} injoignable` }],
+            isError: true,
+          };
         }
 
-        return {
-          content: [{ type: 'text' as const, text: lines.join('\n') }],
-        };
+        const lines: string[] = [`📊 **Status: ${agentName} (:${port})**`, ``];
+        for (const [key, value] of Object.entries(health)) {
+          lines.push(
+            `**${key}:** ${typeof value === 'object' ? JSON.stringify(value).slice(0, 100) : value}`,
+          );
+        }
+
+        return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // SEND — Message synchrone A→B (via agent.a2a)
+      // SEND
       // ═══════════════════════════════════════════════════════════════════════
       case 'send': {
         if (!args.target || !args.message) {
           return {
-            content: [
-              {
-                type: 'text' as const,
-                text: '❌ Paramètres `target` et `message` requis pour action=send',
-              },
-            ],
+            content: [{ type: 'text' as const, text: '❌ `target` et `message` requis' }],
             isError: true,
           };
         }
 
-        const result = rpcCall('agent.a2a', {
-          fromAgent: selfAgent,
-          toAgent: args.target,
-          runner: args.runner,
-          prompt: args.message,
-          ...(args.model ? { model: args.model } : {}),
-        });
+        const d = discoverAgents();
+        const { port, agentName } = resolveTarget(args.target, d);
 
-        const r = result as Record<string, unknown>;
-        if (r.error) {
+        if (!port) {
           return {
             content: [
               {
                 type: 'text' as const,
-                text: `❌ Erreur send → ${args.target}: ${r.error}`,
+                text: `❌ Worker pour "${args.target}" introuvable. Utilisez action=discover pour lister les agents.`,
               },
             ],
             isError: true,
           };
         }
 
-        const content = (r.content || []) as Array<{ type: string; text: string }>;
-        const responseText = content.map((c) => c.text).join('\n');
+        const enrichedMessage = `[A2A — Message from ${selfAgent}]\n${args.message}`;
+        const result = sendToWorker(port, enrichedMessage, {
+          model: args.model,
+          timeoutMs: timeout,
+        });
+
+        if (!result.success) {
+          return {
+            content: [{ type: 'text' as const, text: `❌ ${result.text}` }],
+            isError: true,
+          };
+        }
 
         return {
           content: [
             {
               type: 'text' as const,
-              text: `📤 **Message envoyé à ${args.target}**\n\n${responseText}`,
+              text: `📤 **Message envoyé à ${agentName} (:${port})**\n\n${result.text}`,
             },
           ],
         };
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // DELEGATE — Async fire-and-forget + callback
+      // DELEGATE (async — fire and forget)
       // ═══════════════════════════════════════════════════════════════════════
       case 'delegate': {
         if (!args.target || !args.message) {
           return {
+            content: [{ type: 'text' as const, text: '❌ `target` et `message` requis' }],
+            isError: true,
+          };
+        }
+
+        const d = discoverAgents();
+        const { port, agentName } = resolveTarget(args.target, d);
+
+        if (!port) {
+          return {
             content: [
-              {
-                type: 'text' as const,
-                text: '❌ Paramètres `target` et `message` requis pour action=delegate',
-              },
+              { type: 'text' as const, text: `❌ Worker pour "${args.target}" introuvable` },
             ],
             isError: true,
           };
         }
 
-        const result = rpcCall('agent.delegate', {
-          fromAgent: selfAgent,
-          toAgent: args.target,
-          runner: args.runner,
-          prompt: args.message,
-          async: args.async,
+        // Fire and forget — don't wait for response
+        const enrichedMessage = `[A2A — Delegate from ${selfAgent}]\n${args.message}`;
+        const url = `http://localhost:${port}/send`;
+        const body = {
+          message: enrichedMessage,
+          userId: `a2a_${selfAgent}`,
+          username: selfAgent,
+          channelId: 'a2a_delegate',
           ...(args.model ? { model: args.model } : {}),
-          ...(args.callbackUrl ? { callbackUrl: args.callbackUrl } : {}),
-        });
+        };
 
-        const r = result as Record<string, unknown>;
-        if (r.error) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `❌ Erreur delegate → ${args.target}: ${r.error}`,
-              },
-            ],
-            isError: true,
-          };
+        // Spawn curl in background (fire-and-forget)
+        try {
+          const payload = JSON.stringify(body).replace(/'/g, "'\\''");
+          execSync(
+            `nohup curl -s -m ${Math.floor(timeout / 1000)} -X POST "${url}" -H "Content-Type: application/json" -d '${payload}' > /dev/null 2>&1 &`,
+            { timeout: 2000 },
+          );
+        } catch {
+          // ignore — fire and forget
         }
 
-        if (args.async) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `🤝 **Tâche déléguée à ${args.target}**\n\n**TaskId:** ${r.taskId}\n**Status:** ${r.status}\n${r.message || ''}`,
-              },
-            ],
-          };
-        }
-
-        const content = (r.content || []) as Array<{ type: string; text: string }>;
         return {
           content: [
             {
               type: 'text' as const,
-              text: `✅ **${args.target} a terminé**\n\n${content.map((c) => c.text).join('\n')}`,
+              text: `🤝 **Tâche déléguée à ${agentName} (:${port})**\n\nLe worker traite la requête en arrière-plan. Le résultat sera disponible dans sa session.`,
             },
           ],
         };
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // PIPELINE — Chaîne séquentielle A→B→C
+      // PIPELINE
       // ═══════════════════════════════════════════════════════════════════════
       case 'pipeline': {
         if (!args.message || !args.steps || args.steps.length === 0) {
@@ -534,230 +623,252 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
             content: [
               {
                 type: 'text' as const,
-                text: "❌ Paramètres `message` (prompt initial) et `steps` (chaîne d'agents) requis pour action=pipeline",
+                text: '❌ `message` (prompt initial) et `steps` requis pour pipeline',
               },
             ],
             isError: true,
           };
         }
 
-        const result = rpcCall('agent.pipeline', {
-          initiator: selfAgent,
-          runner: args.runner,
-          prompt: args.message,
-          steps: args.steps,
-          accumulateContext: args.accumulateContext,
-          ...(args.timeoutMs ? { totalTimeoutMs: args.timeoutMs } : {}),
-        });
+        const d = discoverAgents();
+        const outputs: Array<{ agent: string; output: string; success: boolean }> = [];
+        let currentPrompt = args.message;
 
-        const r = result as Record<string, unknown>;
-        if (r.error) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `❌ Erreur pipeline: ${r.error}`,
-              },
-            ],
-            isError: true,
-          };
+        for (let i = 0; i < args.steps.length; i++) {
+          const step = args.steps[i];
+          const { port, agentName } = resolveTarget(step.agentName, d);
+
+          if (!port) {
+            outputs.push({ agent: step.agentName, output: 'Worker introuvable', success: false });
+            break;
+          }
+
+          const stepPrompt =
+            (step.promptPrefix ? step.promptPrefix + '\n\n' : '') +
+            `[Pipeline Step ${i + 1}/${args.steps.length}]\n${currentPrompt}`;
+
+          const result = sendToWorker(port, stepPrompt, { timeoutMs: timeout });
+
+          outputs.push({
+            agent: `${agentName} (:${port})`,
+            output: result.text,
+            success: result.success,
+          });
+
+          if (!result.success) break;
+
+          currentPrompt = args.accumulateContext
+            ? outputs.map((o) => `[${o.agent}]: ${o.output}`).join('\n\n---\n\n')
+            : result.text;
         }
 
-        const outputs = (r.outputs || []) as Array<{
-          agentName: string;
-          output: string;
-          success: boolean;
-        }>;
         const lines: string[] = [
-          `🔗 **Pipeline terminé** (${r.executedSteps}/${r.totalSteps} steps)`,
+          `🔗 **Pipeline terminé** (${outputs.length}/${args.steps.length} steps)`,
           ``,
         ];
-
         for (const o of outputs) {
-          lines.push(`**${o.success ? '✅' : '❌'} ${o.agentName}:**`);
-          lines.push(o.output.slice(0, 500) + (o.output.length > 500 ? '...' : ''));
+          lines.push(`**${o.success ? '✅' : '❌'} ${o.agent}:**`);
+          lines.push(o.output.slice(0, 800) + (o.output.length > 800 ? '...' : ''));
           lines.push('');
         }
 
-        lines.push(`**Output final:**`);
-        lines.push(((r.finalOutput as string) || '').slice(0, 1000));
-
-        return {
-          content: [{ type: 'text' as const, text: lines.join('\n') }],
-        };
+        return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // FANOUT — 1→N parallèle + merge
+      // FANOUT
       // ═══════════════════════════════════════════════════════════════════════
       case 'fanout': {
         if (!args.message || !args.targets || args.targets.length === 0) {
           return {
-            content: [
-              {
-                type: 'text' as const,
-                text: '❌ Paramètres `message` et `targets` requis pour action=fanout',
-              },
-            ],
+            content: [{ type: 'text' as const, text: '❌ `message` et `targets` requis' }],
             isError: true,
           };
         }
 
-        const result = rpcCall('agent.fanout', {
-          fromAgent: selfAgent,
-          runner: args.runner,
-          prompt: args.message,
-          targets: args.targets,
-          mergeStrategy: args.mergeStrategy,
-          ...(args.model ? { model: args.model } : {}),
-          ...(args.timeoutMs ? { agentTimeoutMs: args.timeoutMs } : {}),
-        });
+        const d = discoverAgents();
+        const enrichedMessage = `[A2A — Fanout from ${selfAgent}]\n${args.message}`;
 
-        const r = result as Record<string, unknown>;
-        if (r.error) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `❌ Erreur fanout: ${r.error}`,
-              },
-            ],
-            isError: true,
-          };
+        // Run all in parallel
+        const results = args.targets
+          .map((target) => {
+            const { port } = resolveTarget(target, d);
+            if (!port) {
+              return { agent: target, success: false, text: 'Worker introuvable' };
+            }
+            return sendToWorker(port, enrichedMessage, { model: args.model, timeoutMs: timeout });
+          })
+          .map((r, i) => ({
+            agent: args.targets![i],
+            success: r.success,
+            text: r.text,
+          }));
+
+        // Merge
+        let merged: string;
+        let winner: string | undefined;
+
+        switch (args.mergeStrategy) {
+          case 'first_success': {
+            const first = results.find((r) => r.success);
+            merged = first ? first.text : 'Tous ont échoué';
+            winner = first?.agent;
+            break;
+          }
+          case 'best': {
+            const sorted = results
+              .filter((r) => r.success)
+              .sort((a, b) => b.text.length - a.text.length);
+            merged = sorted.length > 0 ? sorted[0].text : 'Tous ont échoué';
+            winner = sorted[0]?.agent;
+            break;
+          }
+          case 'concat':
+          default: {
+            merged = results
+              .map((r) => `### ${r.agent}${r.success ? '' : ' (ÉCHEC)'}\n${r.text}`)
+              .join('\n\n---\n\n');
+            break;
+          }
         }
 
+        const successCount = results.filter((r) => r.success).length;
         const lines: string[] = [
-          `🌐 **Fanout terminé** (${r.successCount}/${r.totalResults} succès, merge=${r.mergeStrategy})`,
-          ...(r.winner ? [`**Gagnant:** ${r.winner}`] : []),
+          `🌐 **Fanout** (${successCount}/${results.length} succès, merge=${args.mergeStrategy})`,
+          ...(winner ? [`**Gagnant:** ${winner}`] : []),
           ``,
-          `**Résultat fusionné:**`,
-          ((r.merged as string) || '').slice(0, 2000),
+          merged.slice(0, 3000),
         ];
 
-        return {
-          content: [{ type: 'text' as const, text: lines.join('\n') }],
-        };
+        return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // QUERY — Question multi-agents rapide
+      // QUERY
       // ═══════════════════════════════════════════════════════════════════════
       case 'query': {
         if (!args.message || !args.targets || args.targets.length === 0) {
           return {
-            content: [
-              {
-                type: 'text' as const,
-                text: '❌ Paramètres `message` et `targets` requis pour action=query',
-              },
-            ],
+            content: [{ type: 'text' as const, text: '❌ `message` et `targets` requis' }],
             isError: true,
           };
         }
 
-        const result = rpcCall('agent.query', {
-          fromAgent: selfAgent,
-          runner: args.runner,
-          prompt: args.message,
-          targets: args.targets,
-          ...(args.model ? { model: args.model } : {}),
-          ...(args.timeoutMs ? { agentTimeoutMs: args.timeoutMs } : {}),
-        });
+        const d = discoverAgents();
+        const enrichedMessage = `[A2A — Query from ${selfAgent}]\n${args.message}`;
+        const queryTimeout = Math.min(timeout, 60000);
 
-        const r = result as Record<string, unknown>;
-        if (r.error) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `❌ Erreur query: ${r.error}`,
-              },
-            ],
-            isError: true,
-          };
-        }
+        const results = args.targets
+          .map((target) => {
+            const { port } = resolveTarget(target, d);
+            if (!port) {
+              return { agent: target, success: false, text: 'Worker introuvable' };
+            }
+            return sendToWorker(port, enrichedMessage, {
+              model: args.model,
+              timeoutMs: queryTimeout,
+            });
+          })
+          .map((r, i) => ({
+            agent: args.targets![i],
+            success: r.success,
+            text: r.text,
+          }));
 
-        const results = (r.results || []) as Array<{
-          agentName: string;
-          success: boolean;
-          text: string;
-        }>;
         const lines: string[] = [
-          `❓ **Query multi-agents** (${r.successCount}/${r.totalQueried} réponses)`,
+          `❓ **Query multi-agents** (${results.filter((r) => r.success).length}/${results.length} réponses)`,
           ``,
         ];
 
-        for (const res of results) {
-          lines.push(`**${res.success ? '✅' : '❌'} ${res.agentName}:**`);
-          lines.push(res.text.slice(0, 500) + (res.text.length > 500 ? '...' : ''));
+        for (const r of results) {
+          lines.push(`**${r.success ? '✅' : '❌'} ${r.agent}:**`);
+          lines.push(r.text.slice(0, 500) + (r.text.length > 500 ? '...' : ''));
           lines.push('');
         }
 
-        return {
-          content: [{ type: 'text' as const, text: lines.join('\n') }],
-        };
+        return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // BROADCAST — Message global à tous les agents online
+      // BROADCAST
       // ═══════════════════════════════════════════════════════════════════════
       case 'broadcast': {
         if (!args.message) {
           return {
-            content: [
-              {
-                type: 'text' as const,
-                text: '❌ Paramètre `message` requis pour action=broadcast',
-              },
-            ],
+            content: [{ type: 'text' as const, text: '❌ `message` requis' }],
             isError: true,
           };
         }
 
-        const result = rpcCall('agent.broadcast', {
-          fromAgent: selfAgent,
-          runner: args.runner,
-          prompt: args.message,
-          race: args.race,
-          ...(args.targets ? { targets: args.targets } : {}),
-          ...(args.model ? { model: args.model } : {}),
-          ...(args.timeoutMs ? { agentTimeoutMs: args.timeoutMs } : {}),
+        const d = discoverAgents();
+
+        // Determine targets
+        let targetWorkers: WorkerInfo[];
+        if (args.targets && args.targets.length > 0) {
+          // Resolve each target to a worker
+          targetWorkers = args.targets
+            .map((t) => {
+              const { port } = resolveTarget(t, d);
+              return d.workers.find((w) => w.port === port);
+            })
+            .filter((w): w is WorkerInfo => w !== undefined);
+        } else {
+          // All online workers
+          targetWorkers = d.workers.filter((w) => w.online);
+        }
+
+        if (targetWorkers.length === 0) {
+          return {
+            content: [{ type: 'text' as const, text: '❌ Aucun worker online pour broadcast' }],
+            isError: true,
+          };
+        }
+
+        const enrichedMessage = `[A2A — Broadcast from ${selfAgent}]\n${args.message}`;
+
+        if (args.race) {
+          // First to respond wins
+          for (const w of targetWorkers) {
+            const result = sendToWorker(w.port, enrichedMessage, {
+              model: args.model,
+              timeoutMs: timeout,
+            });
+            if (result.success) {
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: `📡 **Broadcast race — ${w.agentName} (:${w.port}) a gagné!**\n\n${result.text}`,
+                  },
+                ],
+              };
+            }
+          }
+          return {
+            content: [{ type: 'text' as const, text: '❌ Tous les workers ont échoué' }],
+            isError: true,
+          };
+        }
+
+        // Send to all in parallel
+        const results = targetWorkers.map((w) => {
+          const r = sendToWorker(w.port, enrichedMessage, {
+            model: args.model,
+            timeoutMs: timeout,
+          });
+          return { agent: `${w.agentName} (:${w.port})`, success: r.success, text: r.text };
         });
 
-        const r = result as Record<string, unknown>;
-        if (r.error) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `❌ Erreur broadcast: ${r.error}`,
-              },
-            ],
-            isError: true,
-          };
-        }
+        const successCount = results.filter((r) => r.success).length;
+        const lines: string[] = [`📡 **Broadcast** — ${successCount}/${results.length} succès`, ``];
 
-        const results = (r.results || []) as Array<{
-          agentName: string;
-          success: boolean;
-          content?: Array<{ text: string }>;
-          error?: string;
-        }>;
-        const lines: string[] = [
-          `📡 **Broadcast ${r.race ? '(race mode)' : ''}** — ${r.successCount}/${r.total} succès`,
-          ``,
-        ];
-
-        for (const res of results) {
-          const text = res.content?.map((c) => c.text).join('\n') || res.error || '';
-          lines.push(`**${res.success ? '✅' : '❌'} ${res.agentName}:**`);
-          lines.push(text.slice(0, 300) + (text.length > 300 ? '...' : ''));
+        for (const r of results) {
+          lines.push(`**${r.success ? '✅' : '❌'} ${r.agent}:**`);
+          lines.push(r.text.slice(0, 300) + (r.text.length > 300 ? '...' : ''));
           lines.push('');
         }
 
-        return {
-          content: [{ type: 'text' as const, text: lines.join('\n') }],
-        };
+        return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
       }
 
       default:
@@ -765,7 +876,7 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
           content: [
             {
               type: 'text' as const,
-              text: `❌ Action inconnue: ${action}. Actions: discover, status, send, delegate, pipeline, fanout, query, broadcast`,
+              text: `❌ Action inconnue: ${args.action}`,
             },
           ],
           isError: true,
