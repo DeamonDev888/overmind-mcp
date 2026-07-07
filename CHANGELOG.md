@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.3.7] - 2026-07-05
+
+### Added
+- install-overmind-native.sh Step 10 refonte: 6 actions détection + correction (structure dossiers, dual-path migration, symlinks cassés, audit profil complet, bridge/agents.json, .mcp.json global) — ne supprime jamais de données utilisateur
+
 ## [3.3.6] - 2026-07-05
 
 ### Changed

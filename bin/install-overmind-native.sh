@@ -742,22 +742,93 @@ ok "overmind-mcp: v${OM_VER}"
 ok "overmind-postgres-mcp: v${PGM_VER}"
 
 # ================================================================
-# STEP 10/11 — Audit arborescence agents (~/.overmind/hermes/profiles/)
+# STEP 10/11 — Audit + Réparation arborescence agents
+#   Détecte ET corrige les mauvaises configs, symlinks cassés,
+#   fichiers manquants, env incomplet — SANS RIEN EFFACER.
 # ================================================================
-step "Audit arborescence agents"
+step "Audit + Réparation arborescence agents"
 
 PROFILES_DIR="$OM_DIR/hermes/profiles"
 
-if [ ! -d "$PROFILES_DIR" ]; then
-  warn "Dossier profiles/ absent — aucun agent configuré"
-  log "Création de la structure canonique..."
-  mkdir -p "$PROFILES_DIR" "$OM_DIR/hermes/distributions" "$OM_DIR/bridge/wrappers" 2>/dev/null || true
-  ok "Structure ~/.overmind/hermes/ créée"
-else
-  ok "Dossier profiles/ trouvé"
+# ─── 1. Vérifier la structure globale ─────────────────────────
+for check_dir in "bridge/wrappers" "logs" "hermes/profiles" "hermes/distributions"; do
+  if [ ! -d "$OM_DIR/$check_dir" ]; then
+    track_warn "~/.overmind/${check_dir}/ MANQUANT → création"
+    mkdir -p "$OM_DIR/$check_dir" 2>/dev/null || true
+  else
+    ok "~/.overmind/${check_dir}/"
+  fi
+done
+
+# ─── 2. Détecter le dual-path ~/.hermes vs ~/.overmind/hermes ─
+HERMES_NATIVE="$OM_HOME/.hermes"
+if [ -d "$HERMES_NATIVE" ] && [ -d "$OM_DIR/hermes" ]; then
+  # Les deux existent! C'est le bug dual-path.
+  NATIVE_PROFILES=$(find "$HERMES_NATIVE/profiles" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+  OM_PROFILES=$(find "$PROFILES_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+
+  if [ "$NATIVE_PROFILES" -gt 0 ] && [ "$OM_PROFILES" -gt 0 ]; then
+    warn "DUAL-PATH détecté: ~/.hermes/ ($NATIVE_PROFILES profils) ET ~/.overmind/hermes/ ($OM_PROFILES profils)"
+    log "Correction: migration des profils ~/.hermes/ → ~/.overmind/hermes/profiles/ (sans effacer)..."
+
+    for native_profile in "$HERMES_NATIVE/profiles"/*/; do
+      [ -d "$native_profile" ] || continue
+      pname=$(basename "$native_profile")
+      target="$PROFILES_DIR/$pname"
+
+      if [ -d "$target" ]; then
+        # Le profil existe déjà dans overmind — vérifier quels fichiers manquent
+        for file in config.yaml SOUL.md .env .mcp.json profile.yaml workspace.yaml; do
+          if [ ! -f "$target/$file" ] && [ -f "$native_profile/$file" ]; then
+            log "  Copie $pname/$file (manquant dans overmind, présent dans native)"
+            cp -p "$native_profile/$file" "$target/$file" 2>/dev/null || true
+          fi
+        done
+        # state.db
+        if [ ! -f "$target/state.db" ] && [ -f "$native_profile/state.db" ]; then
+          log "  Copie $pname/state.db"
+          cp -p "$native_profile/state.db" "$target/state.db" 2>/dev/null || true
+        fi
+        # auth.json
+        if [ ! -f "$target/auth.json" ] && [ -f "$native_profile/auth.json" ]; then
+          log "  Copie $pname/auth.json"
+          cp -p "$native_profile/auth.json" "$target/auth.json" 2>/dev/null || true
+        fi
+        # skills/
+        if [ ! -d "$target/skills" ] && [ -d "$native_profile/skills" ]; then
+          log "  Copie $pname/skills/"
+          cp -rp "$native_profile/skills" "$target/" 2>/dev/null || true
+        fi
+        ok "Profil $pname: fichiers manquants comblés depuis ~/.hermes/"
+      else
+        # Le profil n'existe pas dans overmind — migration complète
+        log "  Migration complète: $pname"
+        cp -rp "$native_profile" "$target/" 2>/dev/null || true
+        ok "Profil $pname migré vers ~/.overmind/hermes/profiles/"
+      fi
+    done
+    ok "Migration dual-path terminée (rien effacé — ~/.hermes/ conservé)"
+  elif [ "$NATIVE_PROFILES" -gt 0 ] && [ "$OM_PROFILES" -eq 0 ]; then
+    warn "~/.hermes/ a $NATIVE_PROFILES profils, ~/.overmind/hermes/ est vide"
+    log "Migration complète des profils..."
+    cp -rp "$HERMES_NATIVE/profiles/"* "$PROFILES_DIR/" 2>/dev/null || true
+    # Copier aussi config.yaml et auth.json globaux
+    [ -f "$HERMES_NATIVE/config.yaml" ] && cp -p "$HERMES_NATIVE/config.yaml" "$OM_DIR/hermes/config.yaml" 2>/dev/null || true
+    [ -f "$HERMES_NATIVE/auth.json" ] && cp -p "$HERMES_NATIVE/auth.json" "$OM_DIR/hermes/auth.json" 2>/dev/null || true
+    ok "Profils migrés vers ~/.overmind/hermes/profiles/"
+  fi
 fi
 
-# Lister les profils existants
+# ─── 3. Vérifier les symlinks cassés ──────────────────────────
+find "$OM_DIR" -type l 2>/dev/null | while read -r link; do
+  if [ ! -e "$link" ]; then
+    linkname=$(echo "$link" | sed "s|$OM_DIR/||")
+    track_warn "Symlink cassé: ~/.overmind/${linkname} → suppression (lien mort seulement)"
+    rm -f "$link" 2>/dev/null || true
+  fi
+done
+
+# ─── 4. Audit détaillé par profil ─────────────────────────────
 PROFILE_COUNT=0
 if [ -d "$PROFILES_DIR" ]; then
   PROFILE_COUNT=$(find "$PROFILES_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
@@ -767,27 +838,39 @@ if [ "$PROFILE_COUNT" -eq 0 ]; then
   warn "Aucun profil agent dans ~/.overmind/hermes/profiles/"
   log "Créez un agent avec: overmind create-agent --name <name> --prompt '...' --runner hermes"
 else
-  log "Audit de $PROFILE_COUNT profil(s)..."
+  log "Audit + réparation de $PROFILE_COUNT profil(s)..."
   echo
 
-  # Pour chaque profil, vérifier les fichiers requis
   for profile_path in "$PROFILES_DIR"/*/; do
     [ -d "$profile_path" ] || continue
     pname=$(basename "$profile_path")
     echo -e "  ${C}▸ ${pname}${N}"
 
-    # Fichiers requis (v3.1)
-    PROFILE_OK=true
-
-    # config.yaml (OBLIGATOIRE)
+    # ── config.yaml (OBLIGATOIRE) ────────────────────────────
     if [ -f "${profile_path}config.yaml" ]; then
-      ok "${pname}/config.yaml"
+      # Vérifier qu'il contient model.provider et model.model
+      if ! grep -q 'model:' "${profile_path}config.yaml" 2>/dev/null; then
+        track_warn "${pname}/config.yaml ne contient pas 'model:' → rewrite"
+        cat > "${profile_path}config.yaml" <<YAMLEOF
+model:
+  provider: minimax-cn
+  model: MiniMax-M3
+YAMLEOF
+        ok "${pname}/config.yaml corrigé avec defaults"
+      else
+        ok "${pname}/config.yaml"
+      fi
     else
-      fail "${pname}/config.yaml MANQUANT"
-      PROFILE_OK=false
+      track_warn "${pname}/config.yaml MANQUANT → création avec defaults"
+      cat > "${profile_path}config.yaml" <<YAMLEOF
+model:
+  provider: minimax-cn
+  model: MiniMax-M3
+YAMLEOF
+      ok "${pname}/config.yaml créé"
     fi
 
-    # SOUL.md (prompt système)
+    # ── SOUL.md ───────────────────────────────────────────────
     if [ -f "${profile_path}SOUL.md" ]; then
       SOUL_SIZE=$(wc -c < "${profile_path}SOUL.md" 2>/dev/null | tr -d ' ')
       if [ "$SOUL_SIZE" -lt 50 ]; then
@@ -796,111 +879,133 @@ else
         ok "${pname}/SOUL.md (${SOUL_SIZE} bytes)"
       fi
     else
-      track_warn "${pname}/SOUL.md MANQUANT — l'agent n'a pas de prompt système"
+      track_warn "${pname}/SOUL.md MANQUANT → création placeholder"
+      echo "# ${pname}" > "${profile_path}SOUL.md"
+      echo "" >> "${profile_path}SOUL.md"
+      echo "Tu es un agent Overmind. Réponds aux requêtes de l'utilisateur." >> "${profile_path}SOUL.md"
+      ok "${pname}/SOUL.md créé (placeholder)"
     fi
 
-    # .env (secrets du profil)
-    if [ -f "${profile_path}.env" ]; then
-      ok "${pname}/.env"
+    # ── .env (clés LLM) ───────────────────────────────────────
+    if [ ! -f "${profile_path}.env" ]; then
+      track_warn "${pname}/.env MANQUANT → création template"
+      cat > "${profile_path}.env" <<ENVEOF
+# Credentials pour ${pname}
+# Remplir avec vos clés API
+# MINIMAX_CN_API_KEY=sk-cp-...
+# ANTHROPIC_AUTH_TOKEN=...
+ENVEOF
+      chmod 600 "${profile_path}.env" 2>/dev/null || true
+      ok "${pname}/.env créé (template)"
     else
-      track_warn "${pname}/.env MANQUANT — clés LLM manquantes"
+      # Vérifier qu'au moins une clé est présente
+      if ! grep -qE 'API_KEY|AUTH_TOKEN|SECRET' "${profile_path}.env" 2>/dev/null; then
+        track_warn "${pname}/.env ne contient aucune clé API"
+      else
+        ok "${pname}/.env"
+      fi
     fi
 
-    # profile.yaml (kanban — OBLIGATOIRE v3.1)
-    if [ -f "${profile_path}profile.yaml" ]; then
+    # ── auth.json stale ───────────────────────────────────────
+    if [ -f "${profile_path}auth.json" ]; then
+      AUTH_AGE=$(($(date +%s) - $(stat -f %m "${profile_path}auth.json" 2>/dev/null || stat -c %Y "${profile_path}auth.json" 2>/dev/null || echo 0)))
+      if [ "$AUTH_AGE" -gt 604800 ]; then
+        track_warn "${pname}/auth.json stale (>7j). Peut causer 401/429. Suppression du cache..."
+        rm -f "${profile_path}auth.json" 2>/dev/null || true
+        ok "${pname}/auth.json supprimé (sera recréé par Hermes au prochain run)"
+      else
+        ok "${pname}/auth.json (récent)"
+      fi
+    fi
+
+    # ── profile.yaml (kanban) ─────────────────────────────────
+    if [ ! -f "${profile_path}profile.yaml" ]; then
+      track_warn "${pname}/profile.yaml MANQUANT → création"
+      cat > "${profile_path}profile.yaml" <<YAMLEOF
+name: "${pname}"
+description: "Agent Overmind"
+model: "$(grep 'model:' "${profile_path}config.yaml" 2>/dev/null | head -1 | awk '{print $2}' || echo 'unknown')"
+workspace: persistent
+created: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+YAMLEOF
+      ok "${pname}/profile.yaml créé"
+    else
       ok "${pname}/profile.yaml"
-    else
-      track_warn "${pname}/profile.yaml MANQUANT — kanban router sera aveugle"
     fi
 
-    # workspace.yaml
-    if [ -f "${profile_path}workspace.yaml" ]; then
+    # ── workspace.yaml ────────────────────────────────────────
+    if [ ! -f "${profile_path}workspace.yaml" ]; then
+      log "${D}  ${pname}/workspace.yaml → création (persistent)${N}"
+      echo "kind: persistent" > "${profile_path}workspace.yaml"
+      echo "path: ${profile_path}" >> "${profile_path}workspace.yaml"
+      ok "${pname}/workspace.yaml créé"
+    else
       ok "${pname}/workspace.yaml"
-    else
-      track_warn "${pname}/workspace.yaml MANQUANT — workspace kind inconnu"
     fi
 
-    # state.db (sessions)
-    if [ -f "${profile_path}state.db" ]; then
-      ok "${pname}/state.db (sessions)"
-    else
-      log "${D}  ${pname}/state.db non créé (sera créé au premier run)${N}"
-    fi
-
-    # .mcp.json (MCP servers override)
+    # ── .mcp.json (optionnel) ─────────────────────────────────
     if [ -f "${profile_path}.mcp.json" ]; then
-      ok "${pname}/.mcp.json (MCP override)"
+      ok "${pname}/.mcp.json"
     else
       log "${D}  ${pname}/.mcp.json absent (utilisera le global)${N}"
     fi
 
-    # skills/ (optionnel)
+    # ── state.db ──────────────────────────────────────────────
+    if [ -f "${profile_path}state.db" ]; then
+      ok "${pname}/state.db"
+    else
+      log "${D}  ${pname}/state.db non créé (sera créé au premier run)${N}"
+    fi
+
+    # ── skills/ (optionnel) ───────────────────────────────────
     if [ -d "${profile_path}skills" ]; then
       SKILL_COUNT=$(find "${profile_path}skills" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
-      if [ "$SKILL_COUNT" -gt 0 ]; then
-        ok "${pname}/skills/ (${SKILL_COUNT} skill(s))"
-      fi
+      ok "${pname}/skills/ (${SKILL_COUNT} skill(s))"
     fi
 
-    # memories/ (optionnel)
+    # ── memories/ (optionnel) ─────────────────────────────────
     if [ -f "${profile_path}memories/MEMORY.md" ]; then
       ok "${pname}/memories/MEMORY.md"
-    fi
-
-    # auth.json (cache credentials — vérifier pas stale)
-    if [ -f "${profile_path}auth.json" ]; then
-      AUTH_AGE=$(($(date +%s) - $(stat -f %m "${profile_path}auth.json" 2>/dev/null || stat -c %Y "${profile_path}auth.json" 2>/dev/null || echo 0)))
-      if [ "$AUTH_AGE" -gt 604800 ]; then
-        track_warn "${pname}/auth.json stale (${AUTH_AGE}s — >7j). Peut causer des 401/429."
-      else
-        ok "${pname}/auth.json (récent)"
-      fi
     fi
 
     echo
   done
 fi
 
-# Vérifier la structure globale ~/.overmind/
-echo -e "  ${C}Structure globale:${N}"
-for check_dir in "bridge" "logs" "hermes/profiles" "hermes/distributions"; do
-  if [ -d "$OM_DIR/$check_dir" ]; then
-    ok "~/.overmind/${check_dir}/"
-  else
-    track_warn "~/.overmind/${check_dir}/ MANQUANT"
-    mkdir -p "$OM_DIR/$check_dir" 2>/dev/null || true
-  fi
-done
-
-# Vérifier les symlinks cassés (runs/, agents/ legacy)
-for legacy_link in "hermes/runs" "hermes/agents" "hermes/sessions"; do
-  if [ -L "$OM_DIR/$legacy_link" ]; then
-    if [ ! -e "$OM_DIR/$legacy_link" ]; then
-      track_warn "Symlink cassé: ~/.overmind/${legacy_link} → suppression"
-      rm -f "$OM_DIR/$legacy_link" 2>/dev/null || true
-    else
-      ok "Symlink legacy: ~/.overmind/${legacy_link} → OK"
-    fi
-  fi
-done
-
-# Vérifier bridge/agents.json (sessions runtime)
-if [ -f "$OM_DIR/bridge/agents.json" ]; then
+# ─── 5. Vérifier bridge/agents.json ───────────────────────────
+if [ ! -f "$OM_DIR/bridge/agents.json" ]; then
+  log "${D}bridge/agents.json absent → création vide${N}"
+  echo '{}' > "$OM_DIR/bridge/agents.json" 2>/dev/null || true
+  ok "bridge/agents.json créé"
+else
   SESSION_COUNT=$(grep -c '"id"' "$OM_DIR/bridge/agents.json" 2>/dev/null || echo 0)
   ok "bridge/agents.json (${SESSION_COUNT} session(s))"
-else
-  log "${D}bridge/agents.json absent (créé au premier run)${N}"
 fi
 
-# Vérifier .mcp.json global
-if [ -f "$OM_DIR/.mcp.json" ]; then
+# ─── 6. Vérifier .mcp.json global ─────────────────────────────
+if [ ! -f "$OM_DIR/.mcp.json" ]; then
+  track_warn ".mcp.json global MANQUANT → création minimal"
+  cat > "$OM_DIR/.mcp.json" <<MCPEOF
+{
+  "mcpServers": {
+    "memory": {
+      "transport": "httpStream",
+      "url": "http://localhost:${MCP_PORT_CORE}/mcp"
+    },
+    "postgres": {
+      "transport": "httpStream",
+      "url": "http://localhost:${MCP_PORT_PG}/mcp"
+    }
+  }
+}
+MCPEOF
+  ok ".mcp.json créé"
+else
   MCP_SERVERS=$(grep -c '"transport"' "$OM_DIR/.mcp.json" 2>/dev/null || echo 0)
   ok ".mcp.json global (${MCP_SERVERS} serveur(s) MCP)"
-else
-  track_warn ".mcp.json global MANQUANT"
 fi
 
-ok "Audit arborescence terminé"
+ok "Audit + réparation terminé"
 
 # ================================================================
 # STEP 11/11 — Validation finale
