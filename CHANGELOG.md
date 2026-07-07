@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.3.6] - 2026-07-05
+
+### Changed
+- README.md: arborescence mise à jour avec HERMES_HOME (injecté par HermesRunner)
+- docs/SETUP_HERMES_AGENT_FROM_SCRATCH.md: hermes/agents/ → hermes/profiles/, chemins corrigés, mentions du HERMES_HOME
+- docs/SUBTILISATION_EXPLAINED.md: note que HERMES_HOME est injecté par HermesRunner en v3.1
+- docs/provider-config-map.md: chemin corrigé ~/.hermes/.env → ~/.overmind/hermes/.env
+
 ## [3.3.5] - 2026-07-05
 
 ### Fixed

@@ -49,17 +49,14 @@ Le postinstall crée `~/.overmind/` automatiquement :
 ├── bridge/
 │   ├── agents.json                       ← registre sessions unifié
 │   └── process-registry.json             ← runtime live
-└── hermes/
+└── hermes/                               ← HERMES_HOME (injecté par HermesRunner)
     └── profiles/                         ← SOURCE homes (unique)
         └── <name>/
-    │       ├── profile.yaml              ← description kanban (OBLIGATOIRE)
-    │       ├── config.yaml               ← Hermes config (model, provider)
-    │       ├── SOUL.md                   ← system prompt
-    │       ├── .env                      ← credentials spécifiques
-    │       ├── .mcp.json                 ← override MCP
-    │       ├── state.db                  ← state local (SQLite)
-    │       ├── workspace.yaml            ← kind: scratch|persistent|shared
-    │       └── README.md                 ← rôle + owner
+            ├── config.yaml               ← Hermes config (model, provider)
+            ├── SOUL.md                   ← system prompt
+            ├── .env                      ← credentials spécifiques
+            ├── state.db                  ← state local (SQLite)
+            └── skills/                   ← skills personnalisés
 ```
 
 ### Configuration MCP Client

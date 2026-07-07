@@ -165,7 +165,7 @@ Ce que tu n'as PAS besoin de faire
 - Tu n'as pas à lire plugins/model-providers/minimax/init.py
 - Tu n'as pas à mapper manuellement $KEY vers le bon provider
 - Tu n'as pas à tester 50 combinaisons d'env var names
-- Tu n'as pas à te soucier du cwd du process pour HERMES_HOME
+- Tu n'as pas à te soucier du cwd du process pour HERMES_HOME (v3.1: injecté par HermesRunner)
 
 Tu mets ton token, Overmind s'occupe du reste.
 

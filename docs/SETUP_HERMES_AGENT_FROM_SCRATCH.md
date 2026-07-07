@@ -128,12 +128,14 @@ automatiquement quels env vars provider-specific seed (e.g. `MINIMAX_CN_API_KEY`
 │   └── agents/<agent>.md                   ← (legacy, ignoré par Hermes)
 ├── .mcp.json                               ← registre MCP servers HTTP
 ├── .env                                    ← tokens + secrets ($VAR)
-├── .overmind/hermes/                       ← HERMES_HOME (root partagé)
-│   ├── agents/<agent>/                     ← COUCHE 2 (canonique, auto-généré)
-│   │   ├── settings.json                   ← écrit par le runner
-│   │   ├── SOUL.md                         ← persona de l'agent
-│   │   ├── sessions/  logs/  memories/    ← Hermes upstream écrit
-│   ├── config.yaml                         ← COUCHE 3 (Hermes global, auto-bootstrappé)
+├── .overmind/hermes/                       ← HERMES_HOME (root partagé, injecté par HermesRunner)
+│   ├── config.yaml                         ← Config globale Hermes (auto-bootstrappé)
+│   ├── auth.json                           ← Credential pool
+│   └── profiles/<agent>/                   ← COUCHE 2 (canonique v3.1)
+│       ├── config.yaml                     ← Provider + model + mcp_servers
+│       ├── SOUL.md                         ← Persona de l'agent
+│       ├── .env                            ← Clés API spécifiques
+│       └── state.db                        ← Sessions + state local
 │   ├── auth.json                           ← COUCHE 3 (credential pool, Hermes global)
 │   ├── sessions/  logs/                    ← partagés entre agents
 └── src/                                    ← code source Overmind (si dev)
@@ -141,7 +143,7 @@ automatiquement quels env vars provider-specific seed (e.g. `MINIMAX_CN_API_KEY`
 
 **3 couches pour 3 raisons :**
 - **Source** `.claude/settings_<name>.json` = portable entre 4 runners (Claude/Kilo/OpenClaw/Hermes)
-- **Canonique** `.overmind/hermes/agents/<name>/settings.json` = ce qu'Hermes upstream lit
+- **Canonique** `.overmind/hermes/profiles/<name>/config.yaml` = ce qu'Hermes upstream lit (via HERMES_HOME injecté par HermesRunner)
 - **Globale** `.overmind/hermes/config.yaml` + `auth.json` = état partagé, géré par Hermes upstream
 
 ### 4.3 La subtilisation — TABLE DE MAPPING (le coeur du fix 2.8.x)
@@ -246,7 +248,7 @@ de matcher mais ça peut casser.
 
 ### 6.3 Le persona de l'agent (SOUL.md)
 
-**`~/overmind-workflow/.overmind/hermes/agents/sniperbot_analyst/SOUL.md`**
+**`~/.overmind/hermes/profiles/sniperbot_analyst/SOUL.md`**
 
 Ce fichier est créé automatiquement par le runner au premier spawn, mais
 tu peux le pré-créer. Format : markdown libre.
@@ -276,7 +278,7 @@ toujours via les outils MCP Discord (jamais de texte brut après un appel).
 **`~/overmind-workflow/.overmind/hermes/config.yaml`**
 
 Ce fichier est créé automatiquement par le runner Overmind au premier
-spawn (depuis `~/.hermes/config.yaml` par défaut). Contient au minimum :
+spawn (depuis `~/.overmind/hermes/config.yaml` par défaut). Contient au minimum :
 
 ```yaml
 mcp_servers:
@@ -421,7 +423,7 @@ curl http://localhost:3001/status  # bridge
 | Sniperbot dit "j'ai pas de MCP" mais log montre 69 tools registered | SOUL.md désaligné | Réécrire le SOUL.md pour lister les vrais tools |
 | "Provider: openrouter" au lieu de "minimax-cn" | `--provider` flag pas passé | Vérifier que le runner a `--provider` dans cleanArgs |
 | `EXIT_CODE_1` sur le bridge | MCP server tourne l'ancien build | `pkill -f overmind && overmind start &` |
-| "Erreur inconnue" générique | Stale state dans `.overmind/hermes/agents/<name>/.hermes/` | Migrer vers `agents/<name>/` (le helper `getAgentHermesHome` 2.8.30 le fait auto) |
+| "Erreur inconnue" générique | Stale state dans l'ancien layout | Migrer vers `~/.overmind/hermes/profiles/<name>/` (le script `install-overmind-native.sh` le fait auto) |
 | `cleanupTempFiles` efface le settings.json canonique | settings.json pushé dans `tempFiles` | Bug fixé en 2.8.32 — ne pas push |
 
 ---

@@ -11,7 +11,7 @@ Workflow/.env  (~/.env)
       ↓
 settings_[agent].json  →  env  (apres interpolation $VAR par process.env)
       ↓
-HERMES_HOME/.env  (~/.hermes/.env)  ← DERNIER MOT
+HERMES_HOME/.env  (~/.overmind/hermes/.env)  ← DERNIER MOT (v3.1: HERMES_HOME injecté par HermesRunner)
 ```
 
 **Detail du code** (`NousHermesRunner.ts` l.268-456):
@@ -36,7 +36,7 @@ Donc le `.hermes/.env` de l'agent a **toujours le dernier mot**. Si tu mets `MIN
 
 | Fichier | Role |
 |---|---|
-| `HERMES_HOME/.env` | API keys globales Hermes (fallback) |
+| `HERMES_HOME/.env` | API keys globales Hermes (~/.overmind/hermes/.env) (fallback) |
 | `Workflow/.env` | Variables du workflow (DB, tokens, etc.) |
 | `settings_[agent].json` | Config par agent (model, provider, tokens, MCP) |
 | `HERMES_HOME/.hermes/config.yaml` | Config systeme Hermes (model.default, provider, etc.) |
