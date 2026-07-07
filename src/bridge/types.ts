@@ -162,7 +162,7 @@ export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
   maxRetries: 2,
   retryDelayMs: 2_000,
   defaultMcpServers: [
-    { name: 'overmind', transport: 'httpStream', url: 'http://localhost:3099/mcp' },
+    { name: 'memory', transport: 'httpStream', url: 'http://localhost:3099/mcp' },
   ],
 };
 

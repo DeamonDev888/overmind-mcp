@@ -6,10 +6,10 @@ import { AgentManager } from '../services/AgentManager.js';
 
 /**
  * MCP servers injectés par défaut lors de la création d'un agent Hermes.
- * 'overmind' = serveur :3099 complet (14 tools incluant memory_search/store/runs).
- * Pour un accès restreint mémoire seule, utiliser 'memory' sur :3098 (--memory-only).
+ * 'memory' = 3 tools restreint (memory_search/store/runs, --memory-only sur :3099).
+ * Pour un accès complet 14 tools, utiliser 'overmind' au lieu de 'memory'.
  */
-const DEFAULT_MCP_SERVERS = ['overmind'];
+const DEFAULT_MCP_SERVERS = ['memory'];
 
 export const createAgentSchema = z.object({
   name: z

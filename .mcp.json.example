@@ -3,12 +3,12 @@
     "overmind": {
       "transport": "httpStream",
       "url": "http://localhost:3099/mcp",
-      "description": "OverMind MCP — orchestration complète (14 tools, port 3099)"
+      "description": "OverMind complet — 14 tools (run_agent, memory_*, create_agent, etc.)"
     },
     "memory": {
       "transport": "httpStream",
-      "url": "http://localhost:3098/mcp",
-      "description": "Memory access only — memory_search/store/runs (3 tools, port 3098)"
+      "url": "http://localhost:3099/mcp",
+      "description": "Memory-only — 3 tools (memory_search/store/runs, via --memory-only)"
     },
     "postgres": {
       "transport": "httpStream",
@@ -21,6 +21,6 @@
       "description": "Discord MCP — messages, channels, members (port 3141)"
     }
   },
-  "description": "Configuration MCP HTTP Singleton — v3.3. 'overmind' = 14 tools (:3099), 'memory' = 3 tools restreints (:3098 --memory-only). 'discord' est un nom réservé Hermes, utilisez 'serveur_discord'.",
-  "version": "3.3.0"
+  "description": "'overmind' = 14 tools (:3099), 'memory' = 3 tools restreints (:3099 --memory-only). Même port, accès différent. 'serveur_discord' obligatoire (discord réservé Hermes).",
+  "version": "3.3.2"
 }

@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.3.9] — 2025-07-07
+
+### Changed
+- **Memory MCP par défaut pour tous les agents**: `DEFAULT_BRIDGE_CONFIG.defaultMcpServers` injecte `{ name: 'memory', url: ':3099' }` (3 tools restreints: `memory_search`, `memory_store`, `memory_runs`) dans le bridge
+- `create_agent.ts`: `DEFAULT_MCP_SERVERS = ['memory']` — tout nouvel agent reçoit le MCP `memory` automatiquement
+- `OverBridgeService.runAgent()`: injecte `this.proxy.defaultMcpServers = 'memory'` dans chaque appel d'agent
+- Accès complet (`run_agent`, `create_agent`, etc.) nécessite maintenant `'overmind'` explicite dans `config.yaml`
+
+### Fixed
+- `.mcp.json.example` et `config_example.ts` alignés avec le nouveau défaut `memory`
+- `PostgresMemoryProvider.ts` corrections mineures
+
+---
+
 ## SÉRIE v3 — VUE D'ENSEMBLE
 
 La série v3 représente la refonte majeure d'Overmind MCP: architecture profiles/, isolation mémoire par agent, sécurité anti-secrets, installateur multi-OS robuste, et intégration Hermes native via HERMES_HOME.

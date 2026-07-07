@@ -620,6 +620,8 @@ for (let i = 0; i < cliArgs.length; i++) {
   } else if (cliArgs[i] === '--mcp-config' && cliArgs[i + 1]) {
     mcpPath = cliArgs[i + 1];
     i++;
+    // ─── Mode restreint mémoire (v3.2 — actif via --memory-only) ────────────
+    // Le daemon écoute sur le même port que le serveur principal.
   } else if (cliArgs[i] === '--memory-only') {
     memoryOnly = true;
   } else if (cliArgs[i] === '--memory-tools-only') {

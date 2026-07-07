@@ -450,6 +450,18 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
     const { embedding, model } = await embedText(params.text);
     if (!embedding || embedding.length === 0) {
+      // Check si la clé API embedding est configurée
+      const embKey = process.env.OVERMIND_EMBEDDING_KEY || process.env.OPENROUTER_API_KEY;
+      if (!embKey || embKey.includes('...') || embKey === '') {
+        logger.error(
+          '[PostgresMemory] EMBEDDING_KEY manquante — memory_store échoue silencieusement. ' +
+            'Configurez OVERMIND_EMBEDDING_KEY dans ~/.overmind/.env',
+        );
+        throw new Error(
+          'EMBEDDING_NOT_CONFIGURED: OVERMIND_EMBEDDING_KEY manquante. ' +
+            'Ajoutez OVERMIND_EMBEDDING_KEY=sk-or-v1-... dans ~/.overmind/.env',
+        );
+      }
       const err = new Error(
         `[PostgresMemory] CRITICAL: embedText() returned empty embedding for text chunk "${params.text.slice(0, 50)}...". ` +
           `Cannot store knowledge with NULL embedding — search would return corrupt results. ` +

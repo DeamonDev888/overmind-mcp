@@ -29,7 +29,7 @@ export const configExampleSchema = z.object({
  *
  * MCP servers:
  *   'overmind' = :3099 (14 tools complet)
- *   'memory'   = :3098 (--memory-only, 3 tools)
+ *   'memory'   = :3099 (3 tools restreint mémoire, --memory-only)
  *   'postgres' = :5433 (10 tools DB)
  *
  * OVERMIND_AGENT_NAME est injecté par HermesRunner dans le child env.
@@ -62,8 +62,8 @@ export async function configExample(args: z.infer<typeof configExampleSchema>) {
 
 | Nom | Port | Tools | Usage |
 |-----|------|-------|-------|
-| \`overmind\` | :3099 | 14 | Orchestration complète + mémoire |
-| \`memory\` | :3098 | 3 | Mémoire seule (--memory-only) |
+| \`overmind\` | :3099 | 14 | Orchestration complète (run_agent, memory_*, create_agent) |
+| \`memory\`   | :3099 | 3  | Mémoire seule (--memory-only, memory_search/store/runs) |
 | \`postgres\` | :5433 | 10 | PostgreSQL direct (vector, SQL) |
 `;
 
@@ -277,11 +277,10 @@ create_agent fait automatiquement:
 ### MCP servers
 
 - **overmind** (:3099) = 14 tools (run_agent, memory_*, create_agent, etc.)
-- **memory** (:3098) = 3 tools restreints (--memory-only)
+- **memory-only** (:3099) = 3 tools restreints (memory_search/store/runs, via --memory-only)
 - **postgres** (:5433) = 10 tools (SQL direct, vector search)
 
-Pour restreindre un agent à la mémoire seule, remplacer \`overmind\` par \`memory\`
-dans le config.yaml du profil et lancer un daemon :3098 avec \`--memory-only\`.`;
+Pour restreindre un agent à la mémoire seule, utiliser le flag \`--memory-only\` (même port :3099).`;
       break;
   }
 
