@@ -26,7 +26,7 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process';
-import { CONFIG, getWorkspaceDir } from '../lib/config.js';
+import { CONFIG, getWorkspaceDir, getSharedHermesHome } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { linkSessionToPid } from '../lib/processRegistry.js';
 import { withSpan } from '../lib/telemetry.js';
@@ -249,6 +249,8 @@ export class HermesRunner {
         windowsHide: true,
         env: {
           ...process.env,
+          // Force Hermes à lire depuis ~/.overmind/hermes/ (canonique Overmind)
+          HERMES_HOME: getSharedHermesHome(),
           // Tell the child which agent it is — used by memory_search/store for DB isolation
           OVERMIND_AGENT_NAME: agentName || process.env.OVERMIND_AGENT_NAME || '',
           // Ensure Python uses UTF-8 (avoids Windows encoding crashes)

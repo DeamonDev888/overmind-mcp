@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.3.5] - 2026-07-05
+
+### Fixed
+- HermesRunner.ts: injecte HERMES_HOME dans l'env du child process → Hermes lit directement ~/.overmind/hermes/profiles/<name>/ — fini le dual-path et les symlinks
+- config.ts: cleanup getSharedHermesHome() — suppression des fallbacks legacy obsolètes (-18 lignes)
+
 ## [3.3.4] - 2026-07-05
 
 ### Fixed

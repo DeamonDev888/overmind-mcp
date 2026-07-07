@@ -205,28 +205,14 @@ export function updateConfig(newSettingsPath?: string, newMcpPath?: string) {
  *
  * v3.1 architecture:
  *   ~/.overmind/hermes/profiles/<name>/
- *     ├── profile.yaml      (kanban description — OBLIGATOIRE)
- *     ├── config.yaml       (Hermes config)
- *     ├── SOUL.md           (system prompt)
- *     ├── .env              (credentials)
- *     ├── .mcp.json         (MCP override)
- *     ├── state.db          (local SQLite state)
- *     ├── skills/
- *     ├── memories/
- *     ├── cron/
- *     ├── hooks/
- *     ├── logs/
- *     ├── README.md
- *     └── workspace.yaml    (kind: scratch|persistent|shared)
  *
  * Resolution order:
- *   1. ~/.overmind/hermes/profiles/<name>/  (canonical v3.1)
- *   2. ~/.hermes/profiles/<name>/            (native Hermes — fallback)
+ *   1. OVERMIND_HERMES_HOME env var (operator override)
+ *   2. ~/.overmind/hermes/profiles/<name>/  (canonical v3.1)
  */
 export function getAgentHermesHome(agentName: string | null | undefined): string {
   const base = getSharedHermesHome();
   const name = agentName || 'central';
-  // v3.1 canonical: <shared>/profiles/<name>/
   return path.join(base, 'profiles', name);
 }
 
