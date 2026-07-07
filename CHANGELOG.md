@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
 
+## [3.3.8] - 2026-07-05
+
+### Added
+- install-overmind-native.sh: symlink obligatoire ~/.hermes → ~/.overmind/hermes (défense en profondeur) — backup automatique si vrai dossier, aucune donnée effacée
+
 ## [3.3.7] - 2026-07-05
 
 ### Added

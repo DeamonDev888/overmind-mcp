@@ -761,61 +761,96 @@ for check_dir in "bridge/wrappers" "logs" "hermes/profiles" "hermes/distribution
 done
 
 # ─── 2. Détecter le dual-path ~/.hermes vs ~/.overmind/hermes ─
+# SOLUTION DÉFINITIVE: remplacer ~/.hermes/ par un SYMLINK vers ~/.overmind/hermes/
+# Comme ça, peu importe qui écrit dans ~/.hermes/ (agent, humain, CLI),
+# ça atterrit TOUJOURS dans ~/.overmind/hermes/.
 HERMES_NATIVE="$OM_HOME/.hermes"
-if [ -d "$HERMES_NATIVE" ] && [ -d "$OM_DIR/hermes" ]; then
-  # Les deux existent! C'est le bug dual-path.
+
+if [ -d "$HERMES_NATIVE" ] && [ ! -L "$HERMES_NATIVE" ]; then
+  # ~/.hermes/ existe ET n'est pas un symlink → c'est un vrai dossier
   NATIVE_PROFILES=$(find "$HERMES_NATIVE/profiles" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
-  OM_PROFILES=$(find "$PROFILES_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+  warn "DUAL-PATH détecté: ~/.hermes/ est un vrai dossier ($NATIVE_PROFILES profils)"
+  log "Migration → symlink: ~/.hermes/ → ~/.overmind/hermes/ (sans rien effacer)..."
 
-  if [ "$NATIVE_PROFILES" -gt 0 ] && [ "$OM_PROFILES" -gt 0 ]; then
-    warn "DUAL-PATH détecté: ~/.hermes/ ($NATIVE_PROFILES profils) ET ~/.overmind/hermes/ ($OM_PROFILES profils)"
-    log "Correction: migration des profils ~/.hermes/ → ~/.overmind/hermes/profiles/ (sans effacer)..."
+  # 1. Créer ~/.overmind/hermes/ si vide
+  mkdir -p "$PROFILES_DIR" "$OM_DIR/hermes/distributions" 2>/dev/null || true
 
+  # 2. Copier TOUS les fichiers de ~/.hermes/ vers ~/.overmind/hermes/ (sans écraser)
+  if [ "$NATIVE_PROFILES" -gt 0 ]; then
     for native_profile in "$HERMES_NATIVE/profiles"/*/; do
       [ -d "$native_profile" ] || continue
       pname=$(basename "$native_profile")
       target="$PROFILES_DIR/$pname"
 
       if [ -d "$target" ]; then
-        # Le profil existe déjà dans overmind — vérifier quels fichiers manquent
-        for file in config.yaml SOUL.md .env .mcp.json profile.yaml workspace.yaml; do
+        # Profil existe déjà → combler les fichiers manquants uniquement
+        for file in config.yaml SOUL.md .env .mcp.json profile.yaml workspace.yaml auth.json state.db; do
           if [ ! -f "$target/$file" ] && [ -f "$native_profile/$file" ]; then
-            log "  Copie $pname/$file (manquant dans overmind, présent dans native)"
             cp -p "$native_profile/$file" "$target/$file" 2>/dev/null || true
+            log "  Copie $pname/$file"
           fi
         done
-        # state.db
-        if [ ! -f "$target/state.db" ] && [ -f "$native_profile/state.db" ]; then
-          log "  Copie $pname/state.db"
-          cp -p "$native_profile/state.db" "$target/state.db" 2>/dev/null || true
-        fi
-        # auth.json
-        if [ ! -f "$target/auth.json" ] && [ -f "$native_profile/auth.json" ]; then
-          log "  Copie $pname/auth.json"
-          cp -p "$native_profile/auth.json" "$target/auth.json" 2>/dev/null || true
-        fi
-        # skills/
-        if [ ! -d "$target/skills" ] && [ -d "$native_profile/skills" ]; then
-          log "  Copie $pname/skills/"
-          cp -rp "$native_profile/skills" "$target/" 2>/dev/null || true
-        fi
-        ok "Profil $pname: fichiers manquants comblés depuis ~/.hermes/"
+        for subdir in skills memories cron hooks; do
+          if [ ! -d "$target/$subdir" ] && [ -d "$native_profile/$subdir" ]; then
+            cp -rp "$native_profile/$subdir" "$target/" 2>/dev/null || true
+            log "  Copie $pname/$subdir/"
+          fi
+        done
+        ok "Profil $pname: synchronisé"
       else
-        # Le profil n'existe pas dans overmind — migration complète
-        log "  Migration complète: $pname"
+        # Profil n'existe pas → migration complète
         cp -rp "$native_profile" "$target/" 2>/dev/null || true
-        ok "Profil $pname migré vers ~/.overmind/hermes/profiles/"
+        ok "Profil $pname migré"
       fi
     done
-    ok "Migration dual-path terminée (rien effacé — ~/.hermes/ conservé)"
-  elif [ "$NATIVE_PROFILES" -gt 0 ] && [ "$OM_PROFILES" -eq 0 ]; then
-    warn "~/.hermes/ a $NATIVE_PROFILES profils, ~/.overmind/hermes/ est vide"
-    log "Migration complète des profils..."
-    cp -rp "$HERMES_NATIVE/profiles/"* "$PROFILES_DIR/" 2>/dev/null || true
-    # Copier aussi config.yaml et auth.json globaux
-    [ -f "$HERMES_NATIVE/config.yaml" ] && cp -p "$HERMES_NATIVE/config.yaml" "$OM_DIR/hermes/config.yaml" 2>/dev/null || true
-    [ -f "$HERMES_NATIVE/auth.json" ] && cp -p "$HERMES_NATIVE/auth.json" "$OM_DIR/hermes/auth.json" 2>/dev/null || true
-    ok "Profils migrés vers ~/.overmind/hermes/profiles/"
+  fi
+
+  # 3. Copier les fichiers globaux (config.yaml, auth.json, .env)
+  for global_file in config.yaml auth.json .env .mcp.json; do
+    if [ -f "$HERMES_NATIVE/$global_file" ] && [ ! -f "$OM_DIR/hermes/$global_file" ]; then
+      cp -p "$HERMES_NATIVE/$global_file" "$OM_DIR/hermes/$global_file" 2>/dev/null || true
+      log "  Copie globale: $global_file"
+    fi
+  done
+
+  # 4. Backup ~/.hermes/ → ~/.hermes.backup.YYYYMMDD (ne pas effacer!)
+  BACKUP_NAME="$HERMES_NATIVE.backup.$(date +%Y%m%d%H%M%S)"
+  mv "$HERMES_NATIVE" "$BACKUP_NAME" 2>/dev/null || {
+    track_warn "Impossible de renommer ~/.hermes/ — permission refusée"
+    track_warn "Migration manuelle requise: voir ~/.overmind/docs/MIGRATION_V3.md"
+  }
+
+  # 5. Créer le symlink ~/.hermes → ~/.overmind/hermes
+  if [ ! -e "$HERMES_NATIVE" ]; then
+    ln -sfn "$OM_DIR/hermes" "$HERMES_NATIVE" 2>/dev/null || {
+      track_warn "Impossible de créer le symlink ~/.hermes/ → ~/.overmind/hermes/"
+      track_warn "Faites manuellement: ln -sfn ~/.overmind/hermes ~/.hermes"
+    }
+    if [ -L "$HERMES_NATIVE" ]; then
+      ok "Symlink créé: ~/.hermes/ → ~/.overmind/hermes/"
+      ok "Backup conservé: $BACKUP_NAME"
+      ok "Aucune donnée effacée — backup disponible si rollback nécessaire"
+    fi
+  fi
+
+elif [ -L "$HERMES_NATIVE" ]; then
+  # C'est déjà un symlink — vérifier qu'il pointe au bon endroit
+  LINK_TARGET=$(readlink "$HERMES_NATIVE" 2>/dev/null)
+  if [ "$LINK_TARGET" = "$OM_DIR/hermes" ]; then
+    ok "Symlink ~/.hermes/ → ~/.overmind/hermes/ déjà en place"
+  else
+    warn "Symlink ~/.hermes/ pointe vers $LINK_TARGET (mauvaise cible)"
+    log "Correction: ~/.hermes/ → ~/.overmind/hermes/"
+    ln -sfn "$OM_DIR/hermes" "$HERMES_NATIVE" 2>/dev/null || true
+    ok "Symlink corrigé"
+  fi
+
+elif [ ! -e "$HERMES_NATIVE" ]; then
+  # ~/.hermes/ n'existe pas → créer le symlink directement
+  log "Création symlink ~/.hermes/ → ~/.overmind/hermes/"
+  ln -sfn "$OM_DIR/hermes" "$HERMES_NATIVE" 2>/dev/null || true
+  if [ -L "$HERMES_NATIVE" ]; then
+    ok "Symlink créé: ~/.hermes/ → ~/.overmind/hermes/"
   fi
 fi
 
