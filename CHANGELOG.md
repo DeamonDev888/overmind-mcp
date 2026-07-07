@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 
+---
+
+## SÉRIE v3 — VUE D'ENSEMBLE
+
+La série v3 représente la refonte majeure d'Overmind MCP: architecture profiles/, isolation mémoire par agent, sécurité anti-secrets, installateur multi-OS robuste, et intégration Hermes native via HERMES_HOME.
+
+### v3.0.x — Architecture v3.1 (Breaking)
+- **v3.0.0**: Refonte layout `agents/` → `profiles/`, `.claude/` → `bridge/`, config.ts + sessions.ts + processRegistry.ts + HermesProfileManager + AgentManager
+- **v3.0.1**: CI fix — vitest.config.ts pour contraindre la découverte des tests (GitHub Actions #280)
+- **v3.0.2**: Docs refonte v3.1 — README, MIGRATION_V3, agent_control, sniperbot flow, setup hermes
+- **v3.0.3**: Docs cleanup — README indentation, migration sans symlinks
+- **v3.0.4**: Deps update (fastmcp 4.3.2, pg 8.22.0, eslint 10.6.0, vitest 4.1.9), launch.cjs polish
+
+### v3.1.x — Bridge & Webhooks
+- **v3.1.0**: BridgeConfig.defaultMcpServers, Telegram webhook natif, ngrok tunnel unifié
+- **v3.1.1**: Bug fixes P0/P1/P2 — install-overmind-native multi-OS, postinstall POSTGRES_DATABASE, overmind-verify + overmind-keygen
+
+### v3.2.x — Installateur & Sécurité
+- **v3.2.0**: Architecture refactor complet — profiles/ canonical, bridge RPC, lint 0 warnings, Telegram webhook, deps majeures
+- **v3.2.1**: postinstall crypto fix (await import sync), ClaudeRunner shell:true
+- **v3.2.2**: PG_PASSWORD single source of truth (randomBytes 1x au boot)
+- **v3.2.3**: Multi-OS install (Homebrew/apt/yum/pacman), docker run direct, minimist ESM fix
+- **v3.2.4**: install-overmind-native refonte 8 steps — 5 package managers, launchd macOS, idempotent, anti-cassure
+- **v3.2.5**: Steps 8-11 — CLIs runners, MAJ npm, audit arborescence agents, validation finale
+- **v3.2.6**: macOS audit fixes — runCommand crash, PG version scan (@18→@17→@16), createdb wait-for-ready
+- **v3.2.7**: ClaudeRunner spawn claude.exe direct (win32) — fini les popups cmd.exe
+- **v3.2.8**: config.ts tilde expand, .env load order, .env.example hardening
+- **v3.2.9**: SECURITY — 2 tokens Z.AI remplacés par placeholders + MCP server rename memory→overmind
+
+### v3.3.x — Isolation Mémoire & HERMES_HOME
+- **v3.3.0**: OVERMIND_AGENT_NAME injection + SOUL.md memory bloc + auto DB isolation par agent
+- **v3.3.1**: Audit 9 bugs — config_example v3.3 refonte, run_agent mode fix, memory_search try/catch, manage_agents mcpServers
+- **v3.3.2**: Test anti-secret secret_guard.test.ts (12 patterns) + fix chemins codés en dur
+- **v3.3.3**: Secret guard 18 patterns — NVIDIA, ElevenLabs, DeepSeek, MiniMax JWT, détecteur générique ENV
+- **v3.3.4**: CI GitHub Actions green — Node 24, pnpm 10.18.0, runner_lockdown CI-safe
+- **v3.3.5**: HERMES_HOME injection dans HermesRunner — fini le dual-path et les symlinks
+- **v3.3.6**: Docs alignées avec HERMES_HOME (README, SETUP, SUBTILISATION, provider-config-map)
+- **v3.3.7**: install-overmind-native Step 10 refonte — 6 actions audit + réparation (dossiers, dual-path, symlinks, profils, bridge, mcp.json)
+- **v3.3.8**: Symlink obligatoire ~/.hermes → ~/.overmind/hermes — défense en profondeur triple couche
+
+### ROADMAP v3.x (à venir)
+- **v3.4.0** (planifié): Refonte tools mémoire — memory_store/source enum, memory_runs avec filtering, integration Overmind Memory MCP
+- **v3.4.x** (planifié): CLI overmind-verify refonte — health check complet (DB, MCP, agents, bridge)
+- **v3.5.0** (planifié): Multi-agent parallel execution — pool de workers, load balancing, failover automatique
+- **v3.6.0** (planifié): Web dashboard — monitoring agents en temps réel, métriques, logs centralisés
+- **Ouvert**: Ajout de providers LLM supplémentaires, API REST publique, système de plugins
+
+
+---
+
 
 ## [3.3.8] - 2026-07-05
 
@@ -279,8 +329,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Compatibility
 - Windows: `%LOCALAPPDATA%\overmind\hermes\profiles\<name>\`
-- Linux: `~/.overmind/hermes/profiles\<name>/`
-- Fallback: `~/.hermes/profiles\<name>/` (if already exists)
+- Linux: `~/.overmind/hermes\profiles\<name>/`
+- Fallback: `~/.hermes\profiles\<name>/` (if already exists)
 
 ### Post-Refactor Cleanup
 - Removed unused imports in `cli.ts`, `overmind-bridge.ts`, `ArgParser.ts`, `OverBridgeServer.ts`, `PromptSource.ts`.
@@ -289,25 +339,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Removed dead code path filtering `default` profile in `AgentManager.ts`.
 - Renamed `docs/MIGRATION_V3.1.md` → `docs/MIGRATION_V3.md`.
 
-## [2.8.53] - 2026-06-28
+## [2.9.0] - 2026-06-28
 
+### Breaking — Refonte Architecture v3.1 (original release, later re-versioned as v3.0.0)
+- **config.ts**: `getWorkspaceDir()` fallback `~/.overmind-mcp/` → `~/.overmind/` (canonical). `getSharedHermesHome()` simplifié à `~/.overmind/hermes/`. `getAgentHermesHome()` cherche `profiles/<name>/` au lieu de `agents/<name>/`. Supprimé `getAgentOvermindHome()` (deprecated).
+- **sessions.ts**: `.claude/sessions.json` → `bridge/agents.json` (registre unifié).
+- **processRegistry.ts**: `.claude/process-registry.json` → `bridge/process-registry.json`.
+- **HermesProfileManager.ts**: `getProfilePath()` cherche `~/.overmind/hermes/profiles/<name>/`. `create()` génère `profile.yaml` + `workspace.yaml` + `README.md`. Ajout `writeProfileYaml()`, `writeWorkspaceYaml()`, `writeReadme()`. Supprimé `require_os()`.
+- **AgentManager.ts**: Commentaires layout mis à jour (v3.1: `profiles/` au lieu de `agents/`).
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+### Compatibility
+- Les agents existants dans `~/.hermes/profiles/` continuent de fonctionner (fallback automatique).
+- Windows: `%LOCALAPPDATA%\overmind\hermes\profiles\<name>\`
+- Linux: `~/.overmind/hermes/profiles/<name>/`
 
 ## [2.8.53] - 2026-06-28
 
@@ -531,18 +575,6 @@ Hermes upstream looks up each name in `Workflow/.mcp.json` and **silently skips*
 - **`agentHermesHome.test.ts`** - Rewrote to test the new layout (canonical + legacy fallback). 9 tests, all green.
 - Total: 64/64 tests pass.
 
-## [2.8.25] - 2026-06-07
-
-### Fixed
-- **[Lib] `envUtils.ts`** — `interpolateEnvVars()` regex bug: the previous `\$(\w+)|\${(\w+)}` had only ONE capture group (so the callback received `undefined` for the second arg and `${VAR}` crashed on `process.env[undefined]`), and it did not consume the closing `}` (leaked as literal text). Fixed regex: `\$\{(\w+)\}|\$(\w+)` with explicit capture group on each alternation branch and closing brace consumed.
-- **[Services] `NousHermesRunner.ts`** — Token re-map hijack bug: when both a generic key (e.g. `ANTHROPIC_AUTH_TOKEN=*** and a provider-specific key (e.g. `MINIMAX_API_KEY=sk-cp-...DIFFERENT`) were set, the old code took `ANTHROPIC_AUTH_TOKEN` first, re-mapped it to `MINIMAX_API_KEY`, and ignored the user explicit choice. New 3-pass strategy: Pass A prefers the candidate whose env-var name already matches its detected provider; Pass B re-maps the first candidate to the right provider; Pass C is the rare fallback.
-- **[Docs] `provider-config-map.md`** — Corrected the priority order (was inverted: HERMES_HOME/.env listed first, but the code reads process.env first then settings then .hermes/.env which has the last word). Added a "Niveau 1 vs Niveau 2" section explaining that the runner votes 3-signal to seed auth.json, and Hermes upstream re-reads with its own model-name-based logic.
-- **[Docs] `SUBTILISATION_EXPLAINED.txt`** — Added the CN vs GLOBAL disambiguation case (sk-cp- prefix is shared between both, URL is the only signal that disambiguates). Documented the new 3-pass strategy and the canonical vs local-closure split.
-
-### Added
-- **[Services] `hermesTokenResolver.ts`** — Canonical, side-effect-free module exporting `detectTokenProvider` and `resolveTokenWithDetection`. The runner keeps its local closure for ergonomics, but the canonical version is the source of truth and is what the tests exercise.
-- **[Tests] `envUtils.test.ts`** — 10 unit tests covering the `${VAR}` bug fix, recursing into objects/arrays, and defensive behavior.
-- **[Tests] `hermesSubtilisation.test.ts`** — 15 unit tests covering Z.AI token detection (32hex.32hex, 32hex, 16+hex), MiniMax (sk-cp-, sk-mm-), anthropic, openrouter, openai, unknown; 3-pass resolution strategy; Pass A re-map hijack fix; real Z.AI + MiniMax end-to-end scenarios.
 ## [2.8.28] - 2026-06-07
 
 ### Fixed
@@ -609,6 +641,18 @@ Hermes upstream looks up each name in `Workflow/.mcp.json` and **silently skips*
 ### Added
 - **[Env] `OVERMIND_MINIMAX_DEFAULT`** — New env var controlling the MiniMax CN vs GLOBAL default. Defaults to `cn`. Documented in `provider-config-map.md` and `SUBTILISATION_EXPLAINED.txt`.
 - **[Tests] `hermesSubtilisation.test.ts`** — 7 new tests covering `OVERMIND_MINIMAX_DEFAULT` behavior and `defaultBaseUrlFor()` mapping.
+## [2.8.25] - 2026-06-07
+
+### Fixed
+- **[Lib] `envUtils.ts`** — `interpolateEnvVars()` regex bug: the previous `\$(\w+)|\${(\w+)}` had only ONE capture group (so the callback received `undefined` for the second arg and `${VAR}` crashed on `process.env[undefined]`), and it did not consume the closing `}` (leaked as literal text). Fixed regex: `\$\{(\w+)\}|\$(\w+)` with explicit capture group on each alternation branch and closing brace consumed.
+- **[Services] `NousHermesRunner.ts`** — Token re-map hijack bug: when both a generic key (e.g. `ANTHROPIC_AUTH_TOKEN=*** and a provider-specific key (e.g. `MINIMAX_API_KEY=sk-cp-...DIFFERENT`) were set, the old code took `ANTHROPIC_AUTH_TOKEN` first, re-mapped it to `MINIMAX_API_KEY`, and ignored the user explicit choice. New 3-pass strategy: Pass A prefers the candidate whose env-var name already matches its detected provider; Pass B re-maps the first candidate to the right provider; Pass C is the rare fallback.
+- **[Docs] `provider-config-map.md`** — Corrected the priority order (was inverted: HERMES_HOME/.env listed first, but the code reads process.env first then settings then .hermes/.env which has the last word). Added a "Niveau 1 vs Niveau 2" section explaining that the runner votes 3-signal to seed auth.json, and Hermes upstream re-reads with its own model-name-based logic.
+- **[Docs] `SUBTILISATION_EXPLAINED.txt`** — Added the CN vs GLOBAL disambiguation case (sk-cp- prefix is shared between both, URL is the only signal that disambiguates). Documented the new 3-pass strategy and the canonical vs local-closure split.
+
+### Added
+- **[Services] `hermesTokenResolver.ts`** — Canonical, side-effect-free module exporting `detectTokenProvider` and `resolveTokenWithDetection`. The runner keeps its local closure for ergonomics, but the canonical version is the source of truth and is what the tests exercise.
+- **[Tests] `envUtils.test.ts`** — 10 unit tests covering the `${VAR}` bug fix, recursing into objects/arrays, and defensive behavior.
+- **[Tests] `hermesSubtilisation.test.ts`** — 15 unit tests covering Z.AI token detection (32hex.32hex, 32hex, 16+hex), MiniMax (sk-cp-, sk-mm-), anthropic, openrouter, openai, unknown; 3-pass resolution strategy; Pass A re-map hijack fix; real Z.AI + MiniMax end-to-end scenarios.
 ## [2.8.15] - 2026-06-06
 
 ### Fixed
