@@ -35,6 +35,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.4.1] — 2025-07-07
+
+### Added
+- **Nouvel outil MCP #15: `a2a_hub`** — Vue complète du système multi-agents avec 8 actions:
+  - `discover` — scan auto des profils ~/.overmind/hermes/profiles/ (nom, status, modèle, provider, skills, description, dernière activité, self-marker)
+  - `status` — état détaillé d'un agent (totalRuns, totalErrors, a2aReceived, a2aSent, sessionId)
+  - `send` — message synchrone A→B avec header A2A standardisé
+  - `delegate` — async fire-and-forget + callback HTTP
+  - `pipeline` — chaîne séquentielle A→B→C avec accumulateContext
+  - `fanout` — 1→N parallèle + merge (concat/best/vote/first_success)
+  - `query` — question multi-agents rapide, parallèle, timeout par agent
+  - `broadcast` — message global tous agents (ou race mode)
+- Auto-discovery: l'agent n'a besoin de rien connaître, `discover` lit profiles/, config.yaml, bridge registry
+
+---
+
 ## SÉRIE v3 — VUE D'ENSEMBLE
 
 La série v3 représente la refonte majeure d'Overmind MCP: architecture profiles/, isolation mémoire par agent, sécurité anti-secrets, installateur multi-OS robuste, et intégration Hermes native via HERMES_HOME.

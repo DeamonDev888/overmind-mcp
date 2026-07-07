@@ -66,6 +66,7 @@ import {
 import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_configs.js';
 import { configExample, configExampleSchema } from './tools/config_example.js';
 import { agentControl, agentControlSchema } from './tools/agent_control.js';
+import { a2aHub, a2aHubSchema } from './tools/a2a_hub.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ToolExecute = (...args: any[]) => Promise<any>;
@@ -293,7 +294,47 @@ agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "stream" })
 agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "kill" })
 agent_control({ agentName: "sniper_analyst", runner: "kilo", action: "wait", timeoutMs: 300000 })`,
       parameters: agentControlSchema,
-      execute: agentControl,
+      execute: wrapExecute('agent_control', agentControl),
+    });
+
+    // ─── 15. a2a_hub ──────────────────────────────────────────────────────────
+    server.addTool({
+      name: 'a2a_hub',
+      description: `🌐 **A2A Hub — Communication Agent-to-Agent unifiée**
+
+Découvre automatiquement tous les agents persistants du système et permet de communiquer avec eux.
+
+**Actions disponibles:**
+
+discover — Liste TOUS les agents avec leur status temps réel, modèle, skills, description
+  → a2a_hub(action: "discover")
+
+status — État détaillé d'un agent (runs, erreurs, A2A count, session)
+  → a2a_hub(action: "status", target: "sniperbot_analyst")
+
+send — Message synchrone A→B (attend la réponse)
+  → a2a_hub(action: "send", target: "tradingview_analyst", message: "Analyse BTCUSDT")
+
+delegate — Tâche async (retourne immédiatement avec taskId + callback optionnel)
+  → a2a_hub(action: "delegate", target: "sniperbot_analyst", message: "Prépare un plan", callbackUrl: "http://...")
+
+pipeline — Chaîne séquentielle A→B→C (output de l'un = input du suivant)
+  → a2a_hub(action: "pipeline", message: "Analyse le marché", steps: [{agentName: "tradingview_analyst"}, {agentName: "sniperbot_analyst"}])
+
+fanout — 1→N parallèle + merge (concat|best|vote|first_success)
+  → a2a_hub(action: "fanout", targets: ["agent_a", "agent_b"], message: "Quelle stratégie?", mergeStrategy: "best")
+
+query — Question rapide multi-agents (tous répondent en parallèle)
+  → a2a_hub(action: "query", targets: ["agent_a", "agent_b"], message: "Prix actuel BTC?")
+
+broadcast — Message global à tous les agents online
+  → a2a_hub(action: "broadcast", message: "Alerte marché!")
+  → a2a_hub(action: "broadcast", message: "Premier qui répond!", race: true)
+
+**Auto-discovery:** L'outil scanne ~/.overmind/hermes/profiles/ automatiquement.
+Aucune configuration manuelle nécessaire — il connaît tous les agents du système.`,
+      parameters: a2aHubSchema,
+      execute: wrapExecute('a2a_hub', a2aHub),
     });
   }
 
