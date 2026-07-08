@@ -51,6 +51,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.4.3] — 2026-07-05
+
+### Fixed
+- **change_me ÉLIMINÉ partout**: auto-install.mjs (randomBytes(18)), install-dependencies.mjs (randomBytes(18)), setup.mjs (randomBytes(18)), setup-windows.js (message auto-généré), install-overmind-unix.sh (openssl rand), install-overmind-windows.bat (placeholder)
+- POSTGRES_DB → POSTGRES_DATABASE: MessageLog.ts (compat v3→v2 avec fallback), overmind-bridge.ts (doc), auto-install.mjs, Docker (POSTGRES_DB=overmind_memory correct pour init Docker)
+
+### Removed
+- Scripts obsolètes supprimés: migrate-hermes-home.mjs, migrate-to-profiles.mjs
+
 ## [3.4.2] — 2025-07-07
 
 ### Changed

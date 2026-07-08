@@ -217,8 +217,8 @@ if not exist "%USERPROFILE%\.overmind\.env" (
         echo POSTGRES_HOST=localhost
         echo POSTGRES_PORT=5432
         echo POSTGRES_USER=postgres
-        echo POSTGRES_PASSWORD=overmind_temp_password_change_me
-        echo POSTGRES_DB=overmind
+        echo POSTGRES_PASSWORD=CHANGE_ME_IN_DOTENV
+        echo POSTGRES_DATABASE=overmind_memory
         echo.
         echo # Infrastructure detectee
         if "%USE_EXTERNAL_POSTGRES%"=="1" (

@@ -18,6 +18,7 @@
 import { execSync, spawn } from 'child_process';
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { randomBytes } from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { createInterface } from 'readline';
@@ -175,10 +176,12 @@ async function installPostgreSQL() {
     execSync('docker pull pgvector/pgvector:pg16', { stdio: 'inherit' });
 
     console.log('🚀 Démarrage container PostgreSQL...');
+    const pgPwd = randomBytes(18).toString('base64url');
     const runCommand = `docker run -d --name overmind-postgres-pgvector \\
       -p 5432:5432 \\
-      -e POSTGRES_PASSWORD=overmind_temp_password_change_me \\
+      -e POSTGRES_PASSWORD=${pgPwd} \\
       -e POSTGRES_USER=postgres \\
+      -e POSTGRES_DB=overmind_memory \\
       -v overmind_postgres_data:/var/lib/postgresql/data \\
       --restart unless-stopped \\
       pgvector/pgvector:pg16`;

@@ -180,8 +180,8 @@ if [ ! -f "$OVERMIND_DIR/.env" ]; then
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=overmind_temp_password_change_me
-POSTGRES_DB=overmind
+POSTGRES_PASSWORD=$(openssl rand -base64 18 | tr -d '/+=' | head -c 24)
+POSTGRES_DATABASE=overmind_memory
 
 # Infrastructure détectée
 EOF

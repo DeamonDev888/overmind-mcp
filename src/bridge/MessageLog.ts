@@ -454,7 +454,7 @@ export function loadMessageLogConfigFromEnv(): MessageLogConfig {
     port: num(process.env.POSTGRES_PORT, 5432),
     user: process.env.POSTGRES_USER ?? 'postgres',
     password: process.env.POSTGRES_PASSWORD ?? '',
-    database: process.env.POSTGRES_DB ?? 'overmind_memory',
+    database: process.env.POSTGRES_DATABASE ?? process.env.POSTGRES_DB ?? 'overmind_memory',
     ssl: process.env.POSTGRES_SSL === 'true',
     poolMin: num(process.env.POSTGRES_POOL_MIN, 2),
     poolMax: num(process.env.POSTGRES_POOL_MAX, 10),

@@ -589,7 +589,8 @@ ENV VARS
   POSTGRES_PORT           Postgres port (default: 5432)
   POSTGRES_USER           Postgres user
   POSTGRES_PASSWORD       Postgres password
-  POSTGRES_DB             Postgres database
+  POSTGRES_DATABASE       Postgres database (v3.x)
+  POSTGRES_DB             Alias (v2.x compat, fallback)
 
 For more help on a specific command:
   overmind-bridge <command> --help

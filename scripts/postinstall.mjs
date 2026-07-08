@@ -13,8 +13,18 @@
  */
 
 import { execSync, spawn } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
-import { join } from 'path';
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  lstatSync,
+  renameSync,
+  symlinkSync,
+  unlinkSync,
+  cpSync,
+} from 'fs';
+import { join, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { randomBytes } from 'crypto';
@@ -294,6 +304,108 @@ async function installPostgresMCP() {
   }
 }
 
+function copyIfMissing(src, dest) {
+  try {
+    if (!existsSync(src) || existsSync(dest)) return false;
+    cpSync(src, dest, { recursive: true, preserveTimestamps: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function alignHermesHome() {
+  logSection('ALIGNEMENT HERMES_HOME');
+
+  // Windows Desktop utilise %LOCALAPPDATA%\\hermes. Ne pas symlinker ~/.hermes sur Windows.
+  if (process.platform === 'win32') {
+    log(COLORS.cyan, 'Windows détecté: Hermes Desktop utilise %LOCALAPPDATA%\\hermes. Symlink ~/.hermes ignoré.');
+    return true;
+  }
+
+  const home = process.env.HOME || process.env.USERPROFILE || process.env.HOMEPATH;
+  const overmindHermes = join(INSTALL_DIR, 'hermes');
+  const nativeHermes = join(home, '.hermes');
+  const profilesDir = join(overmindHermes, 'profiles');
+
+  mkdirSync(profilesDir, { recursive: true });
+  mkdirSync(join(overmindHermes, 'distributions'), { recursive: true });
+
+  try {
+    if (!existsSync(nativeHermes)) {
+      symlinkSync(overmindHermes, nativeHermes, 'dir');
+      log(COLORS.green, `✅ Symlink créé: ~/.hermes → ${overmindHermes}`);
+      return true;
+    }
+
+    const stat = lstatSync(nativeHermes);
+
+    if (stat.isSymbolicLink()) {
+      const target = runCommand(`readlink "${nativeHermes}"`)?.trim();
+      if (target === overmindHermes) {
+        log(COLORS.green, '✅ ~/.hermes pointe déjà vers ~/.overmind/hermes');
+        return true;
+      }
+      log(COLORS.yellow, `⚠️ ~/.hermes pointe vers ${target || '(inconnu)'} — correction`);
+      unlinkSync(nativeHermes);
+      symlinkSync(overmindHermes, nativeHermes, 'dir');
+      log(COLORS.green, '✅ Symlink ~/.hermes corrigé');
+      return true;
+    }
+
+    if (!stat.isDirectory()) {
+      log(COLORS.yellow, '⚠️ ~/.hermes existe mais n’est pas un dossier — backup + symlink');
+    } else {
+      log(COLORS.yellow, '⚠️ Dual-path détecté: ~/.hermes est un vrai dossier — migration non destructive');
+    }
+
+    // Copier les profils de ~/.hermes/profiles vers ~/.overmind/hermes/profiles sans écraser.
+    const nativeProfiles = join(nativeHermes, 'profiles');
+    if (existsSync(nativeProfiles)) {
+      for (const entry of runCommand(`find "${nativeProfiles}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null`)?.split('\n') || []) {
+        if (!entry.trim()) continue;
+        const name = basename(entry.trim());
+        const destProfile = join(profilesDir, name);
+        mkdirSync(destProfile, { recursive: true });
+        for (const file of ['config.yaml', 'SOUL.md', '.env', '.mcp.json', 'profile.yaml', 'workspace.yaml', 'auth.json', 'state.db']) {
+          if (copyIfMissing(join(entry.trim(), file), join(destProfile, file))) {
+            log(COLORS.cyan, `   Copie profil ${name}/${file}`);
+          }
+        }
+        for (const dir of ['skills', 'memories', 'cron', 'hooks', 'sessions']) {
+          if (copyIfMissing(join(entry.trim(), dir), join(destProfile, dir))) {
+            log(COLORS.cyan, `   Copie profil ${name}/${dir}/`);
+          }
+        }
+      }
+    }
+
+    // Copier les fichiers globaux sans écraser.
+    for (const file of ['config.yaml', 'auth.json', '.env', '.mcp.json', 'SOUL.md', 'state.db']) {
+      if (copyIfMissing(join(nativeHermes, file), join(overmindHermes, file))) {
+        log(COLORS.cyan, `   Copie global ${file}`);
+      }
+    }
+    for (const dir of ['skills', 'memories', 'cron', 'hooks', 'sessions']) {
+      if (copyIfMissing(join(nativeHermes, dir), join(overmindHermes, dir))) {
+        log(COLORS.cyan, `   Copie global ${dir}/`);
+      }
+    }
+
+    const backup = `${nativeHermes}.backup.${new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;
+    renameSync(nativeHermes, backup);
+    symlinkSync(overmindHermes, nativeHermes, 'dir');
+    log(COLORS.green, `✅ Symlink créé: ~/.hermes → ${overmindHermes}`);
+    log(COLORS.green, `✅ Backup conservé: ${backup}`);
+    log(COLORS.green, '✅ Aucune donnée effacée');
+    return true;
+  } catch (error) {
+    log(COLORS.yellow, `⚠️ Alignement ~/.hermes échoué: ${error.message}`);
+    log(COLORS.cyan, '   Fix manuel: mv ~/.hermes ~/.hermes.backup.$(date +%Y%m%d%H%M%S) && ln -s ~/.overmind/hermes ~/.hermes');
+    return false;
+  }
+}
+
 function createEnvConfig() {
   logSection('CRÉATION CONFIGURATION');
 
@@ -531,6 +643,7 @@ async function main() {
   console.log('  ✓ Démarrer PostgreSQL + pgvector');
   console.log('  ✓ Copier .env.example → .env');
   console.log('  ✓ Copier .mcp.json.example → .mcp.json');
+  console.log('  ✓ Aligner Hermes: ~/.hermes → ~/.overmind/hermes (Linux/macOS)');
   console.log('  ✓ Valider PostgreSQL');
   console.log('');
 
@@ -552,6 +665,9 @@ async function main() {
 
   // Step 2: Setup .env and .mcp.json (BEFORE Docker so password is shared)
   createEnvConfig();
+
+  // Step 2b: Align Hermes roots (Linux/macOS npm -g path hygiene)
+  alignHermesHome();
 
   // Step 3: Setup PostgreSQL (uses PG_PASSWORD)
   await setupPostgreSQL();
