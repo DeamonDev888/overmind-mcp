@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.5.1] — 2026-07-09
+
+### Fixed
+- `AgentManager.ts`: skip de l'exigence `ANTHROPIC_AUTH_TOKEN` quand `runner === 'hermes'` (les profils Hermes utilisent leur propre `.env` par profil) — évite le crash `MISSING_AUTH_TOKEN` lors de la création d'un agent Hermes
+- `HermesProfileManager.ts`: `getProfilePath()` query désormais `hermes profile show <name>` (source de vérité) au lieu de hardcoder `~/.overmind/hermes/profiles/<name>`. Fallback canonical `HERMES_HOME/profiles/<name>` si la CLI ne répond pas
+- `detectProviderFromModel()`: provider `z-ai` (au lieu de `zai`) pour matcher les noms Hermes réels, et `kimi` (au lieu de `kimi-coding`)
+
+### Cleanup
+- `nul` (fichier vide accidentel Windows) supprimé du working tree
+
+---
+
 ## [3.5.0] — 2026-07-09
 
 ### Added

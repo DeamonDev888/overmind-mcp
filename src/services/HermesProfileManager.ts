@@ -25,6 +25,7 @@ import { exec, execSync } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { rootLogger } from '../lib/logger.js';
 
 const execAsync = promisify(exec);
@@ -57,7 +58,7 @@ export interface CreateProfileOptions {
 function detectProviderFromModel(model: string): string {
   const lower = model.toLowerCase();
   if (lower.includes('minimax') || lower.includes('m3')) return 'minimax-cn';
-  if (lower.includes('glm') || lower.includes('zai')) return 'zai';
+  if (lower.includes('glm') || lower.includes('zai') || lower.includes('z-ai')) return 'z-ai';
   if (
     lower.includes('claude') ||
     lower.includes('sonnet') ||
@@ -68,7 +69,7 @@ function detectProviderFromModel(model: string): string {
   if (lower.includes('gpt')) return 'openai';
   if (lower.includes('gemini')) return 'gemini';
   if (lower.includes('deepseek')) return 'deepseek';
-  if (lower.includes('kimi') || lower.includes('moonshot')) return 'kimi-coding';
+  if (lower.includes('kimi') || lower.includes('moonshot')) return 'kimi';
   if (lower.includes('qwen') || lower.includes('dashscope')) return 'alibaba';
   if (lower.includes('grok') || lower.includes('xai')) return 'xai';
   return 'openrouter'; // Safe default
@@ -232,19 +233,37 @@ export class HermesProfileManager {
 
   /**
    * Get the filesystem path for a profile.
-   * v3.1: ~/.overmind/hermes/profiles/<name>/
+   *
+   * Queries `hermes profile show <name>` to get the real path from Hermes itself.
+   * This is the ONLY reliable way — Hermes controls where profiles live, and the
+   * location depends on HERMES_HOME (Windows: AppData\Local\hermes, Linux: ~/.hermes).
+   *
+   * Falls back to the canonical layout under the shared Hermes home if the CLI
+   * call fails (e.g. profile doesn't exist yet).
    */
   static async getProfilePath(name: string): Promise<string | null> {
+    // 1. Try `hermes profile show <name>` — the authoritative source
     try {
-      const overmindBase = process.env.LOCALAPPDATA || process.env.HOME || '';
-      const v31Path =
-        process.platform === 'win32'
-          ? path.join(overmindBase, 'overmind', 'hermes', 'profiles', name)
-          : path.join(overmindBase, '.overmind', 'hermes', 'profiles', name);
-      return v31Path;
+      const { stdout } = await execAsync(`hermes profile show "${name}"`);
+      const match = stdout.match(/Path:\s*(.+)/);
+      if (match?.[1]) {
+        const resolved = match[1].trim();
+        if (fs.existsSync(resolved)) return resolved;
+      }
     } catch {
-      return null;
+      // Profile may not exist yet, or hermes CLI unavailable — fall through
     }
+
+    // 2. Fallback: construct canonical path under shared Hermes home
+    //    Hermes default: HERMES_HOME/profiles/<name>/
+    //    On Windows official: AppData\Local\hermes\profiles\<name>\
+    //    On Linux: ~/.hermes/profiles/<name>/
+    const hermesHome = process.env.HERMES_HOME
+      || (process.platform === 'win32'
+        ? path.join(process.env.LOCALAPPDATA || process.env.USERPROFILE || os.homedir(), 'hermes')
+        : path.join(os.homedir(), '.hermes'));
+
+    return path.join(hermesHome, 'profiles', name);
   }
 
   /**

@@ -578,6 +578,7 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
     const finalPrompt = prompt + memoryInstructions;
 
     // Resolve auth token: prefer ANTHROPIC_AUTH_TOKEN, fallback to any ANTHROPIC_AUTH_TOKEN_<N>
+    // Hermes profiles use their own .env per-profile — skip this requirement for runner=hermes
     let authToken = process.env.ANTHROPIC_AUTH_TOKEN;
     if (!authToken) {
       const suffixedKeys = Object.keys(process.env)
@@ -591,7 +592,7 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
         );
       }
     }
-    if (!authToken) {
+    if (!authToken && runner !== 'hermes') {
       const err =
         "MISSING_AUTH_TOKEN: ANTHROPIC_AUTH_TOKEN (ou ANTHROPIC_AUTH_TOKEN_<N>) absent de l'environnement. " +
         "Impossible de créer l'agent de manière sécurisée.";
@@ -605,7 +606,7 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
 
     let envVars: Record<string, string> = {
       ANTHROPIC_MODEL: model,
-      ANTHROPIC_AUTH_TOKEN: authToken,
+      ANTHROPIC_AUTH_TOKEN: authToken || '',
       ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
       ANTHROPIC_DEFAULT_HAIKU_MODEL:
         process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || 'claude-3-5-haiku-20241022',
@@ -657,29 +658,27 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
 
     if (runner === 'hermes') {
       // ═══════════════════════════════════════════════════════════════════════
-      // NATIVE HERMES PROFILE (v3.0 — Refactored)
+      // NATIVE HERMES PROFILE
       //
-      // Au lieu de créer un layout custom (settings.json + SOUL.md manuels),
-      // on délègue à `hermes profile create` qui crée un profil natif:
-      //   ~/.hermes/profiles/<name>/
-      //     ├── config.yaml   (provider + model + MCP — géré par Hermes)
-      //     ├── .env          (credentials — géré par Hermes)
+      // Delegates to `hermes profile create` which creates a native profile:
+      //   HERMES_HOME/profiles/<name>/
+      //     ├── config.yaml   (provider + model + MCP — managed by Hermes)
+      //     ├── .env          (credentials — managed by Overmind)
       //     ├── SOUL.md       (system prompt)
-      //     ├── memories/     (state.db — isolation native)
-      //     └── sessions/     (historique — géré par Hermes)
+      //     ├── memories/     (state.db — native isolation)
+      //     └── sessions/     (conversation history — managed by Hermes)
       //
-      // Avantages:
-      //   - Zero credential drift (1 .env par profil, point final)
-      //   - Provider routing géré par Hermes (35+ providers natifs)
-      //   - Pas de TOKEN_KEYS, pas de token resolution, pas de HERMES_HOME custom
+      // getProfilePath() queries `hermes profile show <name>` for the real path.
       // ═══════════════════════════════════════════════════════════════════════
       const { HermesProfileManager } = await import('./HermesProfileManager.js');
 
-      // Build credentials map from envVars (extract provider-specific keys)
+      // Build credentials map — inherit ALL provider keys from the parent .env
+      // so the profile works regardless of which provider is configured.
       const credentials: Record<string, string> = {};
+
+      // Auto-detect the primary provider from the auth token prefix
       const authToken = envVars.ANTHROPIC_AUTH_TOKEN || '';
       if (authToken) {
-        // Auto-detect provider from token prefix to set the right env var
         if (authToken.startsWith('sk-cp-') || authToken.startsWith('sk-mm-')) {
           credentials['MINIMAX_CN_API_KEY'] = authToken;
         } else if (/^[0-9a-f]{32}/i.test(authToken)) {
@@ -688,6 +687,31 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
           credentials['ANTHROPIC_API_KEY'] = authToken;
         }
       }
+
+      // Also forward any existing provider keys from the parent environment
+      // so the profile can use fallback providers
+      const providerEnvKeys = [
+        'GLM_API_KEY', 'ZAI_API_KEY', 'Z_AI_API_KEY',
+        'MINIMAX_API_KEY', 'MINIMAX_CN_API_KEY',
+        'DEEPSEEK_API_KEY',
+        'OPENAI_API_KEY',
+        'ANTHROPIC_API_KEY',
+        'OPENROUTER_API_KEY',
+        'GEMINI_API_KEY', 'GOOGLE_API_KEY',
+        'KIMI_API_KEY', 'MOONSHOT_API_KEY',
+        'DASHSCOPE_API_KEY',
+        'XAI_API_KEY',
+        'BASE_URL_Z', 'GLM_BASE_URL',
+      ];
+      for (const key of providerEnvKeys) {
+        const val = process.env[key];
+        if (val && !credentials[key]) {
+          credentials[key] = val;
+        }
+      }
+
+      // Skip auth token requirement for Hermes — it has its own credential pool
+      // per profile via .env
 
       const { profilePath, soulPath } = await HermesProfileManager.create({
         name,
