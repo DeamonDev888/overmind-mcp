@@ -158,12 +158,47 @@ export class AgentManager {
         promptSize,
       });
     }
-    // Process Hermes agents — lit depuis les profils Hermes natifs (v3.0)
+    // Process Hermes agents — lit depuis les profils Hermes natifs
     for (const profile of hermesProfiles.filter((p) => p.name !== 'default')) {
       const name = profile.name;
       const model = profile.model || 'unknown';
       const provider = model.includes('(') ? model.match(/\(([^)]+)\)/)?.[1] || 'auto' : 'auto';
-      const promptSize = 0;
+
+      // Read real data from the profile directory
+      let promptSize = 0;
+      const mcpServers: string[] = [];
+      let missingConfig = false;
+
+      try {
+        const profilePath = await HermesProfileManager.getProfilePath(name);
+        if (profilePath) {
+          // Read SOUL.md size
+          try {
+            const stat = await fs.stat(path.join(profilePath, 'SOUL.md'));
+            promptSize = stat.size;
+          } catch {
+            missingConfig = true;
+          }
+
+          // Read MCP servers from config.yaml
+          try {
+            const configContent = await fs.readFile(path.join(profilePath, 'config.yaml'), 'utf-8');
+            // Parse mcp_servers: section from YAML
+            const mcpMatch = configContent.match(/^mcp_servers:\s*\n((?:\s{2}\S.*\n?)+)/m);
+            if (mcpMatch) {
+              const serverLines = mcpMatch[1].split('\n');
+              for (const line of serverLines) {
+                const srvMatch = line.match(/^\s{2}(\S+):\s*$/);
+                if (srvMatch) mcpServers.push(srvMatch[1]);
+              }
+            }
+          } catch {
+            // config.yaml not readable — not critical
+          }
+        }
+      } catch {
+        // Profile path unresolvable — keep defaults
+      }
 
       if (!agentsMap.has(name)) {
         agentsMap.set(name, {
@@ -171,9 +206,9 @@ export class AgentManager {
           runner: 'hermes',
           model: model.replace(/\s*\(.*\)$/, '').trim() || 'unknown',
           provider,
-          mcpServers: [],
+          mcpServers,
           origin: 'hermes',
-          missingConfig: false,
+          missingConfig,
           promptSize,
         });
       }
@@ -819,7 +854,17 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
       if (profilePath) {
         result['settings.json'] = await readFileSafe(path.join(profilePath, 'config.yaml'));
         result['prompt.md'] = await readFileSafe(path.join(profilePath, 'SOUL.md'));
+        // Hermes stores MCP servers in config.yaml under mcp_servers:, not a separate .mcp.json
+        // Check both locations for compatibility
         result['.mcp.json'] = await readFileSafe(path.join(profilePath, 'mcp.json'));
+        if (result['.mcp.json'] === 'MISSING') {
+          // Extract mcp_servers section from config.yaml as fallback
+          const configContent = result['settings.json'];
+          if (configContent !== 'MISSING') {
+            const mcpMatch = configContent.match(/^(mcp_servers:\s*\n(?:\s{2,}\S.*\n?)+)/m);
+            result['.mcp.json'] = mcpMatch ? mcpMatch[1] : '(no mcp_servers in config.yaml)';
+          }
+        }
         result['.env'] = await readFileSafe(path.join(profilePath, '.env'));
       }
       return result;

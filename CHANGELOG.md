@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.5.2] — 2026-07-09
+
+### Fixed
+- `AgentManager.listAgents()`: lecture réelle du profil Hermes au lieu de retourner `promptSize=0` / `mcpServers=[]` / `missingConfig=false`
+  - `SOUL.md`: taille réelle via `fs.stat()` depuis `getProfilePath(name)`
+  - `mcp_servers`: parse la section `mcp_servers:` du `config.yaml` du profil (regex indented keys)
+  - `missingConfig: true` si `SOUL.md` est absent
+- `AgentManager.getDetailedConfigs()`: fallback MCP — si `mcp.json` absent (cas normal pour Hermes), extrait la section `mcp_servers:` du `config.yaml`
+
+### Verified
+- `list_agents (details: true)` → 6 agents Hermes natifs détectés avec vraies données: nexus_master (4531B, memory+postgres), nexus_trader (4143B, memory), nexus_healer (4003B, memory), nexus_researcher (3997B, memory), nexus_risk_manager (3894B, memory), nexus_publisher (3845B, postgres)
+- Tests: 63/63 PASS, 0 erreur compile, 0 erreur lint
+
+---
+
 ## [3.5.1] — 2026-07-09
 
 ### Fixed
