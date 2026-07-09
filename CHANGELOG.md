@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.5.0] — 2026-07-09
+
+### Added
+- **Hermes API Server gateway natif (port 8642)**: `run_hermes` interroge désormais directement l'API HTTP/SSE exposée par Hermes au lieu de spawn un subprocess à chaque appel
+  - `HermesGatewayManager.ts` (singleton): lit `API_SERVER_KEY`/`API_SERVER_PORT`/`API_SERVER_HOST` depuis le `.env` Hermes, probe `GET /health` avec cache TTL 10s, expose `ensureReady()` / `isReady()` / `getDetailedHealth()`
+  - `HermesGatewayRunner.ts`: runner HTTP/SSE qui remplace le spawn — `POST /v1/chat/completions` avec `stream:true`, parsing SSE temps réel → `appendLiveOutput()` pour le streaming live, session management natif via header `X-Hermes-Session-Id`, profile routing via `X-Hermes-Profile`, abort propre via `AbortController`
+- Configuration: `gateway.platforms.api_server` activable dans `config.yaml`, `API_SERVER_KEY` + `API_SERVER_ENABLED=1` dans `.env`
+
+### Changed
+- `run_hermes.ts`: gateway en priorité → fallback automatique vers `HermesRunner` (spawn subprocess historique) si `GATEWAY_NOT_READY`. Zéro cassure: si le gateway est down le système marche exactement comme avant
+
+---
+
 ## [3.3.9] — 2025-07-07
 
 ### Changed

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HermesRunner } from '../services/HermesRunner.js';
+import { HermesGatewayRunner } from '../services/HermesGatewayRunner.js';
 import { storeRun } from '../memory/MemoryFactory.js';
 import { getWorkspaceDir } from '../lib/config.js';
 import { deleteSessionId } from '../lib/sessions.js';
@@ -39,7 +40,6 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
     };
   }
 
-  const runner = new HermesRunner();
   const {
     prompt,
     agentName,
@@ -57,27 +57,33 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
   const finalConfig = argConfig || getWorkspaceDir();
 
   const start = Date.now();
-  let result = await runner.runAgent({
+
+  // ─── Try Gateway HTTP first, fall back to subprocess spawn ────────────────
+  // The Hermes API Server (port 8642) provides HTTP+SSE chat without the
+  // ~5-10s Python startup overhead per call. If it's not running, we
+  // transparently fall back to the old HermesRunner (subprocess spawn).
+  const gatewayRunner = new HermesGatewayRunner();
+  const gwResult = await gatewayRunner.runAgent({
     prompt,
     agentName,
     autoResume,
     sessionId,
-    cwd: finalPath,
-    configPath: finalConfig,
-    silent,
     model,
     provider,
     signal,
+    silent,
   });
 
-  // Retry if session invalid
-  if (result.error?.includes('session') || result.error?.includes('EXIT_CODE_1')) {
-    if (agentName) await deleteSessionId(agentName, finalConfig, 'hermes');
-    result = await runner.runAgent({
+  let result: { result: string; sessionId?: string; error?: string; rawOutput?: string; model?: string };
+
+  // If gateway returned GATEWAY_NOT_READY, fall back to subprocess spawn
+  if (gwResult.transport === 'fallback-spawn' || gwResult.error === 'GATEWAY_NOT_READY') {
+    const spawnRunner = new HermesRunner();
+    result = await spawnRunner.runAgent({
       prompt,
       agentName,
-      autoResume: false,
-      sessionId: undefined,
+      autoResume,
+      sessionId,
       cwd: finalPath,
       configPath: finalConfig,
       silent,
@@ -85,6 +91,25 @@ export async function runHermesAgent(args: z.infer<typeof runHermesSchema>) {
       provider,
       signal,
     });
+
+    // Retry if session invalid (spawn mode only — gateway handles sessions natively)
+    if (result.error?.includes('session') || result.error?.includes('EXIT_CODE_1')) {
+      if (agentName) await deleteSessionId(agentName, finalConfig, 'hermes');
+      result = await spawnRunner.runAgent({
+        prompt,
+        agentName,
+        autoResume: false,
+        sessionId: undefined,
+        cwd: finalPath,
+        configPath: finalConfig,
+        silent,
+        model,
+        provider,
+        signal,
+      });
+    }
+  } else {
+    result = gwResult;
   }
 
   const durationMs = Date.now() - start;
