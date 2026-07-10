@@ -27,6 +27,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { rootLogger } from '../lib/logger.js';
+import { HermesPoolClient } from './HermesPoolClient.js';
 
 const execAsync = promisify(exec);
 const logger = rootLogger.child({ module: 'HermesProfileManager' });
@@ -53,26 +54,23 @@ export interface CreateProfileOptions {
 
 /**
  * Detect the Hermes provider name from a model string.
- * Used when the caller doesn't specify --provider explicitly.
+ * Uses simple heuristics matching the actual provider IDs in Hermes pool:
+ *   glm/zai → 'zai', minimax/m3 → 'minimax-cn', claude/sonnet/opus/haiku → 'anthropic',
+ *   gpt → 'openai-api', deepseek → 'deepseek', gemini → 'gemini', etc.
+ *
+ * For unknown models, falls back to 'openai-api' (most permissive).
  */
 function detectProviderFromModel(model: string): string {
   const lower = model.toLowerCase();
-  if (lower.includes('minimax') || lower.includes('m3')) return 'minimax-cn';
-  if (lower.includes('glm') || lower.includes('zai') || lower.includes('z-ai')) return 'z-ai';
-  if (
-    lower.includes('claude') ||
-    lower.includes('sonnet') ||
-    lower.includes('opus') ||
-    lower.includes('haiku')
-  )
-    return 'anthropic';
-  if (lower.includes('gpt')) return 'openai';
-  if (lower.includes('gemini')) return 'gemini';
+  if (lower.includes('glm') || lower.includes('zai')) return 'zai';
+  if (lower.includes('minimax') || lower.includes('m3') || lower.includes('MiniMax')) return 'minimax-cn';
+  if (lower.includes('claude') || lower.includes('sonnet') || lower.includes('opus') || lower.includes('haiku')) return 'anthropic';
+  if (lower.includes('gpt') || lower.includes('o1') || lower.includes('o3')) return 'openai-api';
   if (lower.includes('deepseek')) return 'deepseek';
-  if (lower.includes('kimi') || lower.includes('moonshot')) return 'kimi';
-  if (lower.includes('qwen') || lower.includes('dashscope')) return 'alibaba';
+  if (lower.includes('gemini')) return 'gemini';
+  if (lower.includes('qwen')) return 'qwen-oauth';
   if (lower.includes('grok') || lower.includes('xai')) return 'xai';
-  return 'openrouter'; // Safe default
+  return 'openai-api'; // safe default (most permissive)
 }
 
 export class HermesProfileManager {
@@ -137,19 +135,27 @@ export class HermesProfileManager {
   }
 
   /**
-   * Create a new Hermes profile with all configuration.
+   * Create a new Hermes profile that uses the NATIVE Hermes credential pool.
    *
    * Steps:
-   *   1. hermes profile create <name> --no-alias --description "<desc>"
-   *   2. hermes -p <name> config set model.provider <provider>
-   *   3. hermes -p <name> config set model.model <model>
-   *   4. Write .env with credentials
+   *   1. Validate provider is healthy in the Hermes pool (round_robin rotation)
+   *   2. hermes profile create <name> --no-alias --description "<desc>"
+   *   3. hermes -p <name> config set model.provider <provider>
+   *   4. hermes -p <name> config set model.model <model>
    *   5. Write SOUL.md with system prompt
    *   6. Optionally set mcp_servers in config.yaml
+   *   7. Generate profile.yaml/workspace.yaml/README
+   *
+   * NOTE: We do NOT write credentials to the profile's .env anymore — Hermes
+   * resolves them from the global pool via `hermes auth list`. The profile's
+   * .env stays empty (just the placeholder comment Hermes writes by default).
+   *
+   * If `opts.credentials` is provided, they are added to the GLOBAL POOL via
+   * `hermes auth add` (deduped by label) rather than written to the profile.
    */
   static async create(
     opts: CreateProfileOptions,
-  ): Promise<{ profilePath: string; soulPath: string }> {
+  ): Promise<{ profilePath: string; soulPath: string; provider: string }> {
     const { name, prompt, model } = opts;
 
     if (!SAFE_NAME_RE.test(name)) {
@@ -161,12 +167,37 @@ export class HermesProfileManager {
 
     logger.info({ name, model, provider }, '[CREATE] Creating Hermes profile.');
 
-    // 1. Create profile (no-alias to avoid polluting PATH)
+    // 0. If credentials were provided, add them to the GLOBAL POOL (not the profile)
+    //    This way multiple profiles can share the same key with round_robin rotation.
+    if (opts.credentials && Object.keys(opts.credentials).length > 0) {
+      const apiKey = opts.credentials.api_key ?? opts.credentials.API_KEY ?? Object.values(opts.credentials)[0];
+      if (apiKey) {
+        const label = `overmind-${name}-${Date.now()}`;
+        try {
+          await HermesPoolClient.addCredential(provider, apiKey, { label });
+          logger.info({ provider, label }, '[CREATE] Credential added to global pool.');
+        } catch (e) {
+          logger.warn({ provider, error: e }, '[CREATE] Failed to add credential to pool (continuing).');
+        }
+      }
+    }
+
+    // 0b. Validate that the provider is healthy in the pool (has at least one active key)
+    //     This prevents creating a profile that can't actually run.
+    const healthy = await HermesPoolClient.isProviderHealthy(provider);
+    if (!healthy) {
+      logger.warn(
+        { provider, name },
+        '[CREATE] Provider has NO healthy credentials in the pool. Profile will fail to run until you add one via: hermes auth add ' + provider + ' --api-key <key>',
+      );
+    }
+
+    // 1. Create profile (no-alias to avoid polluting PATH).
+    //    Use \\ to escape the inner quote cleanly without no-useless-escape.
     const createCmd = `hermes profile create "${name}" --no-alias --description "${description.replace(/"/g, '\\"')}"`;
     try {
       await execAsync(createCmd);
     } catch (e) {
-      // Profile might already exist — that's OK if it does
       const msg = e instanceof Error ? e.message : String(e);
       if (!msg.includes('already exists')) {
         throw new Error(`Failed to create profile '${name}': ${msg}`, { cause: e });
@@ -184,35 +215,30 @@ export class HermesProfileManager {
       throw new Error(`Could not resolve profile path for '${name}'`);
     }
 
-    // 4. Write .env with credentials
-    const envPath = path.join(profilePath, '.env');
-    const envLines: string[] = ['# Overmind-managed credentials for Hermes profile'];
-    for (const [key, value] of Object.entries(opts.credentials)) {
-      envLines.push(`${key}=${value}`);
-    }
-    fs.writeFileSync(envPath, envLines.join('\n') + '\n', 'utf-8');
-
-    // 5. Write SOUL.md (system prompt)
+    // 4. SOUL.md (system prompt) — the ONLY profile-specific file we write
     const soulPath = path.join(profilePath, 'SOUL.md');
     fs.writeFileSync(soulPath, prompt, 'utf-8');
 
-    // 6. Optionally set MCP servers
+    // 5. Optionally set MCP servers
     if (opts.mcpServers && opts.mcpServers.length > 0) {
       await this.setMcpServers(name, opts.mcpServers, profilePath);
     }
 
-    // 7. Generate profile.yaml (kanban routing — OBLIGATOIRE)
+    // 6. Generate profile.yaml (kanban routing — OBLIGATOIRE)
     this.writeProfileYaml(profilePath, name, description, model);
 
-    // 8. Generate workspace.yaml
+    // 7. Generate workspace.yaml
     this.writeWorkspaceYaml(profilePath, 'persistent');
 
-    // 9. Generate README.md
+    // 8. Generate README.md
     this.writeReadme(profilePath, name, description);
 
-    logger.info({ name, profilePath }, '[CREATE] Profile created successfully.');
+    logger.info(
+      { name, profilePath, provider, poolHealthy: healthy },
+      '[CREATE] Profile created successfully (credentials via global pool).',
+    );
 
-    return { profilePath, soulPath };
+    return { profilePath, soulPath, provider };
   }
 
   /**

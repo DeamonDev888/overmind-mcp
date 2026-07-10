@@ -707,46 +707,15 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
       // ═══════════════════════════════════════════════════════════════════════
       const { HermesProfileManager } = await import('./HermesProfileManager.js');
 
-      // Build credentials map — inherit ALL provider keys from the parent .env
-      // so the profile works regardless of which provider is configured.
-      const credentials: Record<string, string> = {};
-
-      // Auto-detect the primary provider from the auth token prefix
+      // Pull the auth token (if any) so we can optionally add it to the global pool.
+      // Hermes resolves credentials from the pool — we DON'T need to write a
+      // credentials map per profile anymore.
       const authToken = envVars.ANTHROPIC_AUTH_TOKEN || '';
-      if (authToken) {
-        if (authToken.startsWith('sk-cp-') || authToken.startsWith('sk-mm-')) {
-          credentials['MINIMAX_CN_API_KEY'] = authToken;
-        } else if (/^[0-9a-f]{32}/i.test(authToken)) {
-          credentials['GLM_API_KEY'] = authToken;
-        } else {
-          credentials['ANTHROPIC_API_KEY'] = authToken;
-        }
-      }
 
-      // Also forward any existing provider keys from the parent environment
-      // so the profile can use fallback providers
-      const providerEnvKeys = [
-        'GLM_API_KEY', 'ZAI_API_KEY', 'Z_AI_API_KEY',
-        'MINIMAX_API_KEY', 'MINIMAX_CN_API_KEY',
-        'DEEPSEEK_API_KEY',
-        'OPENAI_API_KEY',
-        'ANTHROPIC_API_KEY',
-        'OPENROUTER_API_KEY',
-        'GEMINI_API_KEY', 'GOOGLE_API_KEY',
-        'KIMI_API_KEY', 'MOONSHOT_API_KEY',
-        'DASHSCOPE_API_KEY',
-        'XAI_API_KEY',
-        'BASE_URL_Z', 'GLM_BASE_URL',
-      ];
-      for (const key of providerEnvKeys) {
-        const val = process.env[key];
-        if (val && !credentials[key]) {
-          credentials[key] = val;
-        }
-      }
-
-      // Skip auth token requirement for Hermes — it has its own credential pool
-      // per profile via .env
+      // The Hermes profile uses the GLOBAL credential pool.
+      // If an auth token was passed, we add it as a single credential to the pool
+      // (keyed by the resolved provider). All other keys come from `hermes auth list`.
+      const credentials: Record<string, string> = authToken ? { api_key: authToken } : {};
 
       const { profilePath, soulPath } = await HermesProfileManager.create({
         name,

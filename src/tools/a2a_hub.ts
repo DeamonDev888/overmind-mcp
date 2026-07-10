@@ -3,36 +3,44 @@
  * A2A Hub — Outil MCP pour la communication Agent-to-Agent
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Architecture distribuee — chaque worker est un serveur HTTP independant:
+ * Architecture distribuée — chaque bridge est un serveur HTTP indépendant:
  *
- *   discord-master (:discord) → routes !trade → TV Analyst :3002
- *                             → routes !sniper → Sniperbot :3001
+ *   a2a_hub parle DIRECTEMENT aux bridges HTTP:
+ *     POST :31XX/rpc  → JSON-RPC 2.0 agent.run (NEXUS bridges)
+ *     POST :30XX/send → legacy message synchrone (discord_llm bridge)
+ *     GET  :XXXX/health → status live
  *
- *   a2a_hub parle DIRECTEMENT aux workers HTTP:
- *     POST :300X/send  → message synchrone
- *     GET  :300X/health → status live
+ * Découverte automatique:
+ *   1. Scan ports 3101-3120 (NEXUS bridges) + 3001-3020 (legacy workers)
+ *   2. Scan ~/.overmind/hermes/profiles/ (Linux) + ~/AppData/Local/hermes/profiles/ (Windows)
+ *   3. Cross-reference: profile ↔ bridge port
+ *   4. Lit Nexus/tmp/bridge_pids.json si présent
  *
- * Decouverte automatique:
- *   1. Scan ports 3001-3020 (workers connus)
- *   2. Scan ~/.overmind/hermes/profiles/ (agents Hermes)
- *   3. Cross-reference: profile ↔ worker port
- *   4. Lit ~/.overmind/bridge/workers.json si present
+ * PROD FIXES (2026-07-10):
+ *   - fetch() async au lieu de execSync('curl') — ne bloque plus l'event loop
+ *   - Vrai parallélisme pour fanout/broadcast (Promise.all)
+ *   - Support dual: POST /rpc (JSON-RPC) + POST /send (legacy)
+ *   - Port scan: 3101-3120 (NEXUS) + 3001-3020 (legacy)
+ *   - Profils Hermes: ~/.overmind/hermes/ + ~/AppData/Local/hermes/
+ *   - 127.0.0.1 au lieu de localhost (IPv4/IPv6 fix)
  */
 
 import { z } from 'zod';
-import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { randomUUID } from 'crypto';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-interface WorkerInfo {
+interface BridgeInfo {
   port: number;
   url: string;
   online: boolean;
   agentName: string;
   health?: Record<string, unknown>;
+  /** true if bridge supports POST /rpc (JSON-RPC 2.0), false for legacy /send */
+  hasRpc: boolean;
 }
 
 interface AgentInfo {
@@ -40,8 +48,8 @@ interface AgentInfo {
   model: string;
   provider: string;
   status: 'online' | 'offline' | 'unknown';
-  workerPort: number | null;
-  workerUrl: string | null;
+  bridgePort: number | null;
+  bridgeUrl: string | null;
   description: string;
   skillsCount: number;
   hasMemory: boolean;
@@ -50,142 +58,199 @@ interface AgentInfo {
 
 interface Discovery {
   totalAgents: number;
-  onlineWorkers: number;
+  onlineBridges: number;
   agents: AgentInfo[];
-  workers: WorkerInfo[];
+  bridges: BridgeInfo[];
   selfAgent: string | null;
 }
 
-// ─── HTTP Helper (curl synchrone) ──────────────────────────────────────────
+// ─── HTTP Helpers (async fetch — non-blocking) ─────────────────────────────
 
-function httpGet(url: string, timeoutMs = 5000): Record<string, unknown> | null {
+async function httpGet(url: string, timeoutMs = 5000): Promise<Record<string, unknown> | null> {
   try {
-    const result = execSync(`curl -s -m ${Math.floor(timeoutMs / 1000)} "${url}" 2>/dev/null`, {
-      encoding: 'utf8',
-      timeout: timeoutMs + 1000,
-    });
-    return JSON.parse(result) as Record<string, unknown>;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(url, { method: 'GET', signal: controller.signal });
+    clearTimeout(timer);
+    if (!response.ok) return null;
+    const text = await response.text();
+    return JSON.parse(text) as Record<string, unknown>;
   } catch {
     return null;
   }
 }
 
-function httpPost(
+async function httpPost(
   url: string,
   body: Record<string, unknown>,
   timeoutMs = 300000,
-): Record<string, unknown> | null {
-  const payload = JSON.stringify(body);
+): Promise<Record<string, unknown> | null> {
   try {
-    const escapedPayload = payload.replace(/'/g, "'\\''");
-    const result = execSync(
-      `curl -s -m ${Math.floor(timeoutMs / 1000)} -X POST "${url}" -H "Content-Type: application/json" -d '${escapedPayload}' 2>/dev/null`,
-      { encoding: 'utf8', timeout: timeoutMs + 1000, maxBuffer: 50 * 1024 * 1024 },
-    );
-    return JSON.parse(result) as Record<string, unknown>;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!response.ok) return null;
+    const text = await response.text();
+    return JSON.parse(text) as Record<string, unknown>;
   } catch {
     return null;
   }
 }
 
-// ─── Worker Discovery ──────────────────────────────────────────────────────
+// ─── Bridge Discovery ──────────────────────────────────────────────────────
 
-function discoverWorkers(): WorkerInfo[] {
-  const workers: WorkerInfo[] = [];
-  const workersJsonPath = path.join(os.homedir(), '.overmind', 'bridge', 'workers.json');
+/** Get candidate Hermes profile directories (Windows + Linux) */
+function getProfileDirs(): string[] {
+  const dirs: string[] = [];
+  const home = os.homedir();
 
-  // 1. Try reading workers registry
-  let knownPorts: Array<{ port: number; agentName: string }> = [];
+  // Linux/Ubuntu: ~/.overmind/hermes/profiles/
+  const overmindHermes = path.join(home, '.overmind', 'hermes', 'profiles');
+  if (fs.existsSync(overmindHermes)) dirs.push(overmindHermes);
+
+  // Windows: ~/AppData/Local/hermes/profiles/
+  const winHermes = path.join(home, 'AppData', 'Local', 'hermes', 'profiles');
+  if (fs.existsSync(winHermes)) dirs.push(winHermes);
+
+  // Linux native: ~/.hermes/profiles/
+  const nativeHermes = path.join(home, '.hermes', 'profiles');
+  if (fs.existsSync(nativeHermes)) dirs.push(nativeHermes);
+
+  return dirs;
+}
+
+/** Get known bridge ports from pid files */
+function getKnownPorts(): Array<{ port: number; agentName: string }> {
+  const known: Array<{ port: number; agentName: string }> = [];
+  const home = os.homedir();
+
+  // 1. NEXUS pid file: Nexus/tmp/bridge_pids.json
+  const nexusPidPath = path.join(home, 'Nexus', 'tmp', 'bridge_pids.json');
+  if (fs.existsSync(nexusPidPath)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(nexusPidPath, 'utf8'));
+      if (Array.isArray(data)) {
+        for (const entry of data) {
+          if (entry.port && entry.name) {
+            known.push({ port: entry.port, agentName: entry.name });
+          }
+        }
+      } else if (data.workers && Array.isArray(data.workers)) {
+        for (const w of data.workers) {
+          if (w.port) known.push({ port: w.port, agentName: w.agentName || '' });
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 2. Legacy workers.json: ~/.overmind/bridge/workers.json
+  const workersJsonPath = path.join(home, '.overmind', 'bridge', 'workers.json');
   if (fs.existsSync(workersJsonPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(workersJsonPath, 'utf8'));
       if (Array.isArray(data.workers)) {
-        knownPorts = data.workers.map((w: { port: number; agentName: string }) => ({
-          port: w.port,
-          agentName: w.agentName || 'unknown',
-        }));
+        for (const w of data.workers) {
+          if (w.port) known.push({ port: w.port, agentName: w.agentName || '' });
+        }
       }
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }
 
-  // 2. Fallback: scan ports 3001-3020
-  if (knownPorts.length === 0) {
-    knownPorts = [];
-    for (let port = 3001; port <= 3020; port++) {
-      knownPorts.push({ port, agentName: '' });
-    }
+  return known;
+}
+
+/** Probe a single port for bridge health */
+async function probeBridge(port: number, agentName: string): Promise<BridgeInfo> {
+  const url = `http://127.0.0.1:${port}`;
+  const health = await httpGet(`${url}/health`, 3000);
+
+  if (health) {
+    const detectedAgent =
+      agentName ||
+      (health.agent as string) ||
+      (health.agentName as string) ||
+      (health.service as string) ||
+      'unknown';
+    // NEXUS bridges expose rpcMethods[] in health — they support POST /rpc
+    const hasRpc = Array.isArray(health.rpcMethods) || 'jsonrpc' in health;
+    return { port, url, online: true, agentName: detectedAgent, health, hasRpc };
   }
 
-  // 3. Probe each port
+  return { port, url, online: false, agentName: agentName || '', hasRpc: false };
+}
+
+/** Discover all bridges (scan ports + pid files) */
+async function discoverBridges(): Promise<BridgeInfo[]> {
+  const knownPorts = getKnownPorts();
+
+  // Build port list: known ports + scan ranges
+  const portSet = new Set<number>();
+  const portAgentMap = new Map<number, string>();
+
+  // Add known ports from pid files
   for (const { port, agentName } of knownPorts) {
-    const url = `http://localhost:${port}`;
-    const health = httpGet(`${url}/health`, 3000);
-
-    if (health) {
-      // Worker is online — extract agent name from health
-      const detectedAgent =
-        agentName ||
-        (health.agent as string) ||
-        (health.agentName as string) ||
-        (health.service as string) ||
-        'unknown';
-
-      workers.push({
-        port,
-        url,
-        online: true,
-        agentName: detectedAgent,
-        health,
-      });
-    } else {
-      // Check if port is listening at all
-      workers.push({
-        port,
-        url,
-        online: false,
-        agentName: agentName || '',
-      });
-    }
+    portSet.add(port);
+    if (agentName) portAgentMap.set(port, agentName);
   }
 
-  return workers;
+  // NEXUS range: 3101-3120
+  for (let p = 3101; p <= 3120; p++) portSet.add(p);
+
+  // Legacy range: 3001-3020
+  for (let p = 3001; p <= 3020; p++) portSet.add(p);
+
+  // Probe all ports in parallel (true parallel — async fetch)
+  const ports = Array.from(portSet).sort((a, b) => a - b);
+  const results = await Promise.all(
+    ports.map((port) => probeBridge(port, portAgentMap.get(port) || '')),
+  );
+
+  return results;
 }
 
 // ─── Agent Discovery ───────────────────────────────────────────────────────
 
-function discoverAgents(): Discovery {
-  const home = os.homedir();
-  const profilesDir = path.join(home, '.overmind', 'hermes', 'profiles');
+async function discoverAgents(): Promise<Discovery> {
   const selfAgent = process.env.OVERMIND_AGENT_NAME || null;
-
   const agents: AgentInfo[] = [];
-  const workers = discoverWorkers();
+  const bridges = await discoverBridges();
 
-  // Build worker lookup: agentName → worker
-  const workerByAgent = new Map<string, WorkerInfo>();
-  for (const w of workers) {
-    if (w.online && w.agentName && w.agentName !== 'unknown') {
-      workerByAgent.set(w.agentName, w);
+  // Build bridge lookup: agentName → bridge
+  const bridgeByAgent = new Map<string, BridgeInfo>();
+  for (const b of bridges) {
+    if (b.online && b.agentName && b.agentName !== 'unknown') {
+      bridgeByAgent.set(b.agentName, b);
     }
   }
 
-  // Scan Hermes profiles
-  if (fs.existsSync(profilesDir)) {
-    const entries = fs.readdirSync(profilesDir, { withFileTypes: true });
+  // Scan all profile directories
+  for (const profilesDir of getProfileDirs()) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(profilesDir, { withFileTypes: true });
+    } catch { continue; }
+
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const profilePath = path.join(profilesDir, entry.name);
+
+      // Avoid duplicates (same profile name in different dirs)
+      if (agents.some((a) => a.name === entry.name)) continue;
 
       // Read config.yaml
       const configPath = path.join(profilePath, 'config.yaml');
       let model = 'unknown';
       let provider = 'unknown';
       if (fs.existsSync(configPath)) {
-        const config = fs.readFileSync(configPath, 'utf8');
-        const modelMatch = config.match(/^\s*model:\s*(?!provider)(.+)/m);
-        const providerMatch = config.match(/^\s*provider:\s*(.+)/m);
+        const configContent = fs.readFileSync(configPath, 'utf8');
+        const modelMatch = configContent.match(/^\s*model:\s*(?!provider)(.+)/m);
+        const providerMatch = configContent.match(/^\s*provider:\s*(.+)/m);
         if (modelMatch) model = modelMatch[1].trim().replace(/['"]/g, '');
         if (providerMatch) provider = providerMatch[1].trim().replace(/['"]/g, '');
       }
@@ -207,44 +272,37 @@ function discoverAgents(): Discovery {
           const walk = (dir: string): number => {
             let count = 0;
             for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
-              if (f.isDirectory()) {
-                count += walk(path.join(dir, f.name));
-              } else if (f.name === 'SKILL.md') {
-                count++;
-              }
+              if (f.isDirectory()) count += walk(path.join(dir, f.name));
+              else if (f.name === 'SKILL.md') count++;
             }
             return count;
           };
           skillsCount = walk(skillsDir);
-        } catch {
-          // ignore
-        }
+        } catch { /* ignore */ }
       }
 
-      // Check memory
-      const hasMemory = fs.existsSync(path.join(profilePath, 'memories', 'MEMORY.md'));
+      // Check memory (state.db or MEMORY.md)
+      const hasMemory =
+        fs.existsSync(path.join(profilePath, 'memories', 'state.db')) ||
+        fs.existsSync(path.join(profilePath, 'memories', 'MEMORY.md'));
 
       // Last activity
       let lastActivity: string | null = null;
-      const stateDb = path.join(profilePath, 'state.db');
+      const stateDb = path.join(profilePath, 'memories', 'state.db');
       if (fs.existsSync(stateDb)) {
-        try {
-          lastActivity = fs.statSync(stateDb).mtime.toISOString();
-        } catch {
-          // ignore
-        }
+        try { lastActivity = fs.statSync(stateDb).mtime.toISOString(); } catch { /* ignore */ }
       }
 
-      // Cross-reference with workers
-      const worker = workerByAgent.get(entry.name);
+      // Cross-reference with bridges
+      const bridge = bridgeByAgent.get(entry.name);
 
       agents.push({
         name: entry.name,
         model,
         provider,
-        status: worker ? 'online' : 'offline',
-        workerPort: worker?.port ?? null,
-        workerUrl: worker?.url ?? null,
+        status: bridge ? 'online' : 'offline',
+        bridgePort: bridge?.port ?? null,
+        bridgeUrl: bridge?.url ?? null,
         description,
         skillsCount,
         hasMemory,
@@ -255,47 +313,77 @@ function discoverAgents(): Discovery {
 
   return {
     totalAgents: agents.length,
-    onlineWorkers: workers.filter((w) => w.online).length,
+    onlineBridges: bridges.filter((b) => b.online).length,
     agents,
-    workers,
+    bridges,
     selfAgent,
   };
 }
 
-// ─── Send message to a worker ──────────────────────────────────────────────
+// ─── Send message to a bridge (supports /rpc + /send) ──────────────────────
 
-function sendToWorker(
-  port: number,
+async function sendToBridge(
+  bridge: BridgeInfo,
   message: string,
-  opts: {
-    model?: string;
-    timeoutMs?: number;
-  } = {},
-): { success: boolean; text: string; raw: Record<string, unknown> | null } {
-  const url = `http://localhost:${port}/send`;
-  const body: Record<string, unknown> = {
-    message,
-    userId: `a2a_${process.env.OVERMIND_AGENT_NAME || 'system'}`,
-    username: process.env.OVERMIND_AGENT_NAME || 'A2A Hub',
+  opts: { model?: string; timeoutMs?: number } = {},
+): Promise<{ success: boolean; text: string; raw: Record<string, unknown> | null }> {
+  const selfAgent = process.env.OVERMIND_AGENT_NAME || 'A2A Hub';
+  const enrichedMessage = `[A2A — Message from ${selfAgent}]\n${message}`;
+  const timeout = opts.timeoutMs ?? 300000;
+
+  // Strategy 1: NEXUS bridge with POST /rpc (JSON-RPC 2.0)
+  if (bridge.hasRpc) {
+    const rpcBody = {
+      jsonrpc: '2.0',
+      id: randomUUID(),
+      method: 'agent.run',
+      params: {
+        agentName: bridge.agentName,
+        runner: 'hermes',
+        prompt: enrichedMessage,
+        ...(opts.model ? { model: opts.model } : {}),
+      },
+    };
+    const response = await httpPost(`${bridge.url}/rpc`, rpcBody, timeout);
+
+    if (response === null) {
+      return { success: false, text: `Bridge :${bridge.port} injoignable`, raw: null };
+    }
+    if (response.error) {
+      return { success: false, text: `Erreur :${bridge.port}: ${(response.error as { message?: string }).message || JSON.stringify(response.error)}`, raw: response };
+    }
+
+    // Extract text from JSON-RPC result
+    const result = response.result as Record<string, unknown> | undefined;
+    if (result) {
+      const content = result.content as Array<{ text?: string }> | undefined;
+      const text = content
+        ? content.map((c) => c.text || '').join('\n')
+        : (result.output as string) || (result.text as string) || JSON.stringify(result);
+      return { success: true, text, raw: response };
+    }
+
+    return { success: true, text: JSON.stringify(response), raw: response };
+  }
+
+  // Strategy 2: Legacy bridge with POST /send
+  const sendBody: Record<string, unknown> = {
+    message: enrichedMessage,
+    userId: `a2a_${selfAgent}`,
+    username: selfAgent,
     channelId: 'a2a',
   };
-  if (opts.model) body.model = opts.model;
+  if (opts.model) sendBody.model = opts.model;
 
-  const response = httpPost(url, body, opts.timeoutMs ?? 300000);
+  const response = await httpPost(`${bridge.url}/send`, sendBody, timeout);
 
   if (response === null) {
-    return { success: false, text: `Worker :${port} injoignable`, raw: null };
+    return { success: false, text: `Bridge :${bridge.port} injoignable`, raw: null };
   }
-
   if (response.error) {
-    return {
-      success: false,
-      text: `Erreur :${port}: ${response.error}`,
-      raw: response,
-    };
+    return { success: false, text: `Erreur :${bridge.port}: ${response.error}`, raw: response };
   }
 
-  // Workers may return { result, content, response, output }
   const text =
     (response.result as string) ||
     (response.response as string) ||
@@ -314,13 +402,13 @@ export const a2aHubSchema = z.object({
   action: z
     .enum(['discover', 'status', 'send', 'delegate', 'pipeline', 'fanout', 'query', 'broadcast'])
     .describe(
-      "Action: discover=liste tous les agents+workers, status=état d'un worker, send=message synchrone, delegate=async, pipeline=chaîne A→B→C, fanout=1→N+merge, query=multi-agents, broadcast=global",
+      "Action: discover=liste tous les agents+bridges, status=état d'un bridge, send=message synchrone, delegate=async, pipeline=chaîne A→B→C, fanout=1→N+merge, query=multi-agents, broadcast=global",
     ),
 
   target: z
     .string()
     .optional()
-    .describe("Nom de l'agent cible (ex: 'sniperbot_analyst') OU port du worker (ex: '3001')"),
+    .describe("Nom de l'agent cible (ex: 'nexus_master') OU port du bridge (ex: '3101')"),
 
   message: z.string().optional().describe('Le message/prompt à envoyer aux agents'),
 
@@ -334,7 +422,7 @@ export const a2aHubSchema = z.object({
       z.object({
         agentName: z
           .string()
-          .describe("Nom de l'agent ou port (ex: 'sniperbot_analyst' ou '3001')"),
+          .describe("Nom de l'agent ou port (ex: 'nexus_master' ou '3101')"),
         promptPrefix: z.string().optional(),
       }),
     )
@@ -376,33 +464,32 @@ export const a2aHubSchema = z.object({
   model: z.string().optional().describe('Modèle LLM override'),
 });
 
-// ─── Resolve agent name to worker port ─────────────────────────────────────
+// ─── Resolve agent name to bridge ──────────────────────────────────────────
 
 function resolveTarget(
   target: string,
   discovery: Discovery,
-): { port: number | null; agentName: string } {
+): { bridge: BridgeInfo | null; agentName: string } {
   // If target is a port number
   const portMatch = target.match(/^(\d{4,5})$/);
   if (portMatch) {
     const port = parseInt(portMatch[1], 10);
-    const worker = discovery.workers.find((w) => w.port === port);
-    return { port, agentName: worker?.agentName || target };
+    const bridge = discovery.bridges.find((b) => b.port === port);
+    return { bridge: bridge ?? null, agentName: bridge?.agentName || target };
   }
 
-  // If target is an agent name, find its worker
+  // If target is an agent name, find its bridge
   const agent = discovery.agents.find((a) => a.name === target);
-  if (agent?.workerPort) {
-    return { port: agent.workerPort, agentName: target };
+  if (agent?.bridgePort) {
+    const bridge = discovery.bridges.find((b) => b.port === agent.bridgePort);
+    if (bridge) return { bridge, agentName: target };
   }
 
-  // Try online workers
-  const worker = discovery.workers.find((w) => w.online && w.agentName === target);
-  if (worker) {
-    return { port: worker.port, agentName: target };
-  }
+  // Try online bridges by agentName
+  const bridge = discovery.bridges.find((b) => b.online && b.agentName === target);
+  if (bridge) return { bridge, agentName: target };
 
-  return { port: null, agentName: target };
+  return { bridge: null, agentName: target };
 }
 
 // ─── Execute ───────────────────────────────────────────────────────────────
@@ -417,54 +504,52 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
       // DISCOVER
       // ═══════════════════════════════════════════════════════════════════════
       case 'discover': {
-        const d = discoverAgents();
+        const d = await discoverAgents();
 
         const lines: string[] = [
           `🌐 **A2A Hub — Découverte du système multi-agents**`,
           ``,
           `**Self:** ${d.selfAgent || '(inconnu)'}`,
-          `**Workers online:** ${d.onlineWorkers}`,
+          `**Bridges online:** ${d.onlineBridges}`,
           `**Total agents:** ${d.totalAgents}`,
           ``,
-          `### Workers HTTP`,
+          `### Bridges HTTP`,
           ``,
         ];
 
-        const onlineWorkers = d.workers.filter((w) => w.online);
-        if (onlineWorkers.length === 0) {
-          lines.push('Aucun worker HTTP en ligne.');
+        const onlineBridges = d.bridges.filter((b) => b.online);
+        if (onlineBridges.length === 0) {
+          lines.push('Aucun bridge HTTP en ligne.');
         } else {
-          lines.push('| Port | Agent | Status | URL |');
-          lines.push('|------|-------|--------|-----|');
-          for (const w of onlineWorkers) {
-            lines.push(`| :${w.port} | ${w.agentName} | 🟢 online | ${w.url} |`);
+          lines.push('| Port | Agent | Type | URL |');
+          lines.push('|------|-------|------|-----|');
+          for (const b of onlineBridges) {
+            const type = b.hasRpc ? 'RPC' : 'Legacy';
+            lines.push(`| :${b.port} | ${b.agentName} | ${type} | ${b.url} |`);
           }
         }
 
         lines.push('');
-        lines.push('### Agents Hermes');
+        lines.push('### Agents');
         lines.push('');
 
         if (d.agents.length === 0) {
-          lines.push('Aucun agent trouvé dans ~/.overmind/hermes/profiles/');
+          lines.push('Aucun agent trouvé.');
         } else {
-          lines.push('| Agent | Status | Worker | Model | Provider | Skills | Description |');
+          lines.push('| Agent | Status | Bridge | Model | Provider | Skills | Description |');
           lines.push('|-------|--------|--------|-------|----------|--------|-------------|');
           for (const a of d.agents) {
             const statusIcon = a.status === 'online' ? '🟢' : '🔴';
-            const workerInfo = a.workerPort ? `:${a.workerPort}` : '—';
+            const bridgeInfo = a.bridgePort ? `:${a.bridgePort}` : '—';
             const nameDisplay = a.name === selfAgent ? `**${a.name} (self)**` : a.name;
             lines.push(
-              `| ${nameDisplay} | ${statusIcon} ${a.status} | ${workerInfo} | ${a.model} | ${a.provider} | ${a.skillsCount} | ${a.description.slice(0, 40)} |`,
+              `| ${nameDisplay} | ${statusIcon} ${a.status} | ${bridgeInfo} | ${a.model} | ${a.provider} | ${a.skillsCount} | ${a.description.slice(0, 40)} |`,
             );
           }
         }
 
         lines.push('');
         lines.push('**Actions disponibles:** send, delegate, pipeline, fanout, query, broadcast');
-        lines.push(
-          '**Exemple:** a2a_hub(action: "send", target: "sniperbot_analyst", message: "Analyse BTC")',
-        );
 
         return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
       }
@@ -480,28 +565,18 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
           };
         }
 
-        const d = discoverAgents();
-        const { port, agentName } = resolveTarget(args.target, d);
+        const d = await discoverAgents();
+        const { bridge, agentName } = resolveTarget(args.target, d);
 
-        if (!port) {
+        if (!bridge || !bridge.online) {
           return {
-            content: [
-              { type: 'text' as const, text: `❌ Worker pour "${args.target}" introuvable` },
-            ],
+            content: [{ type: 'text' as const, text: `❌ Bridge pour "${args.target}" introuvable` }],
             isError: true,
           };
         }
 
-        const health = httpGet(`http://localhost:${port}/health`);
-        if (!health) {
-          return {
-            content: [{ type: 'text' as const, text: `❌ Worker :${port} injoignable` }],
-            isError: true,
-          };
-        }
-
-        const lines: string[] = [`📊 **Status: ${agentName} (:${port})**`, ``];
-        for (const [key, value] of Object.entries(health)) {
+        const lines: string[] = [`📊 **Status: ${agentName} (:${bridge.port})**`, ``];
+        for (const [key, value] of Object.entries(bridge.health ?? {})) {
           lines.push(
             `**${key}:** ${typeof value === 'object' ? JSON.stringify(value).slice(0, 100) : value}`,
           );
@@ -521,23 +596,17 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
           };
         }
 
-        const d = discoverAgents();
-        const { port, agentName } = resolveTarget(args.target, d);
+        const d = await discoverAgents();
+        const { bridge, agentName } = resolveTarget(args.target, d);
 
-        if (!port) {
+        if (!bridge || !bridge.online) {
           return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `❌ Worker pour "${args.target}" introuvable. Utilisez action=discover pour lister les agents.`,
-              },
-            ],
+            content: [{ type: 'text' as const, text: `❌ Bridge pour "${args.target}" introuvable. Utilisez action=discover.` }],
             isError: true,
           };
         }
 
-        const enrichedMessage = `[A2A — Message from ${selfAgent}]\n${args.message}`;
-        const result = sendToWorker(port, enrichedMessage, {
+        const result = await sendToBridge(bridge, args.message, {
           model: args.model,
           timeoutMs: timeout,
         });
@@ -550,12 +619,7 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
         }
 
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `📤 **Message envoyé à ${agentName} (:${port})**\n\n${result.text}`,
-            },
-          ],
+          content: [{ type: 'text' as const, text: `📤 **Message envoyé à ${agentName} (:${bridge.port})**\n\n${result.text}` }],
         };
       }
 
@@ -570,47 +634,25 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
           };
         }
 
-        const d = discoverAgents();
-        const { port, agentName } = resolveTarget(args.target, d);
+        const d = await discoverAgents();
+        const { bridge, agentName } = resolveTarget(args.target, d);
 
-        if (!port) {
+        if (!bridge || !bridge.online) {
           return {
-            content: [
-              { type: 'text' as const, text: `❌ Worker pour "${args.target}" introuvable` },
-            ],
+            content: [{ type: 'text' as const, text: `❌ Bridge pour "${args.target}" introuvable` }],
             isError: true,
           };
         }
 
-        // Fire and forget — don't wait for response
-        const enrichedMessage = `[A2A — Delegate from ${selfAgent}]\n${args.message}`;
-        const url = `http://localhost:${port}/send`;
-        const body = {
-          message: enrichedMessage,
-          userId: `a2a_${selfAgent}`,
-          username: selfAgent,
-          channelId: 'a2a_delegate',
-          ...(args.model ? { model: args.model } : {}),
-        };
-
-        // Spawn curl in background (fire-and-forget)
-        try {
-          const payload = JSON.stringify(body).replace(/'/g, "'\\''");
-          execSync(
-            `nohup curl -s -m ${Math.floor(timeout / 1000)} -X POST "${url}" -H "Content-Type: application/json" -d '${payload}' > /dev/null 2>&1 &`,
-            { timeout: 2000 },
-          );
-        } catch {
-          // ignore — fire and forget
-        }
+        // Fire and forget — don't await
+        void sendToBridge(bridge, args.message, { model: args.model, timeoutMs: timeout })
+          .catch(() => {});
 
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `🤝 **Tâche déléguée à ${agentName} (:${port})**\n\nLe worker traite la requête en arrière-plan. Le résultat sera disponible dans sa session.`,
-            },
-          ],
+          content: [{
+            type: 'text' as const,
+            text: `🤝 **Tâche déléguée à ${agentName} (:${bridge.port})**\n\nLe bridge traite la requête en arrière-plan.`,
+          }],
         };
       }
 
@@ -620,26 +662,21 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
       case 'pipeline': {
         if (!args.message || !args.steps || args.steps.length === 0) {
           return {
-            content: [
-              {
-                type: 'text' as const,
-                text: '❌ `message` (prompt initial) et `steps` requis pour pipeline',
-              },
-            ],
+            content: [{ type: 'text' as const, text: '❌ `message` (prompt initial) et `steps` requis' }],
             isError: true,
           };
         }
 
-        const d = discoverAgents();
+        const d = await discoverAgents();
         const outputs: Array<{ agent: string; output: string; success: boolean }> = [];
         let currentPrompt = args.message;
 
         for (let i = 0; i < args.steps.length; i++) {
           const step = args.steps[i];
-          const { port, agentName } = resolveTarget(step.agentName, d);
+          const { bridge, agentName } = resolveTarget(step.agentName, d);
 
-          if (!port) {
-            outputs.push({ agent: step.agentName, output: 'Worker introuvable', success: false });
+          if (!bridge || !bridge.online) {
+            outputs.push({ agent: step.agentName, output: 'Bridge introuvable', success: false });
             break;
           }
 
@@ -647,10 +684,10 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
             (step.promptPrefix ? step.promptPrefix + '\n\n' : '') +
             `[Pipeline Step ${i + 1}/${args.steps.length}]\n${currentPrompt}`;
 
-          const result = sendToWorker(port, stepPrompt, { timeoutMs: timeout });
+          const result = await sendToBridge(bridge, stepPrompt, { timeoutMs: timeout });
 
           outputs.push({
-            agent: `${agentName} (:${port})`,
+            agent: `${agentName} (:${bridge.port})`,
             output: result.text,
             success: result.success,
           });
@@ -662,10 +699,7 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
             : result.text;
         }
 
-        const lines: string[] = [
-          `🔗 **Pipeline terminé** (${outputs.length}/${args.steps.length} steps)`,
-          ``,
-        ];
+        const lines: string[] = [`🔗 **Pipeline** (${outputs.length}/${args.steps.length} steps)`, ``];
         for (const o of outputs) {
           lines.push(`**${o.success ? '✅' : '❌'} ${o.agent}:**`);
           lines.push(o.output.slice(0, 800) + (o.output.length > 800 ? '...' : ''));
@@ -676,7 +710,7 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // FANOUT
+      // FANOUT (true parallel — Promise.all)
       // ═══════════════════════════════════════════════════════════════════════
       case 'fanout': {
         if (!args.message || !args.targets || args.targets.length === 0) {
@@ -686,23 +720,22 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
           };
         }
 
-        const d = discoverAgents();
-        const enrichedMessage = `[A2A — Fanout from ${selfAgent}]\n${args.message}`;
+        const d = await discoverAgents();
 
-        // Run all in parallel
-        const results = args.targets
-          .map((target) => {
-            const { port } = resolveTarget(target, d);
-            if (!port) {
-              return { agent: target, success: false, text: 'Worker introuvable' };
+        // Run ALL targets in parallel (true parallel — async fetch)
+        const results = await Promise.all(
+          args.targets.map(async (target) => {
+            const { bridge, agentName } = resolveTarget(target, d);
+            if (!bridge || !bridge.online) {
+              return { agent: target, success: false, text: 'Bridge introuvable' };
             }
-            return sendToWorker(port, enrichedMessage, { model: args.model, timeoutMs: timeout });
-          })
-          .map((r, i) => ({
-            agent: args.targets![i],
-            success: r.success,
-            text: r.text,
-          }));
+            const r = await sendToBridge(bridge, args.message!, {
+              model: args.model,
+              timeoutMs: timeout,
+            });
+            return { agent: `${agentName} (:${bridge.port})`, success: r.success, text: r.text };
+          }),
+        );
 
         // Merge
         let merged: string;
@@ -744,7 +777,7 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // QUERY
+      // QUERY (parallel, short timeout)
       // ═══════════════════════════════════════════════════════════════════════
       case 'query': {
         if (!args.message || !args.targets || args.targets.length === 0) {
@@ -754,29 +787,25 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
           };
         }
 
-        const d = discoverAgents();
-        const enrichedMessage = `[A2A — Query from ${selfAgent}]\n${args.message}`;
+        const d = await discoverAgents();
         const queryTimeout = Math.min(timeout, 60000);
 
-        const results = args.targets
-          .map((target) => {
-            const { port } = resolveTarget(target, d);
-            if (!port) {
-              return { agent: target, success: false, text: 'Worker introuvable' };
+        const results = await Promise.all(
+          args.targets.map(async (target) => {
+            const { bridge, agentName } = resolveTarget(target, d);
+            if (!bridge || !bridge.online) {
+              return { agent: target, success: false, text: 'Bridge introuvable' };
             }
-            return sendToWorker(port, enrichedMessage, {
+            const r = await sendToBridge(bridge, args.message!, {
               model: args.model,
               timeoutMs: queryTimeout,
             });
-          })
-          .map((r, i) => ({
-            agent: args.targets![i],
-            success: r.success,
-            text: r.text,
-          }));
+            return { agent: `${agentName} (:${bridge.port})`, success: r.success, text: r.text };
+          }),
+        );
 
         const lines: string[] = [
-          `❓ **Query multi-agents** (${results.filter((r) => r.success).length}/${results.length} réponses)`,
+          `❓ **Query** (${results.filter((r) => r.success).length}/${results.length} réponses)`,
           ``,
         ];
 
@@ -800,64 +829,55 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
           };
         }
 
-        const d = discoverAgents();
+        const d = await discoverAgents();
 
-        // Determine targets
-        let targetWorkers: WorkerInfo[];
+        let targetBridges: BridgeInfo[];
         if (args.targets && args.targets.length > 0) {
-          // Resolve each target to a worker
-          targetWorkers = args.targets
-            .map((t) => {
-              const { port } = resolveTarget(t, d);
-              return d.workers.find((w) => w.port === port);
-            })
-            .filter((w): w is WorkerInfo => w !== undefined);
+          targetBridges = args.targets
+            .map((t) => resolveTarget(t, d).bridge)
+            .filter((b): b is BridgeInfo => b !== null && b.online);
         } else {
-          // All online workers
-          targetWorkers = d.workers.filter((w) => w.online);
+          targetBridges = d.bridges.filter((b) => b.online);
         }
 
-        if (targetWorkers.length === 0) {
+        if (targetBridges.length === 0) {
           return {
-            content: [{ type: 'text' as const, text: '❌ Aucun worker online pour broadcast' }],
+            content: [{ type: 'text' as const, text: '❌ Aucun bridge online pour broadcast' }],
             isError: true,
           };
         }
-
-        const enrichedMessage = `[A2A — Broadcast from ${selfAgent}]\n${args.message}`;
 
         if (args.race) {
-          // First to respond wins
-          for (const w of targetWorkers) {
-            const result = sendToWorker(w.port, enrichedMessage, {
-              model: args.model,
-              timeoutMs: timeout,
-            });
-            if (result.success) {
-              return {
-                content: [
-                  {
-                    type: 'text' as const,
-                    text: `📡 **Broadcast race — ${w.agentName} (:${w.port}) a gagné!**\n\n${result.text}`,
-                  },
-                ],
-              };
-            }
+          // First to respond wins — use Promise.any
+          try {
+            const firstResult = await Promise.any(
+              targetBridges.map(async (b) => {
+                const r = await sendToBridge(b, args.message!, { model: args.model, timeoutMs: timeout });
+                if (!r.success) throw new Error(r.text);
+                return { bridge: b, text: r.text };
+              }),
+            );
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `📡 **Broadcast race — ${firstResult.bridge.agentName} (:${firstResult.bridge.port}) a gagné!**\n\n${firstResult.text}`,
+              }],
+            };
+          } catch {
+            return {
+              content: [{ type: 'text' as const, text: '❌ Tous les bridges ont échoué' }],
+              isError: true,
+            };
           }
-          return {
-            content: [{ type: 'text' as const, text: '❌ Tous les workers ont échoué' }],
-            isError: true,
-          };
         }
 
         // Send to all in parallel
-        const results = targetWorkers.map((w) => {
-          const r = sendToWorker(w.port, enrichedMessage, {
-            model: args.model,
-            timeoutMs: timeout,
-          });
-          return { agent: `${w.agentName} (:${w.port})`, success: r.success, text: r.text };
-        });
+        const results = await Promise.all(
+          targetBridges.map(async (b) => {
+            const r = await sendToBridge(b, args.message!, { model: args.model, timeoutMs: timeout });
+            return { agent: `${b.agentName} (:${b.port})`, success: r.success, text: r.text };
+          }),
+        );
 
         const successCount = results.filter((r) => r.success).length;
         const lines: string[] = [`📡 **Broadcast** — ${successCount}/${results.length} succès`, ``];
@@ -873,23 +893,16 @@ export async function a2aHub(args: z.infer<typeof a2aHubSchema>) {
 
       default:
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `❌ Action inconnue: ${args.action}`,
-            },
-          ],
+          content: [{ type: 'text' as const, text: `❌ Action inconnue: ${args.action}` }],
           isError: true,
         };
     }
   } catch (error) {
     return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `❌ Erreur A2A Hub: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
+      content: [{
+        type: 'text' as const,
+        text: `❌ Erreur A2A Hub: ${error instanceof Error ? error.message : String(error)}`,
+      }],
       isError: true,
     };
   }

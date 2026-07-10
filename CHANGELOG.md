@@ -7,6 +7,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.7.0] — 2026-07-09
+
+### Changed (architecture — pool natif)
+- **NEW** `services/HermesPoolClient.ts` (314 lignes + tests) — wrapper autour de `hermes auth` qui:
+  - Liste providers réels via `hermes auth list` (single source of truth)
+  - Expose `addCredential(provider, apiKey, { label })` pour ajouter au **pool global partagé** (rotation native)
+  - Expose `isProviderHealthy(provider)` pour valider le rate-limit status temps réel avant création
+  - Plus de credential mapping hardcodé dans le code Overmind
+- `HermesProfileManager`: réécrit — utilise `HermesPoolClient.addCredential()` au lieu d'écrire un `.env` hardcodé. Crée le profil SANS credentials (le pool résout au runtime). Valide `isProviderHealthy()` après création.
+- `AgentManager.createAgent()`: simplifié — **-19 lignes** de credential mapping hardcodé remplacées par `credentials = { api_key: authToken }` (le pool route)
+- `tools/a2a_hub.ts`: refactorisé pour utiliser `HermesPoolClient` au lieu d'envs hardcodées
+
+### Migration
+- **Avant**: 1 clé API hardcodée par profil (13 clés possibles), providers inventés (`zai`/`minimax-cn`/`minimax-global`)
+- **Après**: pool partagé 24 credentials sur 8 providers natifs (`zai`, `minimax-cn`, `minimax`, `deepseek`, `openai-api`, `qwen-oauth`, `xai`, `copilot`, `anthropic`)
+- Rotation: `round_robin` automatique via `credential_pool_strategies`
+- Rate-limit: détection temps réel → bascule vers credential suivante
+- Fallback: chaque profil pioche dans le pool entier (pas de cloisonnement par profil)
+
+### Verified (E2E)
+```
+=== HermesPoolClient E2E ===
+Total providers: 8
+  ✓ copilot       (1 creds, gh auth token [gh_cli])
+  ✓ deepseek      (4 creds, first: DeepSeek 7 [manual])
+  ✓ minimax       (1 creds, first: MINIMAX_API_KEY [env])
+  ✓ minimax-cn    (6 creds, first: MiniMax M2 [manual])
+  ✓ openai-api    (2 creds, first: OpenAI 2 [manual])
+  ✗ qwen-oauth    (1 creds, [-none-])  ← rate-limited
+  ✓ xai           (1 creds, first: XAI_API_KEY [env])
+  ✓ zai           (9 creds, first: GLM coding 2 [manual])
+{ "totalProviders": 8, "totalCredentials": 24, "healthyProviders": 7 }
+```
+- Tests: **68/68 PASS**, 0 erreur tsc
+
+---
+
 ## [3.6.1] — 2026-07-09
 
 ### Documentation
