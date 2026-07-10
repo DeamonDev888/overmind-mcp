@@ -8,7 +8,7 @@
  * ║                                                                      ║
  * ║   ARCHITECTURE                                                       ║
  * ║   ─────────────                                                      ║
- * ║   OverBridgeService → BridgeProxy → HTTP localhost:3099/mcp          ║
+ * ║   OverBridgeService → BridgeProxy → HTTP [::1]:3099/mcp             ║
  * ║                                              → Overmind MCP Server  ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
@@ -22,7 +22,7 @@ import type {
   JsonRpcRequest,
 } from './types.js';
 import { DEFAULT_BRIDGE_CONFIG, DEFAULT_CIRCUIT_CONFIG } from './types.js';
-import { createBridgeLogger, parseMcpResponseBody, withRetry, type BridgeLogger } from './utils.js';
+import { createBridgeLogger, parseMcpResponseBody, parseSseText, withRetry, type BridgeLogger } from './utils.js';
 
 // ─── Circuit Breaker ───────────────────────────────────────────────────────
 
@@ -176,25 +176,38 @@ export class BridgeProxy {
   // ─── JSON-RPC Protocol Ping ──────────────────────────────────────────────
 
   /**
-   * Envoie une requête de ping JSON-RPC standard légère au serveur.
+   * Envoie un ping HTTP au serveur MCP.
+   * Utilise un simple GET /health (plus léger que le handshake JSON-RPC complet).
+   * Fallback: POST /mcp avec Accept SSE (si /health n'existe pas).
    */
   async ping(timeoutMs?: number): Promise<boolean> {
     const timeout = timeoutMs ?? 5_000;
-    const request = {
-      jsonrpc: '2.0' as const,
-      id: this.rpcId++,
-      method: 'ping',
-      params: {},
-    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeout);
-      const response = await fetch(this.config.mcpUrl, {
+      // Strategy: try GET /health first (lightweight, FastMCP exposes it)
+      const healthUrl = this.config.mcpUrl.replace(/\/mcp\/?$/, '/health');
+      let response = await fetch(healthUrl, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      if (response.ok) {
+        clearTimeout(timer);
+        return true;
+      }
+      // Fallback: POST /mcp with SSE Accept (real MCP ping)
+      const request = {
+        jsonrpc: '2.0' as const,
+        id: this.rpcId++,
+        method: 'ping',
+        params: {},
+      };
+      response = await fetch(this.config.mcpUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Accept: 'application/json',
+          Accept: 'application/json, text/event-stream',
         },
         body: JSON.stringify(request),
         signal: controller.signal,
@@ -202,9 +215,13 @@ export class BridgeProxy {
       clearTimeout(timer);
       if (!response.ok) return false;
       const bodyText = await response.text();
+      // Accept both SSE and plain JSON
+      const sse = parseSseText(bodyText);
+      if (sse) return !sse.error;
       const parsed = JSON.parse(bodyText.trim());
       return parsed && parsed.jsonrpc === '2.0' && !parsed.error;
     } catch {
+      clearTimeout(timer);
       return false;
     }
   }

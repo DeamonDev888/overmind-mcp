@@ -7,6 +7,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.6.0] — 2026-07-09
+
+### Fixed
+- `bridge/types.ts`: `DEFAULT_BRIDGE_CONFIG.mcpUrl` et `defaultMcpServers[*].url` passent de `http://localhost:3099/mcp` à `http://[::1]:3099/mcp` (IPv6 loopback). Sur Windows, `localhost` résout en `127.0.0.1` (IPv4) → ECONNREFUSED car le MCP FastMCP bind sur `[::1]:3099`. Tous les bridges utilisent maintenant `[::1]`.
+- `bridge/BridgeProxy.ts`: `ping()` réécrit — Accept `application/json, text/event-stream` (FastMCP exige SSE), stratégie GET `/health` d'abord (léger, FastMCP l'expose nativement), fallback POST `/mcp` avec SSE. Parse des deux formats (SSE + JSON).
+- `bridge/utils.js`: import `parseSseText` ajouté dans `BridgeProxy.ts` (était manquant → ping retournait silencieusement false)
+
+### Documentation
+- **NEW** `docs/overmind-bridge-commands-reference.md` (17 KB, 9 sections, 437 lignes):
+  - 17 commandes RPC NEXUS (par bridge, exemples curl)
+  - 24 commandes RPC OverBridgeServer
+  - 8 actions A2A Hub (MCP tool)
+  - Commandes CLI overmind-bridge + Hermes profile
+  - Scripts helper d'installation (start/stop/seed/test)
+  - Tableau des 15 bugs corrigés avec fichier + fix
+
+### Cleanup
+- Suppression `docs/SOUL_pdf_bon_travail_v2.md` (obsolète, info dupliquée)
+
+---
+
 ## [3.5.2] — 2026-07-09
 
 ### Fixed
