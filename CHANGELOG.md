@@ -7,6 +7,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.6.1] — 2026-07-09
+
+### Documentation
+- **NEW** `docs/overmind-bridge-guide.md` (22 KB, 664 lignes, 12 sections) — Guide unifié agents persistants & A2A:
+  1. Concepts (Agent persistant = process bridge autonome, échelle 2 à 100 agents, ports 3101+N)
+  2. Architecture P2P (pas de dispatcher central), services partagés `:3099`/`:8642`/`:5432`
+  3. Créer un agent (create_agent + profil Hermes + .env + config.ts + bridge.ts)
+  4. Module Common (BaseBridge, BridgeClient, logger)
+  5. Commandes RPC (format requête, méthodes customs, registerRpcMethod)
+  6. A2A (3 canaux: bridge→bridge, MCP Hub 8 actions, OverBridgeServer 24 méthodes)
+  7. Lancer un agent (Gateway HTTP, curl, bridge RPC, CLI)
+  8. Cycle de vie (profils, runtime status/stream/kill, health, shutdown)
+  9. Scripts helper (start-all, stop-all, status, seed, test-a2a, postbuild, activation Gateway)
+  10. Héritage auto (mémoire, MCP, clés API, sessions, kanban, circuit breaker, retry)
+  11. Bugs corrigés (13 fixes: Overmind + NEXUS + discord_llm)
+  12. Exemple 3 agents (coordinator → worker_a → worker_b)
+- Pattern générique: identique pour 2, 6, 10 ou 100 agents — ajouter un bridge, un port, un .env et il communique avec les autres via HTTP
+
+### Removed (consolidated)
+- `docs/overmind-bridge-persistent-agents.md` (contenu absorbé par le guide unifié)
+- `docs/overmind-bridge-commands-reference.md` (contenu absorbé sections 5+6 du guide unifié)
+- `docs/doc_guide_agent_hermes_permanent.md` (obsolète)
+- `docs/guide_agent_hermes_overmind.md` (obsolète)
+- `docs/agent-http-tutorial.md` (obsolète)
+
+---
+
 ## [3.6.0] — 2026-07-09
 
 ### Fixed
