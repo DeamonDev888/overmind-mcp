@@ -7,6 +7,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.7.1] — 2026-07-10
+
+### Documentation
+- **NEW** `docs/MIGRATION_V4_WRAPPER.md` (544 lignes) — Plan migration v4 refondu, Kanban rendu OPTIONNEL:
+  - **Vision**: kanban_hub devient opt-in (`OVERMIND_KANBAN_ENABLED=1`, défaut OFF) au lieu de central
+  - **Schéma ASCII**: kanban_hub → hermes kanban CLI marqué [OPTIONNEL] + callout explicatif
+  - **Phase 1** découpée en 1a (obligatoire, sans Kanban — supprime juste dispatcher/YOLO) + 1b (optionnel, suppression historique → v4.1.0)
+  - **Phase 2** renommée: "Support Kanban OPTIONNEL (opt-in) — à faire UNIQUEMENT si demandé"
+  - **Timeline**: 5 phases au lieu de 4, Phase 1b déplacée à v4.1.0 (release suivante, après 1 release de grâce)
+  - **Annexes A/B**: split explicite obligatoire / optionnel / conservé
+- `README.md`: liste des phases mise à jour — Phase 1a (obligatoire) | Phase 2 (opt-in) | Phase 3-4 (obligatoires) | Phase 1b (v4.1.0 opt-in)
+
+### Matrice Kanban par phase
+| Phase   | Kanban? | Quand                                                          |
+|---------|---------|----------------------------------------------------------------|
+| 1a      | Non touché | Obligatoire immédiatement (supprime juste dispatcher/YOLO)  |
+| 2       | Opt-in  | Fait uniquement si utilisateurs demandent                      |
+| 3       | N/A     | Obligatoire (bridges décentralisés)                            |
+| 4       | N/A     | Obligatoire (mémoire per-profile)                              |
+| 1b      | Suppression historique | v4.1.0 — après 1 release de grâce, si Kanban prouvé inutilisé |
+
+### Verified
+- TSC clean, Lint clean, Tests 68/68 PASS, Doc 544 lignes bien structuré
+- Aucun code touché — changement purement documentaire
+
+---
+
 ## [3.7.0] — 2026-07-09
 
 ### Changed (architecture — pool natif)

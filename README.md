@@ -8,7 +8,9 @@
 
 </div>
 
-_Orchestrateur universel agents IA multi-modèles via MCP. Pilote Hermes, Claude-Code, Gemini-cli, QwenCli, Kilo/Cline, OpenClaw et plus — avec mémoire vectorielle PostgreSQL + pgvector._
+_Wrapper multi-agent persistant pour runners IA via MCP. Instanciez et pilotez des agents Hermes, Claude-Code, Gemini-cli, QwenCli, Kilo/Cline, OpenClaw — chacun avec sa propre mémoire, son state, ses skills. Backbone mémoire vectorielle PostgreSQL + pgvector._
+
+> **Positionnement** : OverMind n'est plus un orchestrateur central qui dispatche. C'est une **factory à agents persistants** : chaque agent créé reçoit son propre profil Hermes, sa propre DB, ses propres skills, et vit tant qu'il est utile. L'intelligence est dans les agents, pas dans le wrapper.
 
 <p align="center">
   <a href="https://discord.gg/4AR82phtBz"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logo-color=white" alt="Discord"></a>
@@ -16,7 +18,7 @@ _Orchestrateur universel agents IA multi-modèles via MCP. Pilote Hermes, Claude
   <a href="https://www.npmjs.com/package/overmind-mcp"><img src="https://img.shields.io/npm/v/overmind-mcp?style=for-the-badge&logo=npm&color=CB383D" alt="NPM"></a>
 </p>
 
-**OverMind-MCP** orchestre une flotte illimitée d'agents IA via le Model Context Protocol. Compatible avec **Hermes (natif)**, **Claude-Code**, **Gemini-cli**, **QwenCli**, **Kilo/Cline**, **OpenClaw**, et extensible à tout runner CLI.
+**OverMind-MCP** instancie des agents IA **persistants** via le Model Context Protocol. Chaque agent créé = 1 profil Hermes natif + 1 profile.yaml + 1 SOUL.md + 1 state.db — il vit, se souvient, et communique avec ses pairs. Compatible avec **Hermes (natif)**, **Claude-Code**, **Gemini-cli**, **QwenCli**, **Kilo/Cline**, **OpenClaw**, et extensible à tout runner CLI.
 
 ---
 
@@ -25,7 +27,7 @@ _Orchestrateur universel agents IA multi-modèles via MCP. Pilote Hermes, Claude
 - 🔌 **Multi-Runner** : Hermes natif, Claude-Code, Gemini, Kilo, QwenCli, OpenClaw — 1 commande par runner
 - 🧠 **Mémoire Vectorielle** : RAG 4096D via PostgreSQL + pgvector, isolation par agent
 - 🏗️ **Architecture v3.1** : Profils Hermes canoniques avec `profile.yaml`, `workspace.yaml`, `state.db`
-- 🌉 **Bridge HTTP JSON-RPC** : Orchestration A2A, scénarios, webhooks, sessions multi-tenant
+- 🌉 **Bridge HTTP JSON-RPC** : Communication A2A peer-to-peer entre agents persistants, scénarios, webhooks, sessions multi-tenant
 - 🛡️ **Anti-Zombie** : 1 seul process HTTP partagé, processRegistry avec TTL + cleanup auto
 - 📋 **14 Outils MCP** : run_agent, create_agent, memory_search/store, agent_control, etc.
 - 🧠 **Mémoire par défaut** : tout agent créé via Overmind reçoit automatiquement le MCP `memory` (3 tools: memory_search/store/runs sur :3099). Pour l'accès complet 14 tools, utiliser `overmind` explicitement.
@@ -194,9 +196,23 @@ Agent 3 ──┘
 
 ---
 
-## 🔄 Migration v3.1
+## 🗺️ Roadmap v4.0 — Wrapper Multi-Agent Persistant
 
+> OverMind pivote d'orchestrateur central → wrapper factory à agents persistants.
+> Chaque agent créé est autonome (profil, state, mémoire, skills), pas un slot dans un pool global.
 
+**État actuel (v3.7.0)** — wrapper déjà opérationnel :
+- ✅ Agents Hermes = profils natifs (config.yaml, SOUL.md, state.db, skills/)
+- ✅ Pool de credentials géré par Hermes (rotation round-robin, rate-limit aware)
+- ✅ Bridge HTTP par agent (ports 3101+) — peer-to-peer A2A, pas de dispatch central
+- ✅ Hermes Gateway natif (port 8642) — HTTP+SSE, routing via `X-Hermes-Profile`
+
+**Plan de migration v4.0** — voir [`docs/MIGRATION_V4_WRAPPER.md`](docs/MIGRATION_V4_WRAPPER.md) pour le détail complet :
+- Phase 1a — Suppression du dispatcher/YOLO_CONFIG (obligatoire, ~300 LOC)
+- Phase 2 — Support Kanban OPTIONNEL (opt-in via `OVERMIND_KANBAN_ENABLED=1`)
+- Phase 3 — Chaque agent = son propre bridge (peer-to-peer, plus de central)
+- Phase 4 — Mémoire par-profile (au lieu de pgvector central)
+- Phase 1b — Suppression historique Kanban (seulement si inutilisé après 1 release)
 
 ![Aperçu du Terminal](assets/terminal_preview.png)
 
