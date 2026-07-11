@@ -12,9 +12,9 @@
  *   import { OvermindClient } from './overmind-client.js';
  */
 
-const DEFAULT_BASE = 'http://localhost:3099/mcp';
+const DEFAULT_BASE = 'http://[::1]:3099/mcp';
 const DEFAULT_AUTH = process.env.OVERMIND_AUTH || 'changeme';
-const HEALTH_URL = 'http://localhost:3099/health';
+const HEALTH_URL = 'http://[::1]:3099/health';
 
 // ─── JSON-RPC helpers ─────────────────────────────────────────────────────────
 

@@ -67,6 +67,7 @@ import { getAgentConfigs, getAgentConfigsSchema } from './tools/get_agent_config
 import { configExample, configExampleSchema } from './tools/config_example.js';
 import { agentControl, agentControlSchema } from './tools/agent_control.js';
 import { a2aHub, a2aHubSchema } from './tools/a2a_hub.js';
+import { getMetricsTool, getMetricsSchema } from './tools/get_metrics.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ToolExecute = (...args: any[]) => Promise<any>;
@@ -335,6 +336,15 @@ broadcast — Message global à tous les agents online
 Aucune configuration manuelle nécessaire — il connaît tous les agents du système.`,
       parameters: a2aHubSchema,
       execute: wrapExecute('a2a_hub', a2aHub),
+    });
+
+    // ─── 16. get_metrics ──────────────────────────────────────────────────────
+    server.addTool({
+      name: 'get_metrics',
+      description:
+        '📊 Affiche les métriques agrégées du serveur Overmind MCP: agents live, mémoire, gateway health, stats process.',
+      parameters: getMetricsSchema,
+      execute: wrapExecute('get_metrics', getMetricsTool),
     });
   }
 

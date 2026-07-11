@@ -36,6 +36,9 @@ import { withSpan } from '../lib/telemetry.js';
 import { rootLogger } from '../lib/logger.js';
 import { saveSessionId, getLastSessionId } from '../lib/sessions.js';
 import { getWorkspaceDir } from '../lib/config.js';
+import { HermesProfileManager } from './HermesProfileManager.js';
+import fs from 'fs';
+import path from 'path';
 
 const logger = rootLogger.child({ module: 'HermesGatewayRunner' });
 
@@ -67,6 +70,50 @@ let gatewayPidCounter = 70000;
 
 /** In-memory session map for gateway runs: agentName → sessionId */
 const gatewaySessions = new Map<string, string>();
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ *  SOUL.md CACHE (Fix #1 — Critical)
+ *
+ *  The Hermes API Server does NOT auto-inject SOUL.md for
+ *  /v1/chat/completions calls. We must read it ourselves and inject it
+ *  as the system message in the request body.
+ *
+ *  Cache avoids hitting the filesystem on every call. TTL = 5 min.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+const SOUL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const soulCache = new Map<string, { content: string; loadedAt: number }>();
+
+/** Max concurrent gateway runs (Fix #2 — rate limit). */
+const MAX_CONCURRENT_GW_RUNS = 20;
+let activeGwRuns = 0;
+
+async function loadSoulMd(profile: string | undefined): Promise<string | null> {
+  if (!profile || profile === 'default') return null;
+
+  // Check cache
+  const cached = soulCache.get(profile);
+  if (cached && Date.now() - cached.loadedAt < SOUL_CACHE_TTL_MS) {
+    return cached.content;
+  }
+
+  try {
+    const profilePath = await HermesProfileManager.getProfilePath(profile);
+    if (!profilePath) return null;
+
+    const soulPath = path.join(profilePath, 'SOUL.md');
+    if (!fs.existsSync(soulPath)) return null;
+
+    const content = fs.readFileSync(soulPath, 'utf-8');
+    soulCache.set(profile, { content, loadedAt: Date.now() });
+    logger.debug({ profile, size: content.length }, '[GatewayRunner] SOUL.md loaded and cached.');
+    return content;
+  } catch (err) {
+    logger.warn({ profile, err }, '[GatewayRunner] Failed to read SOUL.md — running without system prompt.');
+    return null;
+  }
+}
 
 /**
  * Runner that talks to the Hermes API Server via HTTP+SSE.
@@ -189,6 +236,19 @@ export class HermesGatewayRunner {
   ): Promise<GatewayRunResult> {
     const { prompt, agentName, silent } = options;
 
+    // ─── Fix #2: Concurrency guard (rate limit protection) ──────────────
+    if (activeGwRuns >= MAX_CONCURRENT_GW_RUNS) {
+      return {
+        result: '',
+        error: 'GATEWAY_BUSY: too many concurrent runs, retry later',
+        transport: 'gateway-http',
+      };
+    }
+
+    // ─── Fix #1: Load SOUL.md for system prompt injection ───────────────
+    const profile = options.profile || agentName;
+    const soulContent = await loadSoulMd(profile);
+
     // Build request headers
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -201,15 +261,23 @@ export class HermesGatewayRunner {
     }
 
     // Profile selection via header (maps to -p <profile>)
-    const profile = options.profile || agentName;
     if (profile && profile !== 'default') {
       headers['X-Hermes-Profile'] = profile;
     }
 
     // Build request body (OpenAI chat completions format)
+    const messages: Array<{ role: string; content: string }> = [];
+
+    // ─── Fix #1: Inject SOUL.md as system message ──────────────────────
+    if (soulContent) {
+      messages.push({ role: 'system', content: soulContent });
+    }
+
+    messages.push({ role: 'user', content: prompt });
+
     const body: Record<string, unknown> = {
       model: options.model || 'hermes-agent',
-      messages: [{ role: 'user', content: prompt }],
+      messages,
       stream: true, // Always stream — we assemble the final text
     };
 
@@ -217,16 +285,23 @@ export class HermesGatewayRunner {
     const combinedSignal = externalSignal;
 
     logger.info(
-      { url: gw.url, agentName, sessionId: sessionId?.slice(0, 20), profile },
+      { url: gw.url, agentName, sessionId: sessionId?.slice(0, 20), profile, soulInjected: !!soulContent },
       '[GatewayRunner] POST /v1/chat/completions (streaming)',
     );
 
-    const response = await fetch(`${gw.url}/v1/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: combinedSignal,
-    });
+    // ─── Fix #2: Track active runs for rate-limit protection ────────────
+    activeGwRuns++;
+    let response: Response;
+    try {
+      response = await fetch(`${gw.url}/v1/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: combinedSignal,
+      });
+    } finally {
+      activeGwRuns--;
+    }
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '(no body)');

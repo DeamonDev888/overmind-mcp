@@ -71,7 +71,10 @@ export class OverBridgeService {
 
   /**
    * Initialise la connexion au serveur MCP, vérifie la santé initiale
-   * et configure éventuellement un heartbeat périodique.
+   * et configure un heartbeat périodique avec auto-reconnect.
+   *
+   * Fix #3: Si le ping échoue, on reset le circuit breaker et on
+   * réessaie de se reconnecter au lieu d'attendre un redémarrage manuel.
    */
   async connect(healthCheckIntervalMs?: number): Promise<HealthStatus> {
     this.proxy.log.info('🔌 Connecting to Overmind MCP server...');
@@ -82,11 +85,31 @@ export class OverBridgeService {
       if (this.heartbeatInterval) {
         clearInterval(this.heartbeatInterval);
       }
+      let consecutiveFailures = 0;
       this.heartbeatInterval = setInterval(async () => {
         const pingStatus = await this.proxy.healthCheck();
-        if (pingStatus.status === 'offline') {
-          this.proxy.log.warn('💓 Heartbeat failed: server is offline');
+        if (pingStatus.status === 'offline' || pingStatus.status === 'degraded') {
+          consecutiveFailures++;
+          this.proxy.log.warn(
+            `💓 Heartbeat failed (${consecutiveFailures}x): ${pingStatus.status}`,
+          );
+          // After 2 consecutive failures, force circuit breaker reset + reconnect
+          if (consecutiveFailures >= 2) {
+            this.proxy.log.warn('🔁 Auto-reconnect: resetting circuit breaker and retrying...');
+            this.proxy.forceReconnect();
+            const retry = await this.proxy.healthCheck();
+            if (retry.status === 'online') {
+              consecutiveFailures = 0;
+              this.proxy.log.info('🔁 Auto-reconnect: SUCCESS — server is back online');
+            } else {
+              this.proxy.log.error('🔁 Auto-reconnect: FAILED — will retry next heartbeat');
+            }
+          }
         } else {
+          if (consecutiveFailures > 0) {
+            this.proxy.log.info(`💓 Heartbeat recovered after ${consecutiveFailures} failures`);
+          }
+          consecutiveFailures = 0;
           this.proxy.log.debug(`💓 Heartbeat: ${pingStatus.status}`);
         }
       }, healthCheckIntervalMs);

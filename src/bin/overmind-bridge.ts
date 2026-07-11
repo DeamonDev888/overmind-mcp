@@ -130,7 +130,7 @@ async function cmdServer(args: ParsedArgs): Promise<void> {
   const enableLog = getFlag(args, 'no-log', undefined) === undefined; // --no-log désactive
   const healthInterval = Number(getFlag(args, 'health-interval', 30_000));
   const mcpUrl = String(
-    getFlag(args, 'mcp-url', process.env.MCP_URL ?? 'http://localhost:3099/mcp'),
+    getFlag(args, 'mcp-url', process.env.MCP_URL ?? 'http://[::1]:3099/mcp'),
   );
   const enableSessionStore = getFlag(args, 'no-session-store', undefined) === undefined;
   const enableDirectives = getFlag(args, 'no-directives', undefined) === undefined;

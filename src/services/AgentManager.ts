@@ -726,6 +726,34 @@ Tu es conçu pour être exécuté par différents runners (Claude, Kilo, Gemini,
         description: `Overmind agent: ${name}`,
       });
 
+      // Fix #11: Also write a .mcp.json file for compatibility with tools that
+      // expect the Claude-style .mcp.json format (get_agent_configs, list_agents).
+      // The authoritative MCP config remains config.yaml's mcp_servers: section.
+      if (mcpServers.length > 0) {
+        try {
+          const { getWorkspaceDir } = await import('../lib/config.js');
+          const globalMcpPath = path.join(getWorkspaceDir(), '.mcp.json');
+          const globalMcpContent = await fs.readFile(globalMcpPath, 'utf-8');
+          const globalMcp = JSON.parse(globalMcpContent);
+          const agentMcpServers: Record<string, Record<string, unknown>> = {};
+          mcpServers.forEach((serverName) => {
+            if (globalMcp.mcpServers?.[serverName]) {
+              agentMcpServers[serverName] = globalMcp.mcpServers[serverName];
+            }
+          });
+          const mcpJsonPath = path.join(profilePath, '.mcp.json');
+          await fs.writeFile(
+            mcpJsonPath,
+            JSON.stringify({ mcpServers: agentMcpServers }, null, 2),
+            'utf-8',
+          );
+        } catch (e) {
+          console.warn(
+            `[AgentManager] ⚠️ Failed to write .mcp.json for hermes profile: ${(e as Error).message}`,
+          );
+        }
+      }
+
       // Mémoriser la création de l'agent
       try {
         const memory = getMemoryProvider();

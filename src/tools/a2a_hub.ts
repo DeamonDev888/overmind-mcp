@@ -165,24 +165,31 @@ function getKnownPorts(): Array<{ port: number; agentName: string }> {
   return known;
 }
 
-/** Probe a single port for bridge health */
+/**
+ * Probe a single port for bridge health.
+ *
+ * Fix #5: Tries IPv4 (127.0.0.1) first, then IPv6 ([::1]) — because some
+ * NEXUS bridges bind on [::1] only (FastMCP default on Windows).
+ */
 async function probeBridge(port: number, agentName: string): Promise<BridgeInfo> {
-  const url = `http://127.0.0.1:${port}`;
-  const health = await httpGet(`${url}/health`, 3000);
-
-  if (health) {
-    const detectedAgent =
-      agentName ||
-      (health.agent as string) ||
-      (health.agentName as string) ||
-      (health.service as string) ||
-      'unknown';
-    // NEXUS bridges expose rpcMethods[] in health — they support POST /rpc
-    const hasRpc = Array.isArray(health.rpcMethods) || 'jsonrpc' in health;
-    return { port, url, online: true, agentName: detectedAgent, health, hasRpc };
+  // Try IPv4 first, then IPv6 loopback
+  const urls = [`http://127.0.0.1:${port}`, `http://[::1]:${port}`];
+  for (const url of urls) {
+    const health = await httpGet(`${url}/health`, 3000);
+    if (health) {
+      const detectedAgent =
+        agentName ||
+        (health.agent as string) ||
+        (health.agentName as string) ||
+        (health.service as string) ||
+        'unknown';
+      // NEXUS bridges expose rpcMethods[] in health — they support POST /rpc
+      const hasRpc = Array.isArray(health.rpcMethods) || 'jsonrpc' in health;
+      return { port, url, online: true, agentName: detectedAgent, health, hasRpc };
+    }
   }
 
-  return { port, url, online: false, agentName: agentName || '', hasRpc: false };
+  return { port, url: `http://127.0.0.1:${port}`, online: false, agentName: agentName || '', hasRpc: false };
 }
 
 /** Discover all bridges (scan ports + pid files) */

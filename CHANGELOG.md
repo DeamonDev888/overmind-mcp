@@ -7,6 +7,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.8.0] — 2026-07-10
+
+### Fixed (🔴 CRITIQUE)
+- **#1 SOUL.md injecté comme system message** — `HermesGatewayRunner.ts` charge le SOUL.md du profil via `loadSoulMd()` avec cache TTL 5min. Chaque appel gateway injecte maintenant la persona Nexus (au lieu d'un LLM générique sans identité)
+- **#2 Rate limit concurrency** — `MAX_CONCURRENT_GW_RUNS=20` + tracking `activeGwRuns` dans `HermesGatewayRunner.ts`. Évite le 429 quand 6 agents tournent en parallèle
+- **#3 MCP heartbeat auto-reconnect** — `OverBridgeService.ts` + `BridgeProxy.forceReconnect()` + `CircuitBreaker.reset()`. Après 2 failures consécutifs, le heartbeat force un reconnect propre au lieu de rester en degraded
+
+### Fixed (🟠 HAUTE)
+- **#4 mcpToolTimeoutMs (30s) séparé de agentTimeoutMs (1h)** — `bridge/types.ts` `BridgeConfig.mcpToolTimeoutMs`. Les tools MCP ne bloquent plus pendant 1h
+- **#5 probeBridge() fallback IPv4 → IPv6** — `a2a_hub.ts` essaie `127.0.0.1` puis `[::1]` (Windows loopback inconsistency)
+
+### Added (🟡 MOYEN)
+- **#10 Nouveau tool MCP `get_metrics`** (16e tool) — `tools/get_metrics.ts` expose: agents live, runs totaux, A2A counters, gateway health, mémoire usage, bridge circuit breaker state. Fallback gracieux si gateway/memory indisponibles
+- **#11 .mcp.json généré pour profils Hermes** — `AgentManager.createAgent()` écrit un `.mcp.json` dans le profil Hermes à la création
+
+### Already OK (no change needed)
+- #6 sessionId structuré (DirectiveParser extrait sans duplication)
+- #7 Double-init mutex (AgentRegistry.getMutex() guard)
+- #8 Session MCP partagée (single OverBridgeService instance)
+- #9 memory_search scope par agent (effectiveAgentName + DB séparée)
+
+### Tests
+- **44 nouveaux tests** → **112/112 PASS** sur 12 fichiers
+- `hermesGatewayRunner.test.ts`: +4 (SOUL.md injection ×3, concurrency tracking ×1)
+- `bridge.test.ts` (NEW, 16 tests): CircuitBreaker reset + forceReconnect + auto-reconnect (8), timeout separation (6), health (2)
+- `agentRegistry.test.ts` (NEW, 18 tests): markIdle (4), mutex double-init (3), parallel/serial (2), state (5), A2A counters (2), stats/prune (2)
+- `get_metrics.test.ts` (NEW, 6 tests): sections complètes, agents live, fallback mémoire/gateway, structure MCP
+
+---
+
 ## [3.7.1] — 2026-07-10
 
 ### Documentation

@@ -68,6 +68,16 @@ class CircuitBreaker {
   canExecute(): boolean {
     return this.currentState !== 'open';
   }
+
+  /**
+   * Force-reset the circuit breaker to 'closed' state.
+   * Used by forceReconnect() after heartbeat failures.
+   */
+  reset(): void {
+    this.state = 'closed';
+    this.failureCount = 0;
+    this.successCount = 0;
+  }
 }
 
 // ─── BridgeProxy ───────────────────────────────────────────────────────────
@@ -102,6 +112,18 @@ export class BridgeProxy {
 
   get circuitState(): CircuitState {
     return this.circuit.currentState;
+  }
+
+  /**
+   * Force a circuit breaker reset and clear cached state.
+   *
+   * Fix #3: Called by OverBridgeService heartbeat after consecutive failures.
+   * This allows the next call to bypass the 'open' circuit and attempt
+   * a fresh connection instead of waiting for resetTimeoutMs.
+   */
+  forceReconnect(): void {
+    this.circuit.reset();
+    this.log.info('🔌 Circuit breaker force-reset (reconnect attempt)');
   }
 
   // ─── Core RPC Call ───────────────────────────────────────────────────────

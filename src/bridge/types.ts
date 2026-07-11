@@ -143,7 +143,9 @@ export interface McpServerSpec {
 export interface BridgeConfig {
   /** URL du serveur MCP Overmind (default: http://[::1]:3099/mcp — IPv6 loopback) */
   mcpUrl: string;
-  /** Timeout par défaut en ms pour les appels MCP (default: 60_000) */
+  /** Timeout pour les tool calls MCP courts (memory_search, etc.) (default: 30_000 = 30s) */
+  mcpToolTimeoutMs: number;
+  /** Timeout par défaut en ms pour les appels MCP génériques (default: 60_000) */
   defaultTimeoutMs: number;
   /** Timeout pour run_agent en ms (default: 3_600_000 = 1h) */
   agentTimeoutMs: number;
@@ -159,8 +161,9 @@ export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
   // [::1] = IPv6 loopback — the Overmind MCP server binds on [::1]:3099 by default.
   // Using 'localhost' can resolve to 127.0.0.1 (IPv4) and fail with ECONNREFUSED on Windows.
   mcpUrl: 'http://[::1]:3099/mcp',
+  mcpToolTimeoutMs: 30_000, // 30s — short tools (memory_search, etc.)
   defaultTimeoutMs: 60_000,
-  agentTimeoutMs: 3_600_000, // 1h
+  agentTimeoutMs: 3_600_000, // 1h — LLM agent runs (was used for all MCP calls before)
   maxRetries: 2,
   retryDelayMs: 2_000,
   defaultMcpServers: [

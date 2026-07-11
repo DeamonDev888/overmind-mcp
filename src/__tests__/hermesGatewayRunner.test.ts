@@ -45,6 +45,32 @@ vi.mock('../lib/sessions.js', () => ({
   deleteSessionId: vi.fn(),
 }));
 
+// Mock config
+vi.mock('../lib/config.js', () => ({
+  getWorkspaceDir: vi.fn(() => '/fake/workspace'),
+}));
+
+// ─── Fix #1: SOUL.md injection — mock HermesProfileManager + fs ──────────
+const mockGetProfilePath = vi.fn();
+const mockReadFileSync = vi.fn();
+vi.mock('../services/HermesProfileManager.js', () => ({
+  HermesProfileManager: {
+    getProfilePath: (...args: unknown[]) => mockGetProfilePath(...args),
+  },
+}));
+vi.mock('fs', () => ({
+  default: {
+    existsSync: vi.fn(() => true),
+    readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
+    writeFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
+  },
+  existsSync: vi.fn(() => true),
+  readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
+  writeFileSync: vi.fn(),
+  mkdirSync: vi.fn(),
+}));
+
 // Helper: build a ReadableStream from SSE data lines
 function makeSSEStream(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -375,7 +401,7 @@ describe('HermesGatewayRunner — Session & Profile', () => {
     const mockMgr = {
       ensureReady: vi.fn().mockResolvedValue({
         url: 'http://127.0.0.1:8642',
-        apiKey: 'k',
+        apiKey: 'my-secret-key',
         port: 8642,
         host: '127.0.0.1',
         healthy: true,
@@ -400,5 +426,189 @@ describe('HermesGatewayRunner — Session & Profile', () => {
     const body = JSON.parse(fetchOptions.body as string);
     expect(body.stream).toBe(true);
     expect(body.messages[0].content).toBe('test prompt');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Fix #1: SOUL.md injection
+// ═══════════════════════════════════════════════════════════════════════════
+describe('HermesGatewayRunner — SOUL.md Injection (Fix #1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetProfilePath.mockReset();
+    mockReadFileSync.mockReset();
+  });
+
+  it('injects SOUL.md as system message when profile is set', async () => {
+    const { HermesGatewayManager } = await import('../services/HermesGatewayManager.js');
+    const { HermesGatewayRunner } = await import('../services/HermesGatewayRunner.js');
+
+    mockGetProfilePath.mockResolvedValue('/fake/profiles/test-agent');
+    mockReadFileSync.mockReturnValue('You are a Nexus trader agent.');
+
+    const mockMgr = {
+      ensureReady: vi.fn().mockResolvedValue({
+        url: 'http://127.0.0.1:8642',
+        apiKey: 'my-secret-key',
+        port: 8642,
+        host: '127.0.0.1',
+        healthy: true,
+        pid: null,
+        version: '0.18.2',
+      }),
+    };
+    HermesGatewayManager.getInstance = vi.fn().mockReturnValue(mockMgr);
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Map(),
+      body: makeSSEStream(buildSSEChunks(['ok'])),
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const runner = new HermesGatewayRunner();
+    await runner.runAgent({
+      prompt: 'Analyze BTC',
+      agentName: 'test-agent',
+      silent: true,
+    });
+
+    const callArgs = fetchMock.mock.calls[0];
+    const body = JSON.parse((callArgs[1] as RequestInit).body as string);
+    // First message should be system (SOUL.md), second is user
+    expect(body.messages).toHaveLength(2);
+    expect(body.messages[0].role).toBe('system');
+    expect(body.messages[0].content).toBe('You are a Nexus trader agent.');
+    expect(body.messages[1].role).toBe('user');
+  });
+
+  it('skips SOUL.md injection for default profile', async () => {
+    const { HermesGatewayManager } = await import('../services/HermesGatewayManager.js');
+    const { HermesGatewayRunner } = await import('../services/HermesGatewayRunner.js');
+
+    const mockMgr = {
+      ensureReady: vi.fn().mockResolvedValue({
+        url: 'http://127.0.0.1:8642',
+        apiKey: 'my-secret-key',
+        port: 8642,
+        host: '127.0.0.1',
+        healthy: true,
+        pid: null,
+        version: '0.18.2',
+      }),
+    };
+    HermesGatewayManager.getInstance = vi.fn().mockReturnValue(mockMgr);
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Map(),
+      body: makeSSEStream(buildSSEChunks(['ok'])),
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const runner = new HermesGatewayRunner();
+    await runner.runAgent({ prompt: 'test', silent: true }); // no agentName → default
+
+    const callArgs = fetchMock.mock.calls[0];
+    const body = JSON.parse((callArgs[1] as RequestInit).body as string);
+    // Only user message, no system message
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0].role).toBe('user');
+    // getProfilePath should not have been called
+    expect(mockGetProfilePath).not.toHaveBeenCalled();
+  });
+
+  it('continues without SOUL.md when profile path cannot be resolved', async () => {
+    const { HermesGatewayManager } = await import('../services/HermesGatewayManager.js');
+    const { HermesGatewayRunner } = await import('../services/HermesGatewayRunner.js');
+
+    mockGetProfilePath.mockResolvedValue(null);
+
+    const mockMgr = {
+      ensureReady: vi.fn().mockResolvedValue({
+        url: 'http://127.0.0.1:8642',
+        apiKey: 'my-secret-key',
+        port: 8642,
+        host: '127.0.0.1',
+        healthy: true,
+        pid: null,
+        version: '0.18.2',
+      }),
+    };
+    HermesGatewayManager.getInstance = vi.fn().mockReturnValue(mockMgr);
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Map(),
+      body: makeSSEStream(buildSSEChunks(['ok'])),
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const runner = new HermesGatewayRunner();
+    await runner.runAgent({
+      prompt: 'test',
+      agentName: 'missing-soul-agent',
+      silent: true,
+    });
+
+    const callArgs = fetchMock.mock.calls[0];
+    const body = JSON.parse((callArgs[1] as RequestInit).body as string);
+    // Only user message — SOUL.md was not found
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0].role).toBe('user');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Fix #2: Concurrency guard (rate limit)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('HermesGatewayRunner — Concurrency Guard (Fix #2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetProfilePath.mockReset();
+    mockReadFileSync.mockReset();
+  });
+
+  it('tracks active gateway runs correctly', async () => {
+    const { HermesGatewayManager } = await import('../services/HermesGatewayManager.js');
+    const { HermesGatewayRunner } = await import('../services/HermesGatewayRunner.js');
+
+    const mockMgr = {
+      ensureReady: vi.fn().mockResolvedValue({
+        url: 'http://127.0.0.1:8642',
+        apiKey: 'my-secret-key',
+        port: 8642,
+        host: '127.0.0.1',
+        healthy: true,
+        pid: null,
+        version: '0.18.2',
+      }),
+    };
+    HermesGatewayManager.getInstance = vi.fn().mockReturnValue(mockMgr);
+
+    // Use a deferred response to simulate an in-flight request
+    let resolveFetch: (value: unknown) => void;
+    const fetchPromise = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+
+    globalThis.fetch = vi.fn().mockReturnValue(fetchPromise) as unknown as typeof fetch;
+
+    const runner = new HermesGatewayRunner();
+    const runPromise = runner.runAgent({ prompt: 'long-running', silent: true });
+
+    // Give the promise a tick to start
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Resolve the fetch
+    resolveFetch!({
+      ok: true,
+      headers: new Map(),
+      body: makeSSEStream(buildSSEChunks(['done'])),
+    });
+
+    const result = await runPromise;
+    expect(result.transport).toBe('gateway-http');
+    expect(result.result).toBe('done');
   });
 });
