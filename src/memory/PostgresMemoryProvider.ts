@@ -407,8 +407,9 @@ export class PostgresMemoryProvider implements MemoryProvider {
     try {
       await pool.query(
         `INSERT INTO agent_runs
-        (id, runner, agent_name, prompt, result, error, duration_ms, success, session_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        (id, runner, agent_name, prompt, result, error, duration_ms, success, session_id,
+         data_subject_id, legal_basis, consent_ref, retention_expires_at, created_for)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
         [
           id,
           params.runner,
@@ -419,6 +420,11 @@ export class PostgresMemoryProvider implements MemoryProvider {
           params.durationMs || null,
           params.success ? 1 : 0,
           params.sessionId || null,
+          params.dataSubjectId || null,
+          params.legalBasis || null,
+          params.consentRef || null,
+          params.retentionExpiresAt || null,
+          params.purpose || null,
         ],
       );
       return id;

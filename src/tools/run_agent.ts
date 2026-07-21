@@ -9,6 +9,7 @@ import { runOpenCodeAgent } from './run_opencode.js';
 import { runHermesAgent } from './run_hermes.js';
 import { verifyInstallation } from '../lib/InstallHelper.js';
 import { withSpan } from '../lib/telemetry.js';
+import { loi25RunnerHook } from '../lib/loi25/runner_hook.js';
 
 // Schema unified for all runners
 export const runAgentSchema = z.object({
@@ -189,6 +190,26 @@ export async function runAgent(args: RunAgentInternalArgs) {
 
   // Validation des modes
   validateMode(runner, mode);
+
+  // ── Loi 25 : guard avant exécution LLM ──────────────────────────────────
+  // Si OVERMIND_LOI25_ENABLED=false → pass-through (zero overhead, v3.8)
+  // Si true → détecte RP, valide consentement, log transfert
+  const loi25Hook = await loi25RunnerHook(runner, params.prompt, params.agentName);
+  if (!loi25Hook.allowed) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `🛡️ **Loi 25 — Requête bloquée**\n${loi25Hook.reason || 'Consentement requis et manquant'}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+  // Sanitization optionnelle du prompt (si OVERMIND_PII_FILTER=true)
+  if (loi25Hook.sanitizedPrompt) {
+    params.prompt = loi25Hook.sanitizedPrompt;
+  }
 
   // Vérification de l'installation avec logging
   const check = await verifyInstallation(runner);

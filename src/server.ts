@@ -22,7 +22,7 @@
  *   2. L'importer dans server.ts → import { <nom> } from './tools/<nom>.js'
  *   3. Ajouter server.addTool()    → name, description, parameters, execute
  *
- * ─── LISTE DES 14 OUTILS ─────────────────────────────────────────────────
+ * ─── LISTE DES 23 OUTILS ────────────────────────────────────────────────
  *
  *  1. run_agent              → src/tools/run_agent.ts
  *  2. run_agents_parallel    → src/tools/run_agents_parallel.ts
@@ -37,7 +37,18 @@
  * 11. create_prompt          → src/tools/manage_prompts.ts
  * 12. edit_prompt            → src/tools/manage_prompts.ts
  * 13. config_example         → src/tools/config_example.ts
- * 14. agent_control          → src/tools/agent_control.ts  (REMPLACE: get_agent_status, stream_agent_output, kill_agent, wait_agent)
+ * 14. agent_control          → src/tools/agent_control.ts
+ * 15. a2a_hub                → src/tools/a2a_hub.ts
+ * 16. get_metrics            → src/tools/get_metrics.ts
+ *
+ * ── Loi 25 (art. 3-35 Loi 25 QC) ──
+ * 17. loi25_access_request   → src/tools/loi25_access_request.ts   (art. 26)
+ * 18. loi25_erasure          → src/tools/loi25_erasure.ts          (art. 27/35.3)
+ * 19. loi25_consent          → src/tools/loi25_consent.ts          (art. 8.1-8.2)
+ * 20. loi25_rectification    → src/tools/loi25_rectification.ts    (art. 27)
+ * 21. loi25_processing_registry → src/tools/loi25_processing_registry.ts (art. 3/35.18)
+ * 22. loi25_report_incident  → src/tools/loi25_report_incident.ts  (art. 3.5-3.8)
+ * 23. loi25_efvp             → src/tools/loi25_efvp.ts             (art. 18.1)
  */
 
 import { FastMCP } from 'fastmcp';
@@ -68,6 +79,17 @@ import { configExample, configExampleSchema } from './tools/config_example.js';
 import { agentControl, agentControlSchema } from './tools/agent_control.js';
 import { a2aHub, a2aHubSchema } from './tools/a2a_hub.js';
 import { getMetricsTool, getMetricsSchema } from './tools/get_metrics.js';
+// ── Loi 25 tools (art. 3-35 Loi 25 QC) ──
+import { loi25AccessRequest, loi25AccessRequestSchema } from './tools/loi25_access_request.js';
+import { loi25Erasure, loi25ErasureSchema } from './tools/loi25_erasure.js';
+import { loi25Consent, loi25ConsentSchema } from './tools/loi25_consent.js';
+import { loi25Rectification, loi25RectificationSchema } from './tools/loi25_rectification.js';
+import {
+  loi25ProcessingRegistry,
+  loi25ProcessingRegistrySchema,
+} from './tools/loi25_processing_registry.js';
+import { loi25ReportIncident, loi25ReportIncidentSchema } from './tools/loi25_report_incident.js';
+import { loi25Efvp, loi25EfvpSchema } from './tools/loi25_efvp.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ToolExecute = (...args: any[]) => Promise<any>;
@@ -345,6 +367,125 @@ Aucune configuration manuelle nécessaire — il connaît tous les agents du sys
         '📊 Affiche les métriques agrégées du serveur Overmind MCP: agents live, mémoire, gateway health, stats process.',
       parameters: getMetricsSchema,
       execute: wrapExecute('get_metrics', getMetricsTool),
+    });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ─── LOI 25 — Conformité protection des RP (7 outils) ─────────────────────
+    // Articles Loi 25 QC: 3-3.1, 8, 14-17.3, 18.1, 21-22, 26, 27, 35.18
+    // Active via OVERMIND_LOI25_ENABLED=true dans .env
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // ─── 17. loi25_access_request ─────────────────────────────────────────────
+    server.addTool({
+      name: 'loi25_access_request',
+      description: `📋 **Loi 25 art. 26** — Droit d'accès aux renseignements personnels.
+
+Extrait tous les RP liés à un sujet de données (agent_runs, knowledge_chunks, archives).
+
+**Exemples :**
+loi25_access_request(data_subject_id: "hash_abc123")
+loi25_access_request(data_subject_id: "hash_abc123", include_archives: true)`,
+      parameters: loi25AccessRequestSchema,
+      execute: wrapExecute('loi25_access_request', loi25AccessRequest),
+    });
+
+    // ─── 18. loi25_erasure ────────────────────────────────────────────────────
+    server.addTool({
+      name: 'loi25_erasure',
+      description: `🗑️ **Loi 25 art. 27/35.3** — Droit d'effacement (droit à l'oubli).
+
+Anonymise ou supprime définitivement les RP d'un sujet.
+
+**Modes :**
+- \`anonymize\` (défaut) : hash les textes + null le data_subject_id
+- \`hard_delete\` : suppression définitive des enregistrements
+
+**Exemple :**
+loi25_erasure(data_subject_id: "hash_abc123", mode: "anonymize")`,
+      parameters: loi25ErasureSchema,
+      execute: wrapExecute('loi25_erasure', loi25Erasure),
+    });
+
+    // ─── 19. loi25_consent ───────────────────────────────────────────────────
+    server.addTool({
+      name: 'loi25_consent',
+      description: `✅ **Loi 25 art. 8.1-8.2** — Gestion du consentement.
+
+Accorde, révoque ou vérifie un consentement pour un sujet de données.
+
+**Actions :**
+- \`grant\` : enregistre un nouveau consentement
+- \`revoke\` : révoque un consentement existant
+- \`check\` : vérifie si un consentement est valide
+
+**Exemples :**
+loi25_consent(action: "grant", data_subject_id: "hash123", purpose: "agent_execution")
+loi25_consent(action: "check", data_subject_id: "hash123")
+loi25_consent(action: "revoke", data_subject_id: "hash123")`,
+      parameters: loi25ConsentSchema,
+      execute: wrapExecute('loi25_consent', loi25Consent),
+    });
+
+    // ─── 20. loi25_rectification ─────────────────────────────────────────────
+    server.addTool({
+      name: 'loi25_rectification',
+      description: `✏️ **Loi 25 art. 27** — Droit de rectification.
+
+Modifie un renseignement personnel inexact ou incomplet.
+
+**Exemple :**
+loi25_rectification(data_subject_id: "hash123", table_name: "agent_runs", record_id: "run_abc", field: "prompt", new_value: "Version corrigée")`,
+      parameters: loi25RectificationSchema,
+      execute: wrapExecute('loi25_rectification', loi25Rectification),
+    });
+
+    // ─── 21. loi25_processing_registry ───────────────────────────────────────
+    server.addTool({
+      name: 'loi25_processing_registry',
+      description: `📚 **Loi 25 art. 3-3.1/35.18** — Registre des traitements.
+
+Consulte, crée ou modifie le registre des traitements de RP + cartographie des transferts hors QC.
+
+**Actions :** list, get, create, update
+
+**Exemples :**
+loi25_processing_registry(action: "list")
+loi25_processing_registry(action: "get", name: "llm_inference")`,
+      parameters: loi25ProcessingRegistrySchema,
+      execute: wrapExecute('loi25_processing_registry', loi25ProcessingRegistry),
+    });
+
+    // ─── 22. loi25_report_incident ────────────────────────────────────────────
+    server.addTool({
+      name: 'loi25_report_incident',
+      description: `🚨 **Loi 25 art. 3.5-3.8** — Notification d'incident.
+
+Signale un incident de confidentialité, liste les incidents ouverts, ou résout un incident.
+
+⚠️ Les incidents de sévérité "high" nécessitent une notification à la CAI dans les 30 jours.
+
+**Actions :** report, list, resolve
+
+**Exemples :**
+loi25_report_incident(action: "report", severity: "moderate", category: "data_leak", description: "Fuite de 3 enregistrements")
+loi25_report_incident(action: "list")`,
+      parameters: loi25ReportIncidentSchema,
+      execute: wrapExecute('loi25_report_incident', loi25ReportIncident),
+    });
+
+    // ─── 23. loi25_efvp ──────────────────────────────────────────────────────
+    server.addTool({
+      name: 'loi25_efvp',
+      description: `🔍 **Loi 25 art. 18.1** — Évaluation des facteurs relatifs à la vie privée (EFVP).
+
+Crée ou consulte une EFVP pour un nouveau projet ou traitement.
+
+**Actions :** create, list, get
+
+**Exemple :**
+loi25_efvp(action: "create", project_name: "agent_memory_v2", description: "Vectorisation des prompts", data_categories: "prompts,embeddings", risks: "Ré-identification par corrélation", mitigations: "Bruit gaussien sur embeddings")`,
+      parameters: loi25EfvpSchema,
+      execute: wrapExecute('loi25_efvp', loi25Efvp),
     });
   }
 
