@@ -26,7 +26,7 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process';
-import { CONFIG, getWorkspaceDir, getSharedHermesHome } from '../lib/config.js';
+import { CONFIG, getWorkspaceDir, getSharedHermesHome, getAgentHermesHome } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { linkSessionToPid } from '../lib/processRegistry.js';
 import { withSpan } from '../lib/telemetry.js';
@@ -154,7 +154,11 @@ export class HermesRunner {
   private async runAgentInternal(options: RunAgentOptions): Promise<RunAgentResult> {
     const { prompt, agentName, silent } = options;
     let { sessionId } = options;
-    const cwd = options.cwd || process.cwd();
+    // When an agentName is provided, spawn Hermes inside that agent's profile
+    // home (e.g. ~/.overmind/hermes/profiles/<name>/) so the process CWD, the
+    // terminal tool's cwd, and HERMES_HOME all agree. An explicit options.cwd
+    // still wins; without an agent we fall back to the current process cwd.
+    const cwd = options.cwd || (agentName ? getAgentHermesHome(agentName) : process.cwd());
     const configPath = options.configPath || getWorkspaceDir();
 
     // ─── Auto Resume ─────────────────────────────────────────────────────────

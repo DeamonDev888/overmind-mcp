@@ -138,4 +138,80 @@ describe('Lockdown: Runner & Workspace Integrity', () => {
       }
     });
   });
+
+  describe('HermesRunner: cwd = profilePath resolution', () => {
+    let HermesRunner: typeof import('../services/HermesRunner.js').HermesRunner;
+    let getAgentHermesHome: typeof import('../lib/config.js').getAgentHermesHome;
+
+    beforeEach(async () => {
+      const hermesRunnerModule = await import('../services/HermesRunner.js');
+      const configModule = await import('../lib/config.js');
+      HermesRunner = hermesRunnerModule.HermesRunner;
+      getAgentHermesHome = configModule.getAgentHermesHome;
+    });
+
+    /** Helper: extract the spawn call options (3rd positional arg) from the latest call. */
+    async function getSpawnOpts(): Promise<{ cwd?: string; env?: Record<string, string | undefined> } | null> {
+      const { spawn } = await import('child_process');
+      const calls = (spawn as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+      if (calls.length === 0) return null;
+      return calls[calls.length - 1][2] as { cwd?: string; env?: Record<string, string | undefined> };
+    }
+
+    it('MUST spawn Hermes inside the agent profile home when agentName is provided (no explicit cwd)', async () => {
+      const runner = new HermesRunner();
+      const expectedCwd = getAgentHermesHome(TEST_AGENT_NAME);
+      fs.mkdirSync(expectedCwd, { recursive: true });
+
+      try {
+        await runner.runAgent({ prompt: 'test', agentName: TEST_AGENT_NAME });
+      } catch {
+        // runAgent may throw in CI — we only care about the spawn call shape
+      }
+
+      const opts = await getSpawnOpts();
+      expect(opts, 'spawn MUST have been called').not.toBeNull();
+      expect(
+        opts!.cwd,
+        'cwd MUST match the agent profile home (getAgentHermesHome)',
+      ).toBe(expectedCwd);
+    });
+
+    it('MUST honor an explicit options.cwd override over the profile home', async () => {
+      const runner = new HermesRunner();
+      const explicitCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'explicit-cwd-'));
+
+      try {
+        await runner.runAgent({
+          prompt: 'test',
+          agentName: TEST_AGENT_NAME,
+          cwd: explicitCwd,
+        });
+      } catch {
+        // ignored — spawn shape is what we assert
+      }
+
+      const opts = await getSpawnOpts();
+      expect(opts, 'spawn MUST have been called').not.toBeNull();
+      expect(
+        opts!.cwd,
+        'explicit options.cwd MUST win over profile home default',
+      ).toBe(explicitCwd);
+    });
+
+    it('MUST fall back to process.cwd() when no agentName is provided', async () => {
+      const runner = new HermesRunner();
+      const before = process.cwd();
+
+      try {
+        await runner.runAgent({ prompt: 'test' });
+      } catch {
+        // ignored
+      }
+
+      const opts = await getSpawnOpts();
+      expect(opts, 'spawn MUST have been called').not.toBeNull();
+      expect(opts!.cwd).toBe(before);
+    });
+  });
 });

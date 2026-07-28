@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.9.1] — 2026-07-27
+
+### Fixed
+- `HermesRunner.runAgentInternal()`: quand un `agentName` est fourni, Hermes est maintenant spawn dans le profile home de cet agent (`getAgentHermesHome(agentName)`) au lieu du CWD du process courant. Aligne le CWD du process, le `terminal tool cwd`, et `HERMES_HOME` sur le même répertoire — l'agent tourne dans son propre profil au lieu d'un répertoire arbitraire.
+  - Un `options.cwd` explicite garde la priorité (override)
+  - Sans `agentName`, fallback inchangé vers `process.cwd()`
+
+### Tests
+- `runner_lockdown.test.ts`: +76 lignes — couverture étendue du runner spawn et de l'intégrité workspace
+- **Total: 143/143 + nouveaux tests** (validé par rebuild)
+
+---
+
 ## [3.9.0] — 2026-07-10
 
 ### Added — Loi 25 (conformité vie privée Québec)
