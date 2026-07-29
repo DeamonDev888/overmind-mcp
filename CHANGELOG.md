@@ -7,6 +7,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.9.2] — 2026-07-27
+
+### Documentation
+- `OverBridgeService.ts` enrichi (+57 lignes) — leçons de déploiement Striker:
+  - Header: diagramme INPUT/OUTPUT contract + 5 leçons apprises
+  - `runAgentForDiscord`: JSDoc complète expliquant le contrat INPUT ONLY (l'agent reçoit le contexte Discord mais ne poste jamais directement)
+  - `_processAgentResponse`: doc sur la détection MCP (logging only, pas silencing — l'agent DOIT appeler les tools MCP lui-même)
+  - `runAgent`: timeout = agent travaille, pas erreur fatale
+
+### Tests
+- **NEW** `tests/test_overbridge_input_only.cjs` — **33 assertions** sur 7 sections qui verrouillent le contrat INPUT ONLY:
+  1. No Discord Direct Output (8): pas d'import discord.js, pas de Client, pas de POST discord.com/api, pas de channel.send/reply, pas de axios.post/fetch discord
+  2. Input Flow (5): runAgentForDiscord existe, formatDiscordContext, runAgent forward via proxy.call
+  3. MCP Output Detection (4): retourne AgentResult, pas de channel.send, extraction sessionId, préservation session
+  4. Timeout Handling (3): ETIMEDOUT/EBODYREAD non-fatal, retourne AgentResult (pas throw), updateSession préserve l'état
+  5. Session Management (4): resetSession, setSession, messageCount++, lastActivityAt
+  6. Memory & MCP (4): memory_search/store/runs via proxy.call, aucune méthode mémoire ne poste sur Discord
+  7. Documentation (5): INPUT ONLY contract, OUTPUT via MCP, LESSONS LEARNED, doc runAgentForDiscord, doc _processAgentResponse
+- **Total: 179/179 PASS** (146 vitest + 33 cjs input-only)
+
+---
+
 ## [3.9.1] — 2026-07-27
 
 ### Fixed

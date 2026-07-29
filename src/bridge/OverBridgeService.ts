@@ -7,9 +7,30 @@
  * ║   runs, et les sessions. Wrappe BridgeProxy pour offrir une          ║
  * ║   interface client simple et robuste (SDK).                          ║
  * ║                                                                      ║
- * ║   ARCHITECTURE                                                       ║
- * ║   ─────────────                                                      ║
- * ║   App/Client SDK → OverBridgeService → BridgeProxy → Overmind MCP    ║
+ * ║   ARCHITECTURE — INPUT/OUTPUT CONTRACT                               ║
+ * ║   ─────────────────────────────────────                              ║
+ * ║   Discord ──input──→ overmind-bridge.js ──→ OverBridgeService        ║
+ * ║                                                        ↓             ║
+ * ║                                              BridgeProxy → MCP       ║
+ * ║                                                        ↓             ║
+ * ║                                                    Agent (Hermes)    ║
+ * ║                                                        ↓             ║
+ * ║                                              OUTPUT via MCP discord   ║
+ * ║                                                                      ║
+ * ║   ⚠️  INPUT ONLY: This service NEVER posts to Discord directly.      ║
+ * ║   The agent handles its own output via its MCP discord tools.        ║
+ * ║   This service only:                                                 ║
+ * ║     1. Receives messages (Discord, HTTP, CLI)                        ║
+ * ║     2. Formats context (channelId, userId, username)                 ║
+ * ║     3. Forwards to agent via MCP run_agent                           ║
+ * ║     4. Detects if agent posted via MCP (for logging only)           ║
+ * ║                                                                      ║
+ * ║   LESSONS LEARNED (Striker deployment 2026-07):                      ║
+ * ║   - Bridge must NEVER post agent text → causes duplicate replies     ║
+ * ║   - Agent timeout ≠ error (agent may still be processing)           ║
+ * ║   - Session ID persists in subprocess, must force-reset state.db    ║
+ * ║   - Discord context (channelId/userId/username) must be injected    ║
+ * ║   - MCP output detection is for LOGGING ONLY, not for silencing     ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 
@@ -213,6 +234,18 @@ export class OverBridgeService {
 
   /**
    * Raccourci : run agent avec contexte Discord auto-formaté.
+   *
+   * INPUT ONLY CONTRACT:
+   *   This method formats the Discord context and forwards to the agent.
+   *   It NEVER posts the agent's response back to Discord.
+   *   The agent must use its MCP discord tools (e.g. striker_discord,
+   *   serveur_discord) to deliver its output.
+   *
+   * @param agentName - Agent profile name (e.g. "striker_comptaria")
+   * @param runner - Runner type (e.g. "hermes")
+   * @param message - The user's message content (already prefix-stripped)
+   * @param discordContext - Channel/user info for agent context
+   * @returns AgentResult — the raw agent response (for logging only, NOT for posting)
    */
   async runAgentForDiscord(
     agentName: string,
@@ -224,6 +257,27 @@ export class OverBridgeService {
     return this.runAgent({ runner, prompt, agentName });
   }
 
+  /**
+   * Process and normalize an MCP agent response.
+   *
+   * IMPORTANT — OUTPUT DETECTION (logging only):
+   *   The agent's content may contain MCP tool call traces (e.g.
+   *   "Message envoyé sur Discord", "Embed publié sur Discord", or a
+   *   Discord message ID like "1531826331875147857").
+   *   These traces are used ONLY for logging/debugging to confirm
+   *   the agent posted its output via MCP. They must NEVER trigger
+   *   the bridge to post the agent's text to Discord as a fallback.
+   *
+   * LESSONS LEARNED:
+   *   - If the agent didn't post via MCP, posting its text as a
+   *     "fallback" creates duplicate replies and confuses users.
+   *   - The proper fix is to ensure the agent's SOUL.md/prompt
+   *     instructs it to ALWAYS use MCP discord tools for output.
+   *   - Timeout responses (ETIMEDOUT) should preserve session state
+   *     because the agent may still be processing.
+   *
+   * @returns Normalized AgentResult with content, isError, and sessionId
+   */
   private _processAgentResponse(result: import('./types.js').McpResponse): AgentResult {
     if (result.error) {
       return {
