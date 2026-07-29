@@ -57,6 +57,9 @@ import {
   formatDiscordContext,
   type BridgeLogger,
 } from './utils.js';
+import fs from 'fs';
+import path from 'path';
+import { getAgentHermesHome, getSharedHermesHome } from '../lib/config.js';
 
 // ─── OverBridgeService ─────────────────────────────────────────────────────
 
@@ -154,11 +157,107 @@ export class OverBridgeService {
   // SESSION MANAGEMENT
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /** Force un reset de session — le prochain appel démarre une nouvelle session */
-  resetSession(): void {
-    this.proxy.log.info('🔄 Session reset');
+  /**
+   * Force un reset de session — le prochain appel démarre une nouvelle session.
+   *
+   * Si `agentName` est fourni, purge également le `state.db` du profile Hermes
+   * correspondant pour éviter que le runner ne réutilise l'historique accumulé.
+   *
+   * Problème résolu :
+   *   Le runner Hermes persiste l'historique des messages dans
+   *   `<profilePath>/memories/state.db` (SQLite). Sans purge, un reset de
+   *   l'ID en mémoire ne suffit pas — la prochaine session est créée dans la
+   *   même DB qui accumulate les anciens messages, provoquant un contexte
+   *   fantôme et des réponses qui se référent à l'historique obsolète.
+   *
+   * @param agentName - Optionnel. Si fourni, purge state.db + WAL/SHM du profile.
+   * @returns Objet décrivant ce qui a été purgé (pour logging/debug).
+   */
+  resetSession(
+    agentName?: string,
+  ): {
+    memoryCleared: boolean;
+    inMemorySessionCleared: boolean;
+    purgedFiles: string[];
+    profilePath?: string;
+    error?: string;
+  } {
+    this.proxy.log.info(
+      `🔄 Session reset${agentName ? ` (+ state.db purge for "${agentName}")` : ''}`,
+    );
+
+    // 1. Reset in-memory session (comportement historique)
     this.session.currentSessionId = undefined;
     this.session.messageCount = 0;
+
+    // 2. Sans agentName : reset mémoire seulement (back-compat)
+    if (!agentName) {
+      return { memoryCleared: false, inMemorySessionCleared: true, purgedFiles: [] };
+    }
+
+    // 3. Purge state.db du profile Hermes ciblé
+    try {
+      const profilePath = getAgentHermesHome(agentName);
+      const memoriesDir = path.join(profilePath, 'memories');
+
+      // Safety: le chemin doit être sous le Hermes home partagé (anti path traversal)
+      const sharedHome = getSharedHermesHome();
+      const resolvedProfile = path.resolve(profilePath);
+      const resolvedShared = path.resolve(sharedHome);
+      if (!resolvedProfile.startsWith(resolvedShared + path.sep) && resolvedProfile !== resolvedShared) {
+        return {
+          memoryCleared: false,
+          inMemorySessionCleared: true,
+          purgedFiles: [],
+          profilePath,
+          error: `Refusing to purge: profile path "${resolvedProfile}" is outside shared Hermes home "${resolvedShared}"`,
+        };
+      }
+
+      // Fichiers SQLite à purger (db principale + journaux WAL/SHM)
+      const filesToPurge = [
+        'state.db',
+        'state.db-wal',
+        'state.db-shm',
+      ];
+
+      const purgedFiles: string[] = [];
+      for (const fname of filesToPurge) {
+        const fpath = path.join(memoriesDir, fname);
+        if (fs.existsSync(fpath)) {
+          try {
+            fs.unlinkSync(fpath);
+            purgedFiles.push(fpath);
+          } catch (e) {
+            // Non-fatal: le fichier est peut-être verrouillé par un runner actif
+            this.proxy.log.warn(
+              `⚠️  Could not delete ${fname}: ${(e as Error).message}`,
+            );
+          }
+        }
+      }
+
+      this.proxy.log.info(
+        purgedFiles.length > 0
+          ? `🧹 Purged ${purgedFiles.length} state file(s) from ${memoriesDir}`
+          : `ℹ️  No state.db to purge at ${memoriesDir}`,
+      );
+
+      return {
+        memoryCleared: purgedFiles.length > 0,
+        inMemorySessionCleared: true,
+        purgedFiles,
+        profilePath,
+      };
+    } catch (e) {
+      // Non-fatal: la purge state.db ne doit jamais casser le reset mémoire
+      return {
+        memoryCleared: false,
+        inMemorySessionCleared: true,
+        purgedFiles: [],
+        error: `state.db purge failed: ${(e as Error).message}`,
+      };
+    }
   }
 
   /** Force un sessionId spécifique (ex: reçu d'un env var) */
