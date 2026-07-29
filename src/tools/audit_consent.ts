@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Gestion du consentement (art. 8.1-8.2)
+ * Audit Trail — Gestion du consentement (art. 8.1-8.2)
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Trois actions :
@@ -16,10 +16,10 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { getPool } from 'overmind-postgres-mcp';
-import { logAccess } from '../lib/loi25/guard.js';
-import type { LegalBasis } from '../lib/loi25/types.js';
+import { logAccess } from '../lib/audit/guard.js';
+import type { LegalBasis } from '../lib/audit/types.js';
 
-export const loi25ConsentSchema = z.object({
+export const auditConsentSchema = z.object({
   action: z
     .enum(['grant', 'revoke', 'check'])
     .describe("'grant' : accorder | 'revoke' : révoquer | 'check' : vérifier"),
@@ -48,7 +48,7 @@ export const loi25ConsentSchema = z.object({
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-export async function loi25Consent(args: z.infer<typeof loi25ConsentSchema>) {
+export async function auditConsent(args: z.infer<typeof auditConsentSchema>) {
   try {
     const pool = getPool();
     const subjectId = args.data_subject_id;
@@ -87,11 +87,11 @@ export async function loi25Consent(args: z.infer<typeof loi25ConsentSchema>) {
 
       await logAccess({
         dataSubjectId: subjectId,
-        accessedBy: 'loi25_consent',
+        accessedBy: 'audit_consent',
         action: 'write',
         resourceType: 'consent_record',
         resourceId: consentId,
-        purpose: `loi25_consent_grant:${purpose}`,
+        purpose: `audit_consent_grant:${purpose}`,
       }).catch(() => {});
 
       return {
@@ -99,7 +99,7 @@ export async function loi25Consent(args: z.infer<typeof loi25ConsentSchema>) {
           {
             type: 'text' as const,
             text:
-              `✅ **Consentement accordé** — Loi 25 art. 8.1\n\n` +
+              `✅ **Consentement accordé** — Audit Trail (Loi 25 art. 8.1)\n\n` +
               `**Sujet :** \`${subjectId}\`\n` +
               `**Consent ID :** \`${consentId}\`\n` +
               `**Finalité :** ${purpose}\n` +
@@ -128,11 +128,11 @@ export async function loi25Consent(args: z.infer<typeof loi25ConsentSchema>) {
 
       await logAccess({
         dataSubjectId: subjectId,
-        accessedBy: 'loi25_consent',
+        accessedBy: 'audit_consent',
         action: 'write',
         resourceType: 'consent_record',
         resourceId: revokedCount > 0 ? (res.rows[0] as { id: string }).id : 'none',
-        purpose: `loi25_consent_revoke:${purpose}`,
+        purpose: `audit_consent_revoke:${purpose}`,
       }).catch(() => {});
 
       if (revokedCount === 0) {
@@ -154,7 +154,7 @@ export async function loi25Consent(args: z.infer<typeof loi25ConsentSchema>) {
           {
             type: 'text' as const,
             text:
-              `🚫 **Consentement révoqué** — Loi 25 art. 8.2\n\n` +
+              `🚫 **Consentement révoqué** — Audit Trail (Loi 25 art. 8.2)\n\n` +
               `**Sujet :** \`${subjectId}\`\n` +
               `**Finalité :** ${purpose}\n` +
               `**Révoqué le :** ${new Date(now).toISOString()}\n` +
@@ -176,11 +176,11 @@ export async function loi25Consent(args: z.infer<typeof loi25ConsentSchema>) {
 
     await logAccess({
       dataSubjectId: subjectId,
-      accessedBy: 'loi25_consent',
+      accessedBy: 'audit_consent',
       action: 'read',
       resourceType: 'consent_record',
       resourceId: purpose,
-      purpose: 'loi25_consent_check',
+      purpose: 'audit_consent_check',
     }).catch(() => {});
 
     if (res.rows.length === 0) {
@@ -246,7 +246,7 @@ export async function loi25Consent(args: z.infer<typeof loi25ConsentSchema>) {
       content: [
         {
           type: 'text' as const,
-          text: `❌ Erreur loi25_consent: ${err instanceof Error ? err.message : String(err)}`,
+          text: `❌ Erreur audit_consent: ${err instanceof Error ? err.message : String(err)}`,
         },
       ],
       isError: true,

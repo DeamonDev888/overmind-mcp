@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Outil MCP : Notification d'incident (art. 3.5-3.8)
+ * Audit Trail — Outil MCP : Notification d'incident (art. 3.5-3.8)
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Signale un incident de confidentialité, liste les incidents ouverts,
@@ -14,11 +14,11 @@
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { getPool } from 'overmind-postgres-mcp';
-import type { IncidentLogEntry } from '../lib/loi25/types.js';
+import type { IncidentLogEntry } from '../lib/audit/types.js';
 
 // ── Schéma Zod ────────────────────────────────────────────────────────────────
 
-export const loi25ReportIncidentSchema = z.object({
+export const auditReportIncidentSchema = z.object({
   action: z
     .enum(['report', 'list', 'resolve'])
     .optional()
@@ -85,7 +85,7 @@ function formatIncident(row: IncidentLogEntry): string {
 
 // ── Tool ─────────────────────────────────────────────────────────────────────
 
-export async function loi25ReportIncident(args: z.infer<typeof loi25ReportIncidentSchema>) {
+export async function auditReportIncident(args: z.infer<typeof auditReportIncidentSchema>) {
   try {
     const pool = getPool();
     const action = args.action ?? 'list';
@@ -211,7 +211,7 @@ export async function loi25ReportIncident(args: z.infer<typeof loi25ReportIncide
       content: [
         {
           type: 'text' as const,
-          text: `❌ Erreur loi25_report_incident: ${err instanceof Error ? err.message : String(err)}`,
+          text: `❌ Erreur audit_report_incident: ${err instanceof Error ? err.message : String(err)}`,
         },
       ],
       isError: true,

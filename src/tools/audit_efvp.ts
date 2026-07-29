@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Outil MCP : Évaluation des facteurs relatifs à la vie privée (EFVP)
+ * Audit Trail — Outil MCP : Évaluation des facteurs relatifs à la vie privée (EFVP)
  *            (art. 18.1)
  * ═══════════════════════════════════════════════════════════════════════════
  *
@@ -18,7 +18,7 @@ import { getPool } from 'overmind-postgres-mcp';
 
 // ── Schéma Zod ────────────────────────────────────────────────────────────────
 
-export const loi25EfvpSchema = z.object({
+export const auditEfvpSchema = z.object({
   action: z
     .enum(['create', 'list', 'get'])
     .optional()
@@ -121,7 +121,7 @@ function formatEfvp(row: EfvpRow): string {
 
 // ── Tool ─────────────────────────────────────────────────────────────────────
 
-export async function loi25Efvp(args: z.infer<typeof loi25EfvpSchema>) {
+export async function auditEfvp(args: z.infer<typeof auditEfvpSchema>) {
   try {
     const pool = getPool();
     await ensureEfvpTable(pool);
@@ -221,7 +221,7 @@ export async function loi25Efvp(args: z.infer<typeof loi25EfvpSchema>) {
       content: [
         {
           type: 'text' as const,
-          text: `❌ Erreur loi25_efvp: ${err instanceof Error ? err.message : String(err)}`,
+          text: `❌ Erreur audit_efvp: ${err instanceof Error ? err.message : String(err)}`,
         },
       ],
       isError: true,

@@ -1,16 +1,16 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Capture au niveau du Bridge
+ * Audit Trail — Capture au niveau du Bridge
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Pseudonymise les externalKeys (Discord userId, phone, Telegram id)
- * en data_subject_id Loi 25 et propage le contexte au runner.
+ * en data_subject_id audit et propage le contexte au runner.
  *
  * Appelé par OverBridgeServer avant l'auto-dispatch vers agent.run.
  */
 
 import { pseudonymize } from './anonymize.js';
-import { isLoi25Enabled, isInternalSubject } from './types.js';
+import { isAuditEnabled, isInternalSubject } from './types.js';
 import type { LegalBasis } from './types.js';
 
 export interface BridgeCaptureResult {
@@ -25,7 +25,7 @@ export interface BridgeCaptureResult {
 }
 
 /**
- * Map des providers webhook vers les sources Loi 25.
+ * Map des providers webhook vers les sources audit.
  */
 const PROVIDER_TO_SOURCE: Record<string, BridgeCaptureResult['source']> = {
   discord: 'discord',
@@ -66,7 +66,7 @@ export function captureBridgeSubject(
  * Note : cette approche est safe car le bridge est mono-request par spawn.
  */
 export function propagateSubjectContext(result: BridgeCaptureResult): void {
-  if (!isLoi25Enabled()) return;
+  if (!isAuditEnabled()) return;
   process.env.OVERMIND_CURRENT_SUBJECT_ID = result.dataSubjectId;
 }
 

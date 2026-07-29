@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Cartographie des transferts (registre des providers LLM)
+ * Audit Trail — Cartographie des transferts (registre des providers LLM)
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Référentiel des 8 providers LLM supportés par Overmind.

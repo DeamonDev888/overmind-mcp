@@ -46,18 +46,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added — Loi 25 (conformité vie privée Québec)
 - **7 nouveaux tools MCP Loi 25** (tools #17-23):
-  - `loi25_consent` — enregistrement et gestion du consentement (grant/revoke/verify)
-  - `loi25_access_request` — droit d'accès aux données personnelles
-  - `loi25_rectification` — correction de données inexactes
-  - `loi25_erasure` — droit à l'effacement (droit à l'oubli)
-  - `loi25_processing_registry` — registre des traitements (obligation légale)
-  - `loi25_efvp` — évaluation des facteurs de vulnérabilité psychologique
-  - `loi25_report_incident` — signalement d'incident de confidentialité (72h)
-- **7 modules lib/loi25/**: `anonymize.ts`, `bridge_capture.ts`, `guard.ts`, `retention.ts`, `runner_hook.ts`, `transfer_map.ts`, `types.ts`
-- **2 scripts**: `scripts/loi25_backfill.mjs` (backfill données legacy), `scripts/loi25_retention_cron.mjs` (cron rétention 24h)
+  - `audit_consent` — enregistrement et gestion du consentement (grant/revoke/verify)
+  - `audit_access_request` — droit d'accès aux données personnelles
+  - `audit_rectification` — correction de données inexactes
+  - `audit_erasure` — droit à l'effacement (droit à l'oubli)
+  - `audit_processing_registry` — registre des traitements (obligation légale)
+  - `audit_efvp` — évaluation des facteurs de vulnérabilité psychologique
+  - `audit_report_incident` — signalement d'incident de confidentialité (72h)
+- **7 modules lib/audit/**: `anonymize.ts`, `bridge_capture.ts`, `guard.ts`, `retention.ts`, `runner_hook.ts`, `transfer_map.ts`, `types.ts`
+- **2 scripts**: `scripts/audit_backfill.mjs` (backfill données legacy), `scripts/audit_retention_cron.mjs` (cron rétention 24h)
 - **1 commande CLI**: `overmind-loi25-migrate` (migration schéma DB)
-- `run_agent.ts`: hook Loi 25 injecté au runtime — anonymisation automatique si `OVERMIND_LOI25_ENABLED=true`
-- `server.ts`: enregistrement conditionnel des 7 tools + flag `OVERMIND_LOI25_ENABLED`
+- `run_agent.ts`: hook Loi 25 injecté au runtime — anonymisation automatique si `OVERMIND_AUDIT_ENABLED=true`
+- `server.ts`: enregistrement conditionnel des 7 tools + flag `OVERMIND_AUDIT_ENABLED`
 - `PostgresMemoryProvider.ts` + `memory/types.ts`: support rétention/anonymisation
 - `OverBridgeServer.ts`: bridge capture pour transferts inter-provinces
 - `.env.example`: +30 lignes config Loi 25
@@ -66,16 +66,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Activation prod
 ```bash
 # 1. Activer le flag
-OVERMIND_LOI25_ENABLED=true
+OVERMIND_AUDIT_ENABLED=true
 
 # 2. Migrer le schéma DB
 overmind-loi25-migrate
 
 # 3. Backfill des données legacy
-node scripts/loi25_backfill.mjs
+node scripts/audit_backfill.mjs
 
 # 4. Programmer le cron de rétention (systemd ou Hermes cron)
-#    node scripts/loi25_retention_cron.mjs  → chaque 24h
+#    node scripts/audit_retention_cron.mjs  → chaque 24h
 ```
 
 ### Tests

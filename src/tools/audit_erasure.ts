@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Droit d'effacement / droit à l'oubli (art. 27 / 35.3)
+ * Audit Trail — Droit d'effacement / droit à l'oubli (art. 27 / 35.3)
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Deux modes d'effacement :
@@ -16,9 +16,9 @@
 import crypto from 'crypto';
 import { z } from 'zod';
 import { getPool } from 'overmind-postgres-mcp';
-import { logAccess } from '../lib/loi25/guard.js';
+import { logAccess } from '../lib/audit/guard.js';
 
-export const loi25ErasureSchema = z.object({
+export const auditErasureSchema = z.object({
   data_subject_id: z
     .string()
     .min(1)
@@ -47,11 +47,11 @@ interface ErasureCounts {
 
 function hashText(text: string): string {
   // SHA-256 + salt local pour empêcher la ré-identification
-  const salt = process.env.OVERMIND_LOI25_SALT || 'overmind-loi25-default-salt-v1';
+  const salt = process.env.OVERMIND_AUDIT_SALT || 'overmind-loi25-default-salt-v1';
   return `[ANONYMIZED:${crypto.createHash('sha256').update(`${salt}:${text}`).digest('hex').slice(0, 16)}]`;
 }
 
-export async function loi25Erasure(args: z.infer<typeof loi25ErasureSchema>) {
+export async function auditErasure(args: z.infer<typeof auditErasureSchema>) {
   try {
     const pool = getPool();
     const subjectId = args.data_subject_id;
@@ -155,11 +155,11 @@ export async function loi25Erasure(args: z.infer<typeof loi25ErasureSchema>) {
     // ── Journalisation (art. 27 — preuve de l'effacement) ────────────────────
     await logAccess({
       dataSubjectId: subjectId,
-      accessedBy: 'loi25_erasure',
+      accessedBy: 'audit_erasure',
       action: 'delete',
       resourceType: 'data_subject_records',
       resourceId: subjectId,
-      purpose: `loi25_erasure_${mode}${includeArchives ? '_with_archives' : ''}`,
+      purpose: `audit_erasure_${mode}${includeArchives ? '_with_archives' : ''}`,
     }).catch(() => {}); // non-bloquant
 
     const modeLabel = mode === 'anonymize' ? '🛡️ Anonymisation' : '🗑️ Suppression définitive';
@@ -169,7 +169,7 @@ export async function loi25Erasure(args: z.infer<typeof loi25ErasureSchema>) {
         {
           type: 'text' as const,
           text:
-            `${modeLabel} — **Loi 25 art. 27/35.3**\n\n` +
+            `${modeLabel} — **Audit Trail (Loi 25 art. 27/35.3)**\n\n` +
             `**Sujet :** \`${subjectId}\`\n` +
             `**Mode :** \`${mode}\`\n` +
             `**Archives incluses :** ${includeArchives ? 'oui' : 'non'}\n\n` +
@@ -188,7 +188,7 @@ export async function loi25Erasure(args: z.infer<typeof loi25ErasureSchema>) {
       content: [
         {
           type: 'text' as const,
-          text: `❌ Erreur loi25_erasure: ${err instanceof Error ? err.message : String(err)}`,
+          text: `❌ Erreur audit_erasure: ${err instanceof Error ? err.message : String(err)}`,
         },
       ],
       isError: true,

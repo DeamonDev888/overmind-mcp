@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Droit de rectification (art. 27)
+ * Audit Trail — Droit de rectification (art. 27)
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Modifie un renseignement personnel (RP) inexact, incomplet ou périmé.
@@ -19,7 +19,7 @@
 
 import { z } from 'zod';
 import { getPool } from 'overmind-postgres-mcp';
-import { logAccess } from '../lib/loi25/guard.js';
+import { logAccess } from '../lib/audit/guard.js';
 
 // Allowlist stricte : empêche l'injection de noms de colonnes arbitraires
 const ALLOWED_FIELDS_BY_TABLE: Record<string, Set<string>> = {
@@ -27,7 +27,7 @@ const ALLOWED_FIELDS_BY_TABLE: Record<string, Set<string>> = {
   knowledge_chunks: new Set(['text']),
 };
 
-export const loi25RectificationSchema = z.object({
+export const auditRectificationSchema = z.object({
   data_subject_id: z.string().min(1).describe('Identifiant pseudonymisé du sujet'),
   table_name: z
     .enum(['agent_runs', 'knowledge_chunks'])
@@ -39,7 +39,7 @@ export const loi25RectificationSchema = z.object({
   new_value: z.string().describe('Nouvelle valeur du champ'),
 });
 
-export async function loi25Rectification(args: z.infer<typeof loi25RectificationSchema>) {
+export async function auditRectification(args: z.infer<typeof auditRectificationSchema>) {
   try {
     // ── Validation stricte du champ autorisé ─────────────────────────────────
     const allowedFields = ALLOWED_FIELDS_BY_TABLE[args.table_name];
@@ -85,11 +85,11 @@ export async function loi25Rectification(args: z.infer<typeof loi25Rectification
     // ── Journalisation (art. 27 — preuve de la rectification) ────────────────
     await logAccess({
       dataSubjectId: args.data_subject_id,
-      accessedBy: 'loi25_rectification',
+      accessedBy: 'audit_rectification',
       action: 'write',
       resourceType: args.table_name,
       resourceId: args.record_id,
-      purpose: `loi25_rectification:${args.table_name}.${args.field}`,
+      purpose: `audit_rectification:${args.table_name}.${args.field}`,
     }).catch(() => {}); // non-bloquant
 
     if (affected === 0) {
@@ -111,7 +111,7 @@ export async function loi25Rectification(args: z.infer<typeof loi25Rectification
         {
           type: 'text' as const,
           text:
-            `✏️ **Rectification appliquée** — Loi 25 art. 27\n\n` +
+            `✏️ **Rectification appliquée** — Audit Trail (Loi 25 art. 27)\n\n` +
             `**Sujet :** \`${args.data_subject_id}\`\n` +
             `**Table :** \`${args.table_name}\`\n` +
             `**Record ID :** \`${args.record_id}\`\n` +
@@ -126,7 +126,7 @@ export async function loi25Rectification(args: z.infer<typeof loi25Rectification
       content: [
         {
           type: 'text' as const,
-          text: `❌ Erreur loi25_rectification: ${err instanceof Error ? err.message : String(err)}`,
+          text: `❌ Erreur audit_rectification: ${err instanceof Error ? err.message : String(err)}`,
         },
       ],
       isError: true,

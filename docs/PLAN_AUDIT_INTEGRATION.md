@@ -9,7 +9,7 @@
 > - **Périmètre RP** : Mixte — consentement explicite (tiers externes) + intérêt légitime (usage interne)
 > - **Transferts hors QC** : Documentation seule, aucun blocage de providers
 > - **Rétention** : 30 jours par défaut pour tout, option de backup/archivage 5 ans
-> - **Activation** : Flag `OVERMIND_LOI25_ENABLED=true` dans `.env` (désactivé = pas de garde)
+> - **Activation** : Flag `OVERMIND_AUDIT_ENABLED=true` dans `.env` (désactivé = pas de garde)
 
 ---
 
@@ -108,7 +108,7 @@ ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS
   anonymized INTEGER DEFAULT 0;
 ```
 
-**Nouvelles tables** (migration `scripts/loi25_migration.mjs`) :
+**Nouvelles tables** (migration `scripts/audit_migration.mjs`) :
 
 ```sql
 CREATE TABLE IF NOT EXISTS data_subjects (
@@ -192,20 +192,20 @@ Créer dans `src/tools/` :
 
 | Outil | Article | Rôle |
 |---|---|---|
-| `loi25_access_request` | 26 | Extrait tous les RP liés à un `data_subject_id` (export JSON) |
-| `loi25_rectification` | 27 | Modifie un RP sur demande du sujet |
-| `loi25_erasure` | 27 / 35.3 | Efface/anonymise les RP d'un sujet (droit à l'oubli) |
-| `loi25_consent` | 8.1-8.2 | Enregistre/vérifie/révoque un consentement |
-| `loi25_processing_registry` | 3-3.1 / 35.18 | Consulte le registre des traitements |
-| `loi25_report_incident` | 3.5-3.8 | Signale un incident + génère notification CAI |
-| `loi25_efvp` | 18.1 | Lance/consulte une évaluation des facteurs vie privée |
+| `audit_access_request` | 26 | Extrait tous les RP liés à un `data_subject_id` (export JSON) |
+| `audit_rectification` | 27 | Modifie un RP sur demande du sujet |
+| `audit_erasure` | 27 / 35.3 | Efface/anonymise les RP d'un sujet (droit à l'oubli) |
+| `audit_consent` | 8.1-8.2 | Enregistre/vérifie/révoque un consentement |
+| `audit_processing_registry` | 3-3.1 / 35.18 | Consulte le registre des traitements |
+| `audit_report_incident` | 3.5-3.8 | Signale un incident + génère notification CAI |
+| `audit_efvp` | 18.1 | Lance/consulte une évaluation des facteurs vie privée |
 
-Chaque outil suit le pattern existant : `loi25_<nom>.ts` exporte `loi25<Nom>Schema`
+Chaque outil suit le pattern existant : `audit_<nom>.ts` exporte `loi25<Nom>Schema`
 + `loi25<Nom>Function`, enregistré dans `server.ts`.
 
 #### 1.3 Migration de données existantes
 
-Script `scripts/loi25_backfill.mjs` :
+Script `scripts/audit_backfill.mjs` :
 - Scanne les `agent_runs` / `knowledge_chunks` existants
 - Pour chaque enregistrement sans `data_subject_id` : tente de détecter un identifiant
   dans le prompt (regex email/Discord ID) ou marque `data_subject_id = 'legacy_unknown'`
@@ -218,12 +218,12 @@ Script `scripts/loi25_backfill.mjs` :
 
 **Objectif** : intercepter chaque flux de RP pour appliquer les contrôles Loi 25.
 
-#### 2.1 Middleware Loi25Guard
+#### 2.1 Middleware AuditGuard
 
-Créer `src/lib/loi25/guard.ts` — wrapper appliqué à chaque outil manipulant des RP :
+Créer `src/lib/audit/guard.ts` — wrapper appliqué à chaque outil manipulant des RP :
 
 ```typescript
-export interface Loi25Context {
+export interface AuditContext {
   dataSubjectId?: string;      // obligatoire si RP détectés
   legalBasis: LegalBasis;      // 'consent' | 'contract' | 'legitimate_interest'
   consentRef?: string;         // requis si legalBasis = 'consent'
@@ -237,12 +237,12 @@ export interface Loi25Context {
   - Détection : `dataSubjectId` absent du registre interne → flag `external = true`
   - Le guard rejecte si pas de consentement valide
 - **Usage interne** (toi + équipe) → `legitimate_interest` suffisant
-  - Détection : `dataSubjectId` dans allowlist `OVERMIND_LOI25_INTERNAL_SUBJECTS`
+  - Détection : `dataSubjectId` dans allowlist `OVERMIND_AUDIT_INTERNAL_SUBJECTS`
   - Pas de blocage, mais log quand même dans `access_log`
-- **Fallback** : si `OVERMIND_LOI25_ENABLED=false` → guard inactif, comportement v3.8
+- **Fallback** : si `OVERMIND_AUDIT_ENABLED=false` → guard inactif, comportement v3.8
 
 Le guard :
-1. **Si `OVERMIND_LOI25_ENABLED=false`** → pass-through (zero overhead)
+1. **Si `OVERMIND_AUDIT_ENABLED=false`** → pass-through (zero overhead)
 2. **Détection de la base légale** selon l'origine du sujet (interne vs tiers)
 3. **Valide le consentement** si tiers → reject si expiré/révoqué
 4. **Détecte les RP** dans le prompt (regex PII : email, téléphone, NAS, carte crédit)
@@ -256,7 +256,7 @@ Modifier `src/bridge/OverBridgeService.ts` :
 - Chaque message Discord entrant génère un `data_subject_id` (hash du Discord user ID)
 - Le consentement est capturé : 1er message = capture implicite `legitimate_interest`,
   ou explicit si commande `!consent` / `!revoke`
-- Le `Loi25Context` est propagé jusqu'à `storeRun()`
+- Le `AuditContext` est propagé jusqu'à `storeRun()`
 
 #### 2.3 Hooks runners
 
@@ -264,7 +264,7 @@ Modifier chaque `*Runner.ts` (8 fichiers) :
 - Avant l'appel LLM : log dans `transfer_log` (provider, région, mécanisme légal)
 - **Pas de blocage** (décision validée) — tous les providers restent accessibles
 - Config flag optionnel `OVERMIND_PII_FILTER=true` : filtre les RP du prompt avant envoi
-- La cartographie des transferts est consultable via l'outil `loi25_processing_registry`
+- La cartographie des transferts est consultable via l'outil `audit_processing_registry`
 
 ---
 
@@ -272,7 +272,7 @@ Modifier chaque `*Runner.ts` (8 fichiers) :
 
 #### 3.1 Cron de rétention + archivage 5 ans
 
-Créer `scripts/loi25_retention_cron.mjs` (exécutable via systemd / Hermes cron) :
+Créer `scripts/audit_retention_cron.mjs` (exécutable via systemd / Hermes cron) :
 - **Rétention active** : 30 jours pour `agent_runs` ET `knowledge_chunks` (défaut validé)
 - **Avant suppression** : archive vers table `archived_runs` / `archived_chunks` (cold storage)
 - **Archivage 5 ans** : les archives sont conservées 5 ans puis purgées définitivement
@@ -301,16 +301,16 @@ ALTER TABLE archived_chunks ADD COLUMN archive_expires_at BIGINT;
 
 ```bash
 # .env — Loi 25 feature flag
-OVERMIND_LOI25_ENABLED=true              # master switch (false = pas de guard, comportement v3.8)
-OVERMIND_LOI25_RETENTION_DAYS=30         # rétention active (défaut 30j)
-OVERMIND_LOI25_ARCHIVE_YEARS=5           # archivage cold storage (défaut 5 ans)
-OVERMIND_LOI25_DEFAULT_BASIS=legitimate_interest  # base légale par défaut
-OVERMIND_LOI25_AUTO_ANONYMIZE=true       # anonymisation à l'expiration
+OVERMIND_AUDIT_ENABLED=true              # master switch (false = pas de guard, comportement v3.8)
+OVERMIND_AUDIT_RETENTION_DAYS=30         # rétention active (défaut 30j)
+OVERMIND_AUDIT_ARCHIVE_YEARS=5           # archivage cold storage (défaut 5 ans)
+OVERMIND_AUDIT_DEFAULT_BASIS=legitimate_interest  # base légale par défaut
+OVERMIND_AUDIT_AUTO_ANONYMIZE=true       # anonymisation à l'expiration
 ```
 
 #### 3.2 Anonymisation technique
 
-Créer `src/lib/loi25/anonymize.ts` :
+Créer `src/lib/audit/anonymize.ts` :
 - Pseudonymisation : remplace identifiants directs par hash SHA-256 + salt
 - K-anonymité sur embeddings : bruit gaussien pour réduire la ré-identification
 - Généralisation : tronque timestamps à la journée, géoloc à la région
@@ -328,7 +328,7 @@ Créer `src/lib/loi25/anonymize.ts` :
 
 #### 4.1 Politique de confidentialité machine-readable
 
-Créer `docs/PRIVACY_POLICY.json` (structuré, consommable par `loi25_processing_registry`) :
+Créer `docs/PRIVACY_POLICY.json` (structuré, consommable par `audit_processing_registry`) :
 - Finalités par traitement
 - Bases légales
 - Destinataires (providers LLM + leurs régions)
@@ -337,7 +337,7 @@ Créer `docs/PRIVACY_POLICY.json` (structuré, consommable par `loi25_processing
 
 #### 4.2 Cartographie des transferts
 
-Créer `src/lib/loi25/transfer_map.ts` — référentiel des 8 providers :
+Créer `src/lib/audit/transfer_map.ts` — référentiel des 8 providers :
 
 ```typescript
 export const PROVIDER_REGISTRY = {
@@ -376,23 +376,23 @@ src/
 │       ├── anonymize.ts          # Fonctions d'anonymisation
 │       ├── transfer_map.ts       # Registre des providers/transferts
 │       ├── retention.ts          # Moteur de rétention
-│       └── types.ts              # Types Loi25Context, etc.
+│       └── types.ts              # Types AuditContext, etc.
 ├── tools/
-│   ├── loi25_access_request.ts
-│   ├── loi25_rectification.ts
-│   ├── loi25_erasure.ts
-│   ├── loi25_consent.ts
-│   ├── loi25_processing_registry.ts
-│   ├── loi25_report_incident.ts
-│   └── loi25_efvp.ts
+│   ├── audit_access_request.ts
+│   ├── audit_rectification.ts
+│   ├── audit_erasure.ts
+│   ├── audit_consent.ts
+│   ├── audit_processing_registry.ts
+│   ├── audit_report_incident.ts
+│   └── audit_efvp.ts
 scripts/
-├── loi25_migration.mjs           # Schema migration
-├── loi25_backfill.mjs            # Migration des données legacy
-└── loi25_retention_cron.mjs      # Cron de purge/anonymisation
+├── audit_migration.mjs           # Schema migration
+├── audit_backfill.mjs            # Migration des données legacy
+└── audit_retention_cron.mjs      # Cron de purge/anonymisation
 docs/
 ├── PRIVACY_POLICY.json           # Politique machine-readable
 ├── EFVP_OVERMIND.md              # Évaluation facteurs vie privée
-└── PLAN_LOI25_INTEGRATION.md     # Ce document
+└── PLAN_AUDIT_INTEGRATION.md     # Ce document
 ```
 
 ## 6. Fichiers à modifier
@@ -400,7 +400,7 @@ docs/
 | Fichier | Modification |
 |---|---|
 | `src/memory/PostgresMemoryProvider.ts` | + colonnes governance, + 7 nouvelles tables |
-| `src/memory/types.ts` | + types Loi25 (ConsentRecord, IncidentLog, etc.) |
+| `src/memory/types.ts` | + types Audit (ConsentRecord, IncidentLog, etc.) |
 | `src/server.ts` | + enregistrement 7 nouveaux outils Loi 25 |
 | `src/bridge/OverBridgeService.ts` | + capture consentement + data_subject_id |
 | `src/services/*Runner.ts` (8 fichiers) | + hook transfer_log |
@@ -429,8 +429,8 @@ docs/
 
 ## 9. Tests de conformité (critères d'acceptation)
 
-- ✅ `loi25_access_request(data_subject_id)` retourne tous les RP en <2s
-- ✅ `loi25_erasure(data_subject_id)` supprime/hash tous les RP + embeddings
+- ✅ `audit_access_request(data_subject_id)` retourne tous les RP en <2s
+- ✅ `audit_erasure(data_subject_id)` supprime/hash tous les RP + embeddings
 - ✅ Chaque `agent_run` stocké a un `legal_basis` + `retention_expires_at`
 - ✅ Chaque appel runner LLM génère une entrée `transfer_log`
 - ✅ Cron de rétention purge les enregistrements expirés sans erreur
@@ -444,21 +444,21 @@ docs/
 | **Périmètre RP** | Mixte — consentement explicite (tiers) + intérêt légitime (interne) | Guard détecte l'origine automatiquement, allowlist `.env` |
 | **Transferts hors QC** | Documentation seule, aucun blocage | `transfer_log` + cartographie, mais tous les providers restent accessibles |
 | **Rétention** | 30 jours active + 5 ans archivage cold storage | Double table `archived_*`, cron anonymise → archive → purge |
-| **Activation** | Feature flag `OVERMIND_LOI25_ENABLED=true` | Désactivé = comportement v3.8 inchangé (rétrocompatible) |
+| **Activation** | Feature flag `OVERMIND_AUDIT_ENABLED=true` | Désactivé = comportement v3.8 inchangé (rétrocompatible) |
 
 ---
 
 ## 11. Ordre d'exécution recommandé
 
 ```
-Étape 1 → scripts/loi25_migration.mjs (schema)
-Étape 2 → src/lib/loi25/types.ts + guard.ts + transfer_map.ts
-Étape 3 → src/tools/loi25_*.ts (7 outils)
+Étape 1 → scripts/audit_migration.mjs (schema)
+Étape 2 → src/lib/audit/types.ts + guard.ts + transfer_map.ts
+Étape 3 → src/tools/audit_*.ts (7 outils)
 Étape 4 → src/server.ts (enregistrement outils)
 Étape 5 → Hooks runners (8 fichiers)
 Étape 6 → Bridge capture consentement
-Étape 7 → scripts/loi25_retention_cron.mjs
-Étape 8 → scripts/loi25_backfill.mjs (migration legacy)
+Étape 7 → scripts/audit_retention_cron.mjs
+Étape 8 → scripts/audit_backfill.mjs (migration legacy)
 Étape 9 → Tests + docs
 Étape 10 → Bump version 3.9.0 + changeset
 ```

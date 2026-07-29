@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Droit d'accès (art. 26)
+ * Audit Trail — Droit d'accès (art. 26)
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Extrait tous les renseignements personnels (RP) liés à un data_subject_id
@@ -13,10 +13,10 @@
 
 import { z } from 'zod';
 import { getPool } from 'overmind-postgres-mcp';
-import { logAccess } from '../lib/loi25/guard.js';
-import { isLoi25Enabled } from '../lib/loi25/types.js';
+import { logAccess } from '../lib/audit/guard.js';
+import { isAuditEnabled } from '../lib/audit/types.js';
 
-export const loi25AccessRequestSchema = z.object({
+export const auditAccessRequestSchema = z.object({
   data_subject_id: z
     .string()
     .min(1)
@@ -28,7 +28,7 @@ export const loi25AccessRequestSchema = z.object({
     .describe('Inclure les archives cold storage (archived_runs, archived_chunks)'),
 });
 
-export async function loi25AccessRequest(args: z.infer<typeof loi25AccessRequestSchema>) {
+export async function auditAccessRequest(args: z.infer<typeof auditAccessRequestSchema>) {
   try {
     const pool = getPool();
     const subjectId = args.data_subject_id;
@@ -56,7 +56,7 @@ export async function loi25AccessRequest(args: z.infer<typeof loi25AccessRequest
     const result: {
       data_subject_id: string;
       generated_at: string;
-      loi25_enabled: boolean;
+      audit_enabled: boolean;
       active: {
         agent_runs: unknown[];
         knowledge_chunks: unknown[];
@@ -75,7 +75,7 @@ export async function loi25AccessRequest(args: z.infer<typeof loi25AccessRequest
     } = {
       data_subject_id: subjectId,
       generated_at: new Date().toISOString(),
-      loi25_enabled: isLoi25Enabled(),
+      audit_enabled: isAuditEnabled(),
       active: {
         agent_runs: agentRunsRes.rows,
         knowledge_chunks: knowledgeChunksRes.rows,
@@ -123,13 +123,13 @@ export async function loi25AccessRequest(args: z.infer<typeof loi25AccessRequest
     // ── Journalisation de l'accès (art. 26 — reddition de comptes) ──────────
     await logAccess({
       dataSubjectId: subjectId,
-      accessedBy: 'loi25_access_request',
+      accessedBy: 'audit_access_request',
       action: 'read',
       resourceType: 'data_subject_export',
       resourceId: subjectId,
       purpose: args.include_archives
-        ? 'loi25_access_request_with_archives'
-        : 'loi25_access_request',
+        ? 'audit_access_request_with_archives'
+        : 'audit_access_request',
     }).catch(() => {}); // non-bloquant
 
     const json = JSON.stringify(result, null, 2);
@@ -139,7 +139,7 @@ export async function loi25AccessRequest(args: z.infer<typeof loi25AccessRequest
         {
           type: 'text' as const,
           text:
-            `📋 **Loi 25 art. 26 — Droit d'accès**\n\n` +
+            `📋 **Audit Trail — Droit d'accès (Loi 25 art. 26)**\n\n` +
             `**Sujet :** \`${subjectId}\`\n` +
             `**Total RP trouvés :** ${result.summary.total}\n` +
             `  • agent_runs : ${result.summary.agent_runs_count}\n` +
@@ -157,7 +157,7 @@ export async function loi25AccessRequest(args: z.infer<typeof loi25AccessRequest
       content: [
         {
           type: 'text' as const,
-          text: `❌ Erreur loi25_access_request: ${err instanceof Error ? err.message : String(err)}`,
+          text: `❌ Erreur audit_access_request: ${err instanceof Error ? err.message : String(err)}`,
         },
       ],
       isError: true,

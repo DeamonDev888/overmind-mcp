@@ -1,13 +1,13 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Types partagés
+ * Audit Trail — Types partagés
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Conformité Loi 25 (Québec) pour Overmind-MCP.
- * Voir docs/PLAN_LOI25_INTEGRATION.md pour le plan complet.
+ * Conformité Audit Trail (Loi 25 QC / AI Act / AI PIA) pour Overmind-MCP.
+ * Voir docs/PLAN_AUDIT_INTEGRATION.md pour le plan complet.
  */
 
-/** Bases légales au sens de la Loi 25 */
+/** Bases légales au sens de la Loi 25 / AI Act */
 export type LegalBasis =
   | 'consent' // art. 8.1-8.2 — consentement explicite (tiers externes)
   | 'contract' // art. 7.1.1 — exécution d'un contrat
@@ -46,10 +46,10 @@ export type IncidentCategory =
   | 'consent_violation'; // traitement sans base légale
 
 /**
- * Contexte Loi 25 propagé à travers chaque outil et runner.
- * Obligatoire quand OVERMIND_LOI25_ENABLED=true.
+ * Contexte audit propagé à travers chaque outil et runner.
+ * Obligatoire quand OVERMIND_AUDIT_ENABLED=true.
  */
-export interface Loi25Context {
+export interface AuditContext {
   /** Identifiant pseudonymisé de la personne (hash SHA-256, jamais l'identité brute) */
   dataSubjectId?: string;
   /** Base légale du traitement */
@@ -143,26 +143,26 @@ export interface RetentionPolicy {
 }
 
 /**
- * Vérifie si la Loi 25 est activée (master feature flag).
+ * Vérifie si la l'audit trail est activé (master feature flag).
  * Si false, tous les guards sont passifs (comportement v3.8).
  */
-export function isLoi25Enabled(): boolean {
-  return process.env.OVERMIND_LOI25_ENABLED === 'true';
+export function isAuditEnabled(): boolean {
+  return process.env.OVERMIND_AUDIT_ENABLED === 'true';
 }
 
 /** Lit la rétention par défaut depuis .env (défaut: 30 jours) */
 export function getDefaultRetentionDays(): number {
-  return parseInt(process.env.OVERMIND_LOI25_RETENTION_DAYS || '30', 10);
+  return parseInt(process.env.OVERMIND_AUDIT_RETENTION_DAYS || '30', 10);
 }
 
 /** Lit la durée d'archivage cold storage depuis .env (défaut: 5 ans) */
 export function getDefaultArchiveYears(): number {
-  return parseInt(process.env.OVERMIND_LOI25_ARCHIVE_YEARS || '5', 10);
+  return parseInt(process.env.OVERMIND_AUDIT_ARCHIVE_YEARS || '5', 10);
 }
 
 /** Lit la base légale par défaut depuis .env */
 export function getDefaultLegalBasis(): LegalBasis {
-  const val = process.env.OVERMIND_LOI25_DEFAULT_BASIS || 'legitimate_interest';
+  const val = process.env.OVERMIND_AUDIT_DEFAULT_BASIS || 'legitimate_interest';
   if (
     val === 'consent' ||
     val === 'contract' ||
@@ -176,10 +176,10 @@ export function getDefaultLegalBasis(): LegalBasis {
 
 /**
  * Allowlist des sujets internes (intérêt légitime suffisant, pas de consentement requis).
- * Format .env : OVERMIND_LOI25_INTERNAL_SUBJECTS=hash1,hash2,hash3
+ * Format .env : OVERMIND_AUDIT_INTERNAL_SUBJECTS=hash1,hash2,hash3
  */
 export function getInternalSubjects(): Set<string> {
-  const raw = process.env.OVERMIND_LOI25_INTERNAL_SUBJECTS || '';
+  const raw = process.env.OVERMIND_AUDIT_INTERNAL_SUBJECTS || '';
   return new Set(
     raw
       .split(',')

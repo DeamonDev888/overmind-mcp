@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Anonymisation technique (art. 23.1)
+ * Audit Trail — Anonymisation technique (art. 23.1)
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Techniques d'anonymisation pour empêcher la ré-identification :
@@ -18,7 +18,7 @@ import crypto from 'crypto';
  * des données (key vault, variable d'environnement séparée).
  */
 function getAnonymizationSalt(): string {
-  return process.env.OVERMIND_LOI25_SALT || 'overmind-loi25-default-salt-v1';
+  return process.env.OVERMIND_AUDIT_SALT || 'overmind-loi25-default-salt-v1';
 }
 
 // ── Pseudonymisation ─────────────────────────────────────────────────────────

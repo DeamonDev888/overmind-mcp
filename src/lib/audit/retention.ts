@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Moteur de rétention (art. 35.2-35.3)
+ * Audit Trail — Moteur de rétention (art. 35.2-35.3)
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Calcule les dates d'expiration de rétention et gère le workflow :

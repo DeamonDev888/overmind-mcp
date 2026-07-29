@@ -1,13 +1,13 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Privacy Guard (middleware)
+ * Audit Trail — Privacy Guard (middleware)
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Intercepte chaque flux de RP pour appliquer les contrôles Loi 25.
+ * Intercepte chaque flux de RP pour appliquer les contrôles d'audit.
  * Appelé par les runners, le bridge et les outils de stockage.
  *
  * Comportement :
- *   1. Si OVERMIND_LOI25_ENABLED=false → pass-through (zero overhead, v3.8)
+ *   1. Si OVERMIND_AUDIT_ENABLED=false → pass-through (zero overhead, v3.8)
  *   2. Détection de la base légale (interne vs tiers)
  *   3. Validation du consentement si tiers (art. 8)
  *   4. Détection de RP dans le texte (email, NAS, téléphone, etc.)
@@ -19,11 +19,11 @@
 import { getPool } from 'overmind-postgres-mcp';
 import { rootLogger } from '../logger.js';
 import {
-  type Loi25Context,
+  type AuditContext,
   type LegalBasis,
   type TransferRegion,
   type TransferMechanism,
-  isLoi25Enabled,
+  isAuditEnabled,
   getDefaultLegalBasis,
   isInternalSubject,
 } from './types.js';
@@ -31,7 +31,7 @@ import { detectPii, pseudonymize, hashShort } from './anonymize.js';
 import { calculateRetentionExpiry } from './retention.js';
 import { getProviderInfo, requiresExplicitConsent } from './transfer_map.js';
 
-const logger = rootLogger.child({ module: 'Loi25Guard' });
+const logger = rootLogger.child({ module: 'AuditGuard' });
 
 // ── Types de réponse ─────────────────────────────────────────────────────────
 
@@ -40,8 +40,8 @@ export interface GuardResult {
   allowed: boolean;
   /** Raison du refus si allowed = false */
   reason?: string;
-  /** Contexte Loi 25 enrichi (avec legalBasis résolu, consentRef si validé) */
-  context: Loi25Context;
+  /** Contexte audit enrichi (avec legalBasis résolu, consentRef si validé) */
+  context: AuditContext;
   /** Texte sanitizé (si PII détectés et filter activé) */
   sanitizedPrompt?: string;
   /** RP détectés dans le prompt */
@@ -102,7 +102,7 @@ async function validateConsent(
   } catch (err) {
     logger.error(
       { error: err instanceof Error ? err.message : String(err) },
-      'Loi25Guard: Failed to validate consent — allowing (fail-open to avoid blocking ops)',
+      'AuditGuard: Failed to validate consent — allowing (fail-open to avoid blocking ops)',
     );
     // Fail-open : si la DB est down, on laisse passer pour éviter de bloquer l'Overmind
     return { valid: true, consentRef: null };
@@ -122,7 +122,7 @@ export async function logAccess(params: {
   resourceId: string;
   purpose?: string;
 }): Promise<void> {
-  if (!isLoi25Enabled()) return;
+  if (!isAuditEnabled()) return;
 
   const pool = getPool();
   try {
@@ -143,7 +143,7 @@ export async function logAccess(params: {
   } catch (err) {
     logger.warn(
       { error: err instanceof Error ? err.message : String(err) },
-      'Loi25Guard: Failed to log access (non-blocking)',
+      'AuditGuard: Failed to log access (non-blocking)',
     );
   }
 }
@@ -160,7 +160,7 @@ export async function logTransfer(params: {
   legalMechanism: TransferMechanism;
   dataType: string;
 }): Promise<void> {
-  if (!isLoi25Enabled()) return;
+  if (!isAuditEnabled()) return;
 
   const pool = getPool();
   try {
@@ -180,7 +180,7 @@ export async function logTransfer(params: {
   } catch (err) {
     logger.warn(
       { error: err instanceof Error ? err.message : String(err) },
-      'Loi25Guard: Failed to log transfer (non-blocking)',
+      'AuditGuard: Failed to log transfer (non-blocking)',
     );
   }
 }
@@ -200,16 +200,16 @@ export interface GuardOptions {
 }
 
 /**
- * Applique les contrôles Loi 25 sur une requête.
+ * Applique les contrôles d'audit sur une requête.
  *
  * @returns GuardResult — allowed=false si la requête doit être bloquée
  */
-export async function loi25Guard(opts: GuardOptions): Promise<GuardResult> {
+export async function auditGuard(opts: GuardOptions): Promise<GuardResult> {
   const now = Date.now();
   const purpose = opts.purpose || 'agent_execution';
 
   // ── 1. Feature flag off → pass-through ──
-  if (!isLoi25Enabled()) {
+  if (!isAuditEnabled()) {
     return {
       allowed: true,
       context: {
@@ -248,7 +248,7 @@ export async function loi25Guard(opts: GuardOptions): Promise<GuardResult> {
     if (!consentCheck.valid) {
       await logAccess({
         dataSubjectId,
-        accessedBy: 'loi25_guard',
+        accessedBy: 'audit_guard',
         action: 'read',
         resourceType: 'consent_check',
         resourceId: purpose,

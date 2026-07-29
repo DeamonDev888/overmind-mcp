@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Loi 25 — Outil MCP : Registre des traitements (art. 3-3.1 / 35.18)
+ * Audit Trail — Outil MCP : Registre des traitements (art. 3-3.1 / 35.18)
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Consulte, crée ou modifie le registre des traitements de renseignements
@@ -13,12 +13,12 @@
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { getPool } from 'overmind-postgres-mcp';
-import { listDocumentedProviders } from '../lib/loi25/transfer_map.js';
-import type { ProcessingEntry } from '../lib/loi25/types.js';
+import { listDocumentedProviders } from '../lib/audit/transfer_map.js';
+import type { ProcessingEntry } from '../lib/audit/types.js';
 
 // ── Schéma Zod ────────────────────────────────────────────────────────────────
 
-export const loi25ProcessingRegistrySchema = z.object({
+export const auditProcessingRegistrySchema = z.object({
   action: z
     .enum(['list', 'get', 'create', 'update'])
     .optional()
@@ -56,7 +56,7 @@ export const loi25ProcessingRegistrySchema = z.object({
     .int()
     .positive()
     .optional()
-    .describe('Durée de rétention active en jours (défaut: .env OVERMIND_LOI25_RETENTION_DAYS).'),
+    .describe('Durée de rétention active en jours (défaut: .env OVERMIND_AUDIT_RETENTION_DAYS).'),
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ function formatProvider(p: {
 
 // ── Tool ─────────────────────────────────────────────────────────────────────
 
-export async function loi25ProcessingRegistry(args: z.infer<typeof loi25ProcessingRegistrySchema>) {
+export async function auditProcessingRegistry(args: z.infer<typeof auditProcessingRegistrySchema>) {
   try {
     const pool = getPool();
     const action = args.action ?? 'list';
@@ -183,7 +183,7 @@ export async function loi25ProcessingRegistry(args: z.infer<typeof loi25Processi
       const now = tsNow();
       const retentionDays =
         args.retention_days ??
-        parseInt(process.env.OVERMIND_LOI25_RETENTION_DAYS || '30', 10);
+        parseInt(process.env.OVERMIND_AUDIT_RETENTION_DAYS || '30', 10);
 
       try {
         await pool.query(
@@ -319,7 +319,7 @@ export async function loi25ProcessingRegistry(args: z.infer<typeof loi25Processi
       content: [
         {
           type: 'text' as const,
-          text: `❌ Erreur loi25_processing_registry: ${err instanceof Error ? err.message : String(err)}`,
+          text: `❌ Erreur audit_processing_registry: ${err instanceof Error ? err.message : String(err)}`,
         },
       ],
       isError: true,
