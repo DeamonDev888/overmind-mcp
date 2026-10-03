@@ -29,8 +29,8 @@ _Wrapper multi-agent persistant pour runners IA via MCP. Instanciez et pilotez d
 - 🏗️ **Architecture v3.1** : Profils Hermes canoniques avec `profile.yaml`, `workspace.yaml`, `state.db`
 - 🌉 **Bridge HTTP JSON-RPC** : Communication A2A peer-to-peer entre agents persistants, scénarios, webhooks, sessions multi-tenant
 - 🛡️ **Anti-Zombie** : 1 seul process HTTP partagé, processRegistry avec TTL + cleanup auto
-- 📋 **14 Outils MCP** : run_agent, create_agent, memory_search/store, agent_control, etc.
-- 🧠 **Mémoire par défaut** : tout agent créé via Overmind reçoit automatiquement le MCP `memory` (3 tools: memory_search/store/runs sur :3099). Pour l'accès complet 14 tools, utiliser `overmind` explicitement.
+- 📋 **23 Outils MCP** : run_agent, create_agent, memory_search/store, agent_control, etc.
+- 🧠 **Mémoire par défaut** : tout agent créé via Overmind reçoit automatiquement le MCP `memory` (3 tools: memory_search/store/runs sur :3099). Pour l'accès complet 23 tools, utiliser `overmind` explicitement.
 - 🅾️ **HTTP Singleton** : FastMCP httpStream — 1 serveur, tous les agents
 
 ---
@@ -112,7 +112,7 @@ pnpm run test
 overmind --transport httpStream --port 3099
 
 # Bridge (Discord, SMS, webhooks)
-overmind-bridge server --port 3001
+overmind-bridge server --port 3100
 
 # Gestion PostgreSQL
 overmind-postgres-mcp up     # docker-compose up
@@ -142,7 +142,7 @@ const { content, isError } = await runAgent({
 });
 ```
 
-### Outils MCP (14)
+### Outils MCP (23)
 
 | Outil | Description |
 |-------|-------------|
@@ -172,7 +172,7 @@ overmind-mcp/
 │   ├── lib/                # Config, logger, sessions, processRegistry
 │   ├── memory/             # Provider PostgreSQL + pgvector
 │   ├── services/           # Runners: Hermes, Claude, Gemini, Kilo, etc.
-│   ├── tools/              # 14 outils MCP (1 fichier par tool)
+│   ├── tools/              # 23 outils MCP (1 fichier par tool)
 │   └── __tests__/          # Tests unitaires (vitest)
 ├── scripts/                # setup, postgres-manager, postinstall, migration
 ├── bin/                    # Launchers (bat, sh, launch.cjs)
@@ -195,24 +195,6 @@ Agent 3 ──┘
 ```
 
 ---
-
-## 🗺️ Roadmap v4.0 — Wrapper Multi-Agent Persistant
-
-> OverMind pivote d'orchestrateur central → wrapper factory à agents persistants.
-> Chaque agent créé est autonome (profil, state, mémoire, skills), pas un slot dans un pool global.
-
-**État actuel (v3.7.0)** — wrapper déjà opérationnel :
-- ✅ Agents Hermes = profils natifs (config.yaml, SOUL.md, state.db, skills/)
-- ✅ Pool de credentials géré par Hermes (rotation round-robin, rate-limit aware)
-- ✅ Bridge HTTP par agent (ports 3101+) — peer-to-peer A2A, pas de dispatch central
-- ✅ Hermes Gateway natif (port 8642) — HTTP+SSE, routing via `X-Hermes-Profile`
-
-**Plan de migration v4.0** — voir [`docs/MIGRATION_V4_WRAPPER.md`](docs/MIGRATION_V4_WRAPPER.md) pour le détail complet :
-- Phase 1a — Suppression du dispatcher/YOLO_CONFIG (obligatoire, ~300 LOC)
-- Phase 2 — Support Kanban OPTIONNEL (opt-in via `OVERMIND_KANBAN_ENABLED=1`)
-- Phase 3 — Chaque agent = son propre bridge (peer-to-peer, plus de central)
-- Phase 4 — Mémoire par-profile (au lieu de pgvector central)
-- Phase 1b — Suppression historique Kanban (seulement si inutilisé après 1 release)
 
 ![Aperçu du Terminal](assets/terminal_preview.png)
 
