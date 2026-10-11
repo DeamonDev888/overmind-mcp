@@ -26,7 +26,7 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process';
-import { CONFIG, getWorkspaceDir, getSharedHermesHome, getAgentHermesHome } from '../lib/config.js';
+import { CONFIG, getWorkspaceDir, getNativeHermesHome, getAgentHermesHome } from '../lib/config.js';
 import { getLastSessionId, saveSessionId } from '../lib/sessions.js';
 import { linkSessionToPid } from '../lib/processRegistry.js';
 import { withSpan } from '../lib/telemetry.js';
@@ -253,8 +253,12 @@ export class HermesRunner {
         windowsHide: true,
         env: {
           ...process.env,
-          // Force Hermes à lire depuis ~/.overmind/hermes/ (canonique Overmind)
-          HERMES_HOME: getSharedHermesHome(),
+          // v3.10.5: use the NATIVE Hermes home — `hermes profile create`
+          // (HermesProfileManager) writes profiles to the default Hermes home,
+          // so spawning with the old overmind-only home made every freshly
+          // created agent fail with "Profile does not exist" (EXIT_CODE_1).
+          // OVERMIND_HERMES_HOME still overrides for isolated installs.
+          HERMES_HOME: getNativeHermesHome(),
           // Tell the child which agent it is — used by memory_search/store for DB isolation
           OVERMIND_AGENT_NAME: agentName || process.env.OVERMIND_AGENT_NAME || '',
           // Ensure Python uses UTF-8 (avoids Windows encoding crashes)

@@ -233,10 +233,33 @@ export function getSharedHermesHome(): string {
       ? path.join(homeBase, 'overmind', 'hermes')
       : path.join(homeBase, '.overmind', 'hermes');
 
-  try {
+    try {
     fs.mkdirSync(overmindRoot, { recursive: true });
   } catch {
     return process.env.HOME || process.env.USERPROFILE || process.cwd();
   }
   return overmindRoot;
+}
+
+/**
+ * The NATIVE Hermes home — where the plain `hermes` CLI reads/writes profiles
+ * when no HERMES_HOME override is set (Windows: %LOCALAPPDATA%\hermes,
+ * Linux/macOS: ~/.hermes).
+ *
+ * v3.10.5 (audit E2E 2026-10-11): hermes profile create (HermesProfileManager)
+ * writes profiles HERE because its exec calls carried no HERMES_HOME, while
+ * HermesRunner spawned children with getSharedHermesHome() — any freshly
+ * created agent failed at run time with "Profile does not exist"
+ * (EXIT_CODE_1). Create/update/delete/show/run must all agree with the home
+ * the real ecosystem lives in. OVERMIND_HERMES_HOME still wins for isolated
+ * installs (checked first in getSharedHermesHome; here we honor an inherited
+ * HERMES_HOME so we always match what the plain CLI sees).
+ */
+export function getNativeHermesHome(): string {
+  return (
+    process.env.HERMES_HOME ||
+    (process.platform === 'win32'
+      ? path.join(process.env.LOCALAPPDATA || process.env.USERPROFILE || os.homedir(), 'hermes')
+      : path.join(os.homedir(), '.hermes'))
+  );
 }

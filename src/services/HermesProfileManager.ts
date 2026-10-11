@@ -28,8 +28,26 @@ import path from 'path';
 import os from 'os';
 import { rootLogger } from '../lib/logger.js';
 import { HermesPoolClient } from './HermesPoolClient.js';
+import { getNativeHermesHome } from '../lib/config.js';
 
-const execAsync = promisify(exec);
+/**
+ * v3.10.5 (audit E2E 2026-10-11): every `hermes` CLI call in this module runs
+ * with the NATIVE Hermes home, matching both the live agent ecosystem (Windows:
+ * %LOCALAPPDATA%\hermes, Linux: ~/.hermes) and HermesRunner.spawn. Previously
+ * these calls ran WITHOUT HERMES_HOME while HermesRunner spawned children with
+ * getSharedHermesHome() (~/.overmind/hermes) — create wrote to one home, run
+ * looked in the other: "Profile does not exist" + EXIT_CODE_1 on every freshly
+ * created agent. OVERMIND_HERMES_HOME still overrides for isolated installs
+ * (getNativeHermesHome honors an inherited HERMES_HOME).
+ */
+function hermesExecEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, HERMES_HOME: getNativeHermesHome() };
+}
+
+/** execAsync with the native Hermes home injected (see hermesExecEnv). */
+async function hermesExec(cmd: string, timeout = 120000): Promise<{ stdout: string; stderr: string }> {
+  return promisify(exec)(cmd, { timeout, env: hermesExecEnv() });
+}
 const logger = rootLogger.child({ module: 'HermesProfileManager' });
 
 const SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
@@ -92,7 +110,7 @@ export class HermesProfileManager {
    */
   static async list(): Promise<HermesProfileInfo[]> {
     try {
-      const { stdout } = await execAsync('hermes profile list');
+      const { stdout } = await hermesExec('hermes profile list', 30000);
       return this.parseProfileList(stdout);
     } catch (e) {
       logger.warn({ error: e }, 'Failed to list Hermes profiles');
@@ -196,7 +214,7 @@ export class HermesProfileManager {
     //    Use \\ to escape the inner quote cleanly without no-useless-escape.
     const createCmd = `hermes profile create "${name}" --no-alias --description "${description.replace(/"/g, '\\"')}"`;
     try {
-      await execAsync(createCmd);
+      await hermesExec(createCmd);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (!msg.includes('already exists')) {
@@ -205,9 +223,13 @@ export class HermesProfileManager {
       logger.warn({ name }, '[CREATE] Profile already exists, will update configuration.');
     }
 
-    // 2. Set provider + model in config.yaml
-    await execAsync(`hermes -p "${name}" config set model.provider "${provider}"`);
-    await execAsync(`hermes -p "${name}" config set model.model "${model}"`);
+    // 2. Set model + provider in config.yaml.
+    //    v3.10.5: write the requested model into model.default (the key Hermes
+    //    actually reads; model.model is ignored) AND set provider LAST —
+    //    `config set model.default` resets model.provider to "auto", so the
+    //    order below is load-bearing.
+    await hermesExec(`hermes -p "${name}" config set model.default "${model}"`);
+    await hermesExec(`hermes -p "${name}" config set model.provider "${provider}"`);
 
     // 3. Get profile path
     const profilePath = await this.getProfilePath(name);
@@ -249,7 +271,7 @@ export class HermesProfileManager {
       throw new Error(`Invalid profile name: '${name}'`);
     }
     try {
-      await execAsync(`hermes profile delete "${name}" --yes`);
+      await hermesExec(`hermes profile delete "${name}" --yes`);
       logger.info({ name }, '[DELETE] Profile deleted.');
     } catch (e) {
       logger.warn({ name, error: e }, '[DELETE] Failed to delete profile.');
@@ -270,7 +292,7 @@ export class HermesProfileManager {
   static async getProfilePath(name: string): Promise<string | null> {
     // 1. Try `hermes profile show <name>` — the authoritative source
     try {
-      const { stdout } = await execAsync(`hermes profile show "${name}"`);
+      const { stdout } = await hermesExec(`hermes profile show "${name}"`);
       const match = stdout.match(/Path:\s*(.+)/);
       if (match?.[1]) {
         const resolved = match[1].trim();
@@ -460,11 +482,12 @@ export class HermesProfileManager {
       throw new Error(`Profile '${name}' not found.`);
     }
 
-    // Update model + provider
+    // Update model + provider (default FIRST, provider LAST — setting
+    // model.default resets model.provider to "auto").
     if (updates.model) {
       const provider = updates.provider || detectProviderFromModel(updates.model);
-      await execAsync(`hermes -p "${name}" config set model.provider "${provider}"`);
-      await execAsync(`hermes -p "${name}" config set model.model "${updates.model}"`);
+      await hermesExec(`hermes -p "${name}" config set model.default "${updates.model}"`);
+      await hermesExec(`hermes -p "${name}" config set model.provider "${provider}"`);
     }
 
     // Update credentials
