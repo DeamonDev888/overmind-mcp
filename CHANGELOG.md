@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.10.5] — 2026-10-11
+
+### Fixed
+- `getSharedHermesHome()` (`src/lib/config.ts`) : HERMES_HOME résolu vers `%LOCALAPPDATA%overmindhermes` (orphelin, sans `profiles/` ni `auth.json`) au lieu du vrai home `%LOCALAPPDATA%hermes` — toute délégation `runner: hermes` crashait sur « not logged into Nous Portal ». Override `OVERMIND_HERMES_HOME` supporté.
+- `HermesProfileManager` : `model.default` (pas `model.model`) + providers ajoutés en dernier (ordre attendu par la CLI Hermes) — configs d agents créées via `create_agent` étaient rejetées par la CLI.
+- `HermesRunner` : exécution hermes native via `hermesExec` (au lieu de spawn parse maison) — audit E2E 16/16 outils OK.
+
+---
+
 ## [3.10.4] — 2026-10-10
 
 ### Removed
