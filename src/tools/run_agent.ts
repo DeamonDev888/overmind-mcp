@@ -9,7 +9,6 @@ import { runOpenCodeAgent } from './run_opencode.js';
 import { runHermesAgent } from './run_hermes.js';
 import { verifyInstallation } from '../lib/InstallHelper.js';
 import { withSpan } from '../lib/telemetry.js';
-import { auditRunnerHook } from '../lib/audit/runner_hook.js';
 
 // Schema unified for all runners
 export const runAgentSchema = z.object({
@@ -190,26 +189,6 @@ export async function runAgent(args: RunAgentInternalArgs) {
 
   // Validation des modes
   validateMode(runner, mode);
-
-  // ── Audit Trail : guard avant exécution LLM ──────────────────────────────────
-  // Si OVERMIND_AUDIT_ENABLED=false → pass-through (zero overhead, v3.8)
-  // Si true → détecte RP, valide consentement, log transfert
-  const auditHook = await auditRunnerHook(runner, params.prompt, params.agentName);
-  if (!auditHook.allowed) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `🛡️ **Audit Trail — Requête bloquée**\n${auditHook.reason || 'Consentement requis et manquant'}`,
-        },
-      ],
-      isError: true,
-    };
-  }
-  // Sanitization optionnelle du prompt (si OVERMIND_PII_FILTER=true)
-  if (auditHook.sanitizedPrompt) {
-    params.prompt = auditHook.sanitizedPrompt;
-  }
 
   // Vérification de l'installation avec logging
   const check = await verifyInstallation(runner);

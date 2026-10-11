@@ -49,12 +49,6 @@ export interface StoreRunParams {
   durationMs?: number;
   success: boolean;
   sessionId?: string;
-  // ── Audit Trail fields (optional — nullable in DB, backward compatible) ──
-  dataSubjectId?: string;
-  legalBasis?: string;
-  consentRef?: string;
-  retentionExpiresAt?: number;
-  purpose?: string;
 }
 
 export interface SearchMemoryParams {

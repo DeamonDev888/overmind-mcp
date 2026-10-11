@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.10.4] — 2026-10-10
+
+### Removed
+- Retrait complet des 7 outils `audit_*` (access_request, consent, efvp, erasure, processing_registry, rectification, report_incident), de `src/lib/audit/` (7 modules), des 4 fichiers de tests audit et des docs associées — fonctionnalité dépréciée, jamais migrée en base.
+
+### Fixed
+- `update_agent_config` : passer `runner: "hermes"` force la branche profil Hermes même quand `hermes profile list` échoue en silence (fix `isHermes` dans `AgentManager`) — avant, l'outil retombait sur `settings_<name>.json` introuvable.
+- `PostgresMemoryProvider.storeRun` : INSERT `agent_runs` aligné sur le DDL (retrait de colonnes inexistantes) — corrige le mismatch latent qui cassait les nouvelles DB d'agents.
+- `src/bridge/OverBridgeServer.ts` et `src/tools/run_agent.ts` : retrait des hooks d'audit désormais inutiles.
+
+### Tests
+- NEW `no_audit_tools.test.ts` — 9 tests anti-régression : serveur sans outil `audit_*`, fichiers retirés du repo, INSERT/DDL alignés, fix `isHermes`.
+
+---
+
 ## [3.9.2] — 2026-07-27
 
 ### Documentation

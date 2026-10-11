@@ -368,7 +368,9 @@ export class AgentManager {
     // ═══════════════════════════════════════════════════════════════════════
     const { HermesProfileManager } = await import('./HermesProfileManager.js');
     const profiles = await HermesProfileManager.list();
-    const isHermes = profiles.some((p) => p.name === name);
+    // Filet de sécurité : runner explicitement 'hermes' force la branche profil
+    // même si `hermes profile list` a échoué (catch silencieux → liste vide).
+    const isHermes = profiles.some((p) => p.name === name) || updates.runner === 'hermes';
     const hermesAgentDir = isHermes ? (await HermesProfileManager.getProfilePath(name)) || '' : '';
 
     // --- MODE RÉÉCRITURE DE FICHIER COMPLET ---

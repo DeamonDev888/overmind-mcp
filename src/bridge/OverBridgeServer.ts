@@ -31,8 +31,6 @@ import { MessageLog, type MessageLogConfig } from './MessageLog.js';
 import { SessionStore } from './SessionStore.js';
 import { DirectiveParser, type ParsedDirectives } from './DirectiveParser.js';
 import { WebhookAdapter, type WebhookProvider, type NormalizedWebhook } from './WebhookAdapter.js';
-import { isAuditEnabled } from '../lib/audit/types.js';
-import { captureBridgeSubject, propagateSubjectContext } from '../lib/audit/bridge_capture.js';
 import { sanitizeAndParse, looksLikeWindowsPathIssue } from './JsonSanitizer.js';
 import { getOrCreateRequestId } from './RequestContext.js';
 import { createBridgeLogger, type BridgeLogger, validateAgentName } from './utils.js';
@@ -1796,17 +1794,6 @@ export class OverBridgeServer {
     const adapter = new WebhookAdapter({ provider: params.data.provider, logger: this.log });
     const normalized = adapter.adapt(params.data.payload);
     const externalKey = params.data.externalKey ?? normalized.externalKey;
-
-    // ── Audit Trail : pseudonymise l'externalKey en data_subject_id ──────────────
-    if (isAuditEnabled()) {
-      const capture = captureBridgeSubject(externalKey, params.data.provider);
-      propagateSubjectContext(capture);
-      this.log.info('Audit: Bridge subject captured', {
-        provider: params.data.provider,
-        source: capture.source,
-        internal: capture.isInternal,
-      });
-    }
 
     if (!params.data.autoDispatch) {
       return {

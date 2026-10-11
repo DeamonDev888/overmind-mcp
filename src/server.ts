@@ -40,15 +40,6 @@
  * 14. agent_control          → src/tools/agent_control.ts
  * 15. a2a_hub                → src/tools/a2a_hub.ts
  * 16. get_metrics            → src/tools/get_metrics.ts
- *
- * ── Audit Trail (Loi 25 QC art. 3-35 / AI Act / AI PIA) ──
- * 17. audit_access_request   → src/tools/audit_access_request.ts   (art. 26)
- * 18. audit_erasure          → src/tools/audit_erasure.ts          (art. 27/35.3)
- * 19. audit_consent          → src/tools/audit_consent.ts          (art. 8.1-8.2)
- * 20. audit_rectification    → src/tools/audit_rectification.ts    (art. 27)
- * 21. audit_processing_registry → src/tools/audit_processing_registry.ts (art. 3/35.18)
- * 22. audit_report_incident  → src/tools/audit_report_incident.ts  (art. 3.5-3.8)
- * 23. audit_efvp             → src/tools/audit_efvp.ts             (art. 18.1)
  */
 
 import { FastMCP } from 'fastmcp';
@@ -79,17 +70,6 @@ import { configExample, configExampleSchema } from './tools/config_example.js';
 import { agentControl, agentControlSchema } from './tools/agent_control.js';
 import { a2aHub, a2aHubSchema } from './tools/a2a_hub.js';
 import { getMetricsTool, getMetricsSchema } from './tools/get_metrics.js';
-// ── Audit Trail tools (Loi 25 QC art. 3-35 / AI Act / AI PIA) ──
-import { auditAccessRequest, auditAccessRequestSchema } from './tools/audit_access_request.js';
-import { auditErasure, auditErasureSchema } from './tools/audit_erasure.js';
-import { auditConsent, auditConsentSchema } from './tools/audit_consent.js';
-import { auditRectification, auditRectificationSchema } from './tools/audit_rectification.js';
-import {
-  auditProcessingRegistry,
-  auditProcessingRegistrySchema,
-} from './tools/audit_processing_registry.js';
-import { auditReportIncident, auditReportIncidentSchema } from './tools/audit_report_incident.js';
-import { auditEfvp, auditEfvpSchema } from './tools/audit_efvp.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ToolExecute = (...args: any[]) => Promise<any>;
@@ -158,7 +138,7 @@ run_agents_parallel(agents: [
   { taskId: "build",  runner: "kilo", agentName: "mistral_1", prompt: "npm run build", path: "./project" },
   { taskId: "lint",   runner: "kilo", agentName: "mistral_2", prompt: "npm run lint",  path: "./project" },
   { taskId: "test",   runner: "kilo", agentName: "mistral_3", prompt: "npm test",      path: "./project" },
-  { taskId: "audit",  runner: "kilo", agentName: "mistral_4", prompt: "Analyse le fichier audit.md", path: "./project" },
+  { taskId: "docs",   runner: "kilo", agentName: "mistral_4", prompt: "Analyse le fichier docs.md", path: "./project" },
 ])
 
 **Options :**
@@ -369,124 +349,6 @@ Aucune configuration manuelle nécessaire — il connaît tous les agents du sys
       execute: wrapExecute('get_metrics', getMetricsTool),
     });
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // ─── AUDIT TRAIL — Conformité protection des RP (7 outils) ─────────────────────
-    // Articles Loi 25 QC / AI Act: 3-3.1, 8, 14-17.3, 18.1, 21-22, 26, 27, 35.18
-    // Active via OVERMIND_AUDIT_ENABLED=true dans .env
-    // ══════════════════════════════════════════════════════════════════════════
-
-    // ─── 17. audit_access_request ─────────────────────────────────────────────
-    server.addTool({
-      name: 'audit_access_request',
-      description: `📋 **Audit Trail (Loi 25 art. 26 / AI Act)** — Droit d'accès aux renseignements personnels.
-
-Extrait tous les RP liés à un sujet de données (agent_runs, knowledge_chunks, archives).
-
-**Exemples :**
-audit_access_request(data_subject_id: "hash_abc123")
-audit_access_request(data_subject_id: "hash_abc123", include_archives: true)`,
-      parameters: auditAccessRequestSchema,
-      execute: wrapExecute('audit_access_request', auditAccessRequest),
-    });
-
-    // ─── 18. audit_erasure ────────────────────────────────────────────────────
-    server.addTool({
-      name: 'audit_erasure',
-      description: `🗑️ **Audit Trail (Loi 25 art. 27/35.3 / AI Act)** — Droit d'effacement (droit à l'oubli).
-
-Anonymise ou supprime définitivement les RP d'un sujet.
-
-**Modes :**
-- \`anonymize\` (défaut) : hash les textes + null le data_subject_id
-- \`hard_delete\` : suppression définitive des enregistrements
-
-**Exemple :**
-audit_erasure(data_subject_id: "hash_abc123", mode: "anonymize")`,
-      parameters: auditErasureSchema,
-      execute: wrapExecute('audit_erasure', auditErasure),
-    });
-
-    // ─── 19. audit_consent ───────────────────────────────────────────────────
-    server.addTool({
-      name: 'audit_consent',
-      description: `✅ **Audit Trail (Loi 25 art. 8.1-8.2 / AI Act art. 26)** — Gestion du consentement.
-
-Accorde, révoque ou vérifie un consentement pour un sujet de données.
-
-**Actions :**
-- \`grant\` : enregistre un nouveau consentement
-- \`revoke\` : révoque un consentement existant
-- \`check\` : vérifie si un consentement est valide
-
-**Exemples :**
-audit_consent(action: "grant", data_subject_id: "hash123", purpose: "agent_execution")
-audit_consent(action: "check", data_subject_id: "hash123")
-audit_consent(action: "revoke", data_subject_id: "hash123")`,
-      parameters: auditConsentSchema,
-      execute: wrapExecute('audit_consent', auditConsent),
-    });
-
-    // ─── 20. audit_rectification ─────────────────────────────────────────────
-    server.addTool({
-      name: 'audit_rectification',
-      description: `✏️ **Audit Trail (Loi 25 art. 27 / AI Act)** — Droit de rectification.
-
-Modifie un renseignement personnel inexact ou incomplet.
-
-**Exemple :**
-audit_rectification(data_subject_id: "hash123", table_name: "agent_runs", record_id: "run_abc", field: "prompt", new_value: "Version corrigée")`,
-      parameters: auditRectificationSchema,
-      execute: wrapExecute('audit_rectification', auditRectification),
-    });
-
-    // ─── 21. audit_processing_registry ───────────────────────────────────────
-    server.addTool({
-      name: 'audit_processing_registry',
-      description: `📚 **Audit Trail (Loi 25 art. 3-3.1/35.18 / AI Act art. 11)** — Registre des traitements.
-
-Consulte, crée ou modifie le registre des traitements de RP + cartographie des transferts hors QC.
-
-**Actions :** list, get, create, update
-
-**Exemples :**
-audit_processing_registry(action: "list")
-audit_processing_registry(action: "get", name: "llm_inference")`,
-      parameters: auditProcessingRegistrySchema,
-      execute: wrapExecute('audit_processing_registry', auditProcessingRegistry),
-    });
-
-    // ─── 22. audit_report_incident ────────────────────────────────────────────
-    server.addTool({
-      name: 'audit_report_incident',
-      description: `🚨 **Audit Trail (Loi 25 art. 3.5-3.8 / AI Act art. 73)** — Notification d'incident IA / RP.
-
-Signale un incident de confidentialité, liste les incidents ouverts, ou résout un incident.
-
-⚠️ Les incidents de sévérité "high" nécessitent une notification à la CAI dans les 30 jours.
-
-**Actions :** report, list, resolve
-
-**Exemples :**
-audit_report_incident(action: "report", severity: "moderate", category: "data_leak", description: "Fuite de 3 enregistrements")
-audit_report_incident(action: "list")`,
-      parameters: auditReportIncidentSchema,
-      execute: wrapExecute('audit_report_incident', auditReportIncident),
-    });
-
-    // ─── 23. audit_efvp ──────────────────────────────────────────────────────
-    server.addTool({
-      name: 'audit_efvp',
-      description: `🔍 **Audit Trail (Loi 25 art. 18.1 / AI PIA)** — Évaluation des facteurs relatifs à la vie privée (EFVP/PIA).
-
-Crée ou consulte une EFVP pour un nouveau projet ou traitement.
-
-**Actions :** create, list, get
-
-**Exemple :**
-audit_efvp(action: "create", project_name: "agent_memory_v2", description: "Vectorisation des prompts", data_categories: "prompts,embeddings", risks: "Ré-identification par corrélation", mitigations: "Bruit gaussien sur embeddings")`,
-      parameters: auditEfvpSchema,
-      execute: wrapExecute('audit_efvp', auditEfvp),
-    });
   }
 
   return server;
